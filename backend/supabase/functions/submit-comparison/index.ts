@@ -87,8 +87,14 @@ Deno.serve(async (req) => {
     });
   }
 
-  const winner = photoPair.find((p) => p.id === winner_id)!;
-  const loser = photoPair.find((p) => p.id === loser_id)!;
+  const winner = photoPair.find((p) => p.id === winner_id);
+  const loser = photoPair.find((p) => p.id === loser_id);
+  if (!winner || !loser) {
+    return new Response(JSON.stringify({ error: 'Failed to fetch photo ratings' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
   const { winnerNew, loserNew } = updateElo(winner.elo_rating, loser.elo_rating);
 
   // Single atomic transaction: claim comparison + update both Elo ratings.
@@ -103,7 +109,7 @@ Deno.serve(async (req) => {
   });
 
   if (submitError) {
-    const isAlreadyDone = submitError.message?.includes('already_submitted');
+    const isAlreadyDone = submitError.code === 'UE001';
     return new Response(
       JSON.stringify({ error: isAlreadyDone ? 'Comparison already submitted' : 'Failed to record comparison result' }),
       {
