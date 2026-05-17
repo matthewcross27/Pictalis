@@ -1,14 +1,14 @@
 -- Update cleanup function to also purge orphaned pending comparisons.
 -- These are created by next-pair but never submitted (abandoned sessions).
 CREATE OR REPLACE FUNCTION public.cleanup_expired_sessions()
-RETURNS void LANGUAGE plpgsql
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = public, storage, extensions
 AS $$
 BEGIN
-  -- Delete pending comparisons abandoned for more than 1 hour
+  -- Delete pending comparisons abandoned for more than 24 hours
   DELETE FROM public.comparisons
   WHERE completed_at IS NULL
-    AND created_at < NOW() - INTERVAL '1 hour';
+    AND created_at < NOW() - INTERVAL '24 hours';
 
   -- Delete storage objects whose session has expired
   DELETE FROM storage.objects so
@@ -20,7 +20,9 @@ BEGIN
         AND s.expires_at < NOW()
     );
 
-  -- Cascades to photos and comparisons via ON DELETE CASCADE
+  -- Cascades to photos (and their comparisons) via ON DELETE CASCADE.
+  -- Note: orphaned comparisons in still-active sessions were already
+  -- purged above; this only handles sessions expiring now.
   DELETE FROM public.sessions WHERE expires_at < NOW();
 END;
 $$;
