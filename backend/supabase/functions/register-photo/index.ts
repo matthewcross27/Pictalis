@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     .from('working-copies')
     .list(`${pathUid}/${pathSessionId}`, { search: filename });
 
-  if (listError || !objects || objects.length === 0) {
+  if (listError || !objects || !objects.some((o) => o.name === filename)) {
     return new Response(JSON.stringify({ error: 'Storage object not found' }), {
       status: 404,
       headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -110,7 +110,8 @@ Deno.serve(async (req) => {
     .single();
 
   if (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('Failed to insert photo record:', error);
+    return new Response(JSON.stringify({ error: 'Failed to register photo' }), {
       status: 500,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
