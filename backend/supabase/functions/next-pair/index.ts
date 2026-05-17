@@ -83,13 +83,22 @@ Deno.serve(async (req) => {
   // Photo B: fewest comparisons among photos not yet paired with A
   const eligible = photos.filter((p) => p.id !== photoA.id && !seenWithA.has(p.id));
   const bPool = eligible.length > 0 ? eligible : photos.filter((p) => p.id !== photoA.id);
-  const photoB = bPool[Math.floor(Math.random() * bPool.length)]!;
+  const bMinCount = bPool[0]!.comparison_count;
+  const bTied = bPool.filter((p) => p.comparison_count === bMinCount);
+  const photoB = bTied[Math.floor(Math.random() * bTied.length)]!;
 
   // Generate signed URLs (1-hour expiry)
   const [signedA, signedB] = await Promise.all([
     supabase.storage.from('working-copies').createSignedUrl(photoA.storage_path, 3600),
     supabase.storage.from('working-copies').createSignedUrl(photoB.storage_path, 3600),
   ]);
+
+  if (!signedA.data?.signedUrl || !signedB.data?.signedUrl) {
+    return new Response(JSON.stringify({ error: 'Failed to generate photo URLs' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
 
   // Create a pending comparison record
   const { data: comparison, error: compError } = await supabase
@@ -108,8 +117,8 @@ Deno.serve(async (req) => {
   return new Response(
     JSON.stringify({
       comparison_id: comparison.id,
-      photo_a: { ...photoA, signed_url: signedA.data?.signedUrl ?? null },
-      photo_b: { ...photoB, signed_url: signedB.data?.signedUrl ?? null },
+      photo_a: { ...photoA, signed_url: signedA.data.signedUrl },
+      photo_b: { ...photoB, signed_url: signedB.data.signedUrl },
     }),
     {
       status: 200,
