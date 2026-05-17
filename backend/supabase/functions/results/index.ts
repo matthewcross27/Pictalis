@@ -67,7 +67,10 @@ Deno.serve(async (req) => {
       if (signedError) throw signedError;
       return { ...photo, signed_url: signed?.signedUrl ?? null };
     })
-  ).catch(() => null);
+  ).catch((err) => {
+    console.error('Failed to generate signed URLs:', err);
+    return null;
+  });
 
   if (!photosWithUrls) {
     return new Response(JSON.stringify({ error: 'Failed to generate photo URLs' }), {
