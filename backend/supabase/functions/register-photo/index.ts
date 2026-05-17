@@ -6,9 +6,13 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Path must be exactly {uuid}/{uuid}/{filename} — no deeper nesting, no root paths.
+const UUID_RE = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const STORAGE_PATH_RE = new RegExp(`^${UUID_RE}/${UUID_RE}/[^/]+$`, 'i');
+
 const RegisterPhotoBody = z.object({
   session_id: z.string().uuid(),
-  storage_path: z.string().min(1),
+  storage_path: z.string().regex(STORAGE_PATH_RE, 'Must match {uid}/{session_id}/{filename}'),
 });
 
 Deno.serve(async (req) => {
@@ -30,6 +34,14 @@ Deno.serve(async (req) => {
     { global: { headers: { Authorization: authHeader } } }
   );
 
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -48,11 +60,40 @@ Deno.serve(async (req) => {
     });
   }
 
+  const { session_id, storage_path } = parsed.data;
+  const [pathUid, pathSessionId, filename] = storage_path.split('/');
+
+  // Cross-validate path segments against caller identity and request body
+  if (pathUid !== user.id) {
+    return new Response(
+      JSON.stringify({ error: 'storage_path UID segment must match the authenticated user' }),
+      { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
+    );
+  }
+  if (pathSessionId !== session_id) {
+    return new Response(
+      JSON.stringify({ error: 'storage_path session_id segment must match session_id field' }),
+      { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Verify the object actually exists in storage before creating a DB record
+  const { data: objects, error: listError } = await supabase.storage
+    .from('working-copies')
+    .list(`${pathUid}/${pathSessionId}`, { search: filename });
+
+  if (listError || !objects || objects.length === 0) {
+    return new Response(JSON.stringify({ error: 'Storage object not found' }), {
+      status: 404,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
   // RLS enforces that the session belongs to the caller
   const { data: session, error: sessionError } = await supabase
     .from('sessions')
     .select('id')
-    .eq('id', parsed.data.session_id)
+    .eq('id', session_id)
     .single();
 
   if (sessionError || !session) {
@@ -64,10 +105,7 @@ Deno.serve(async (req) => {
 
   const { data: photo, error } = await supabase
     .from('photos')
-    .insert({
-      session_id: parsed.data.session_id,
-      storage_path: parsed.data.storage_path,
-    })
+    .insert({ session_id, storage_path })
     .select('id, session_id, storage_path, elo_rating, comparison_count, created_at')
     .single();
 
