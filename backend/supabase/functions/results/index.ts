@@ -53,7 +53,8 @@ Deno.serve(async (req) => {
     .limit(parsed.data.limit);
 
   if (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('Failed to fetch photos:', error);
+    return new Response(JSON.stringify({ error: 'Failed to fetch photos' }), {
       status: 500,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
