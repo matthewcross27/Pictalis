@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  if (comparison.completed_at !== null) {
+  if (comparison.completed_at != null) {
     return new Response(JSON.stringify({ error: 'Comparison already submitted' }), {
       status: 409,
       headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -98,7 +98,21 @@ Deno.serve(async (req) => {
   const loser = photoPair.find((p) => p.id === loser_id)!;
   const { winnerNew, loserNew } = updateElo(winner.elo_rating, loser.elo_rating);
 
-  const [winnerUpdate, loserUpdate, compUpdate] = await Promise.all([
+  // Mark comparison complete first to prevent duplicate submissions
+  const { error: compError2 } = await supabase
+    .from('comparisons')
+    .update({ winner_id, completed_at: new Date().toISOString() })
+    .eq('id', comparison_id);
+
+  if (compError2) {
+    return new Response(JSON.stringify({ error: 'Failed to record comparison result' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Update Elo ratings after comparison is committed
+  const [winnerUpdate, loserUpdate] = await Promise.all([
     supabase
       .from('photos')
       .update({ elo_rating: winnerNew, comparison_count: winner.comparison_count + 1 })
@@ -107,14 +121,10 @@ Deno.serve(async (req) => {
       .from('photos')
       .update({ elo_rating: loserNew, comparison_count: loser.comparison_count + 1 })
       .eq('id', loser_id),
-    supabase
-      .from('comparisons')
-      .update({ winner_id, completed_at: new Date().toISOString() })
-      .eq('id', comparison_id),
   ]);
 
-  if (winnerUpdate.error || loserUpdate.error || compUpdate.error) {
-    return new Response(JSON.stringify({ error: 'Failed to record comparison result' }), {
+  if (winnerUpdate.error || loserUpdate.error) {
+    return new Response(JSON.stringify({ error: 'Failed to update photo ratings' }), {
       status: 500,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
