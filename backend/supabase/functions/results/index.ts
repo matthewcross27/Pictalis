@@ -61,12 +61,20 @@ Deno.serve(async (req) => {
 
   const photosWithUrls = await Promise.all(
     (photos ?? []).map(async (photo) => {
-      const { data: signed } = await supabase.storage
+      const { data: signed, error: signedError } = await supabase.storage
         .from('working-copies')
         .createSignedUrl(photo.storage_path, 3600);
+      if (signedError) throw signedError;
       return { ...photo, signed_url: signed?.signedUrl ?? null };
     })
-  );
+  ).catch(() => null);
+
+  if (!photosWithUrls) {
+    return new Response(JSON.stringify({ error: 'Failed to generate photo URLs' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
 
   return new Response(JSON.stringify({ photos: photosWithUrls }), {
     status: 200,
