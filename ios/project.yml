@@ -5,6 +5,11 @@ options:
     iOS: "17.0"
   createIntermediateGroups: true
 
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: 2.0.0
+
 targets:
   picHelper:
     type: application
@@ -15,7 +20,7 @@ targets:
       path: picHelper/Info.plist
       properties:
         CFBundleDisplayName: picHelper
-        UILaunchStoryboardName: ""
+        UILaunchScreen: {}
         NSPhotoLibraryUsageDescription: "picHelper needs access to your photos to help you curate your favorites."
         NSPhotoLibraryAddUsageDescription: "picHelper saves your favorite photos back to your library."
         UIApplicationSceneManifest:
@@ -26,6 +31,9 @@ targets:
         DEVELOPMENT_TEAM: ""
         SWIFT_STRICT_CONCURRENCY: complete
         ENABLE_USER_SCRIPT_SANDBOXING: YES
+    dependencies:
+      - package: Supabase
+        product: Supabase
 
   picHelperTests:
     type: bundle.unit-test
@@ -34,3 +42,6 @@ targets:
       - path: Tests
     dependencies:
       - target: picHelper
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
