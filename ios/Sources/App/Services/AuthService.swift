@@ -6,6 +6,7 @@ import Supabase
 final class AuthService: ObservableObject {
     @Published private(set) var isAuthenticated = false
     @Published private(set) var userId: UUID?
+    @Published private(set) var authError: String?
 
     private let client: SupabaseClient
 
@@ -29,6 +30,7 @@ final class AuthService: ObservableObject {
             }
         } catch {
             print("Auth error: \(error)")
+            authError = error.localizedDescription
         }
     }
 

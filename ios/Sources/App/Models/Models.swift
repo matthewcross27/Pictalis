@@ -60,7 +60,7 @@ struct NextPairResponse: Decodable {
     }
 }
 
-struct PairPhoto: Decodable {
+struct PairPhoto: Decodable, Identifiable {
     let id: UUID
     let storagePath: String
     let thumbnailPath: String?
@@ -108,8 +108,7 @@ struct RankedPhoto: Decodable, Identifiable {
     let uncertainty: Double?
     let comparisonCount: Int
     let isSuppressed: Bool
-    let clusterId: UUID?
-    let qualityFlags: [String]?
+    let clusterId: String?
     let signedUrl: String
 
     enum CodingKeys: String, CodingKey {
@@ -121,7 +120,6 @@ struct RankedPhoto: Decodable, Identifiable {
         case comparisonCount = "comparison_count"
         case isSuppressed = "is_suppressed"
         case clusterId = "cluster_id"
-        case qualityFlags = "quality_flags"
         case signedUrl = "signed_url"
     }
 }

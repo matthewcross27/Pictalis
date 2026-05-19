@@ -12,6 +12,7 @@ struct ComparisonView: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var comparisonCount = 0
+    @State private var fullscreenPhoto: PairPhoto?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,11 +48,14 @@ struct ComparisonView: View {
                     .padding()
                 Spacer()
             } else if let pair {
-                HStack(spacing: 4) {
+                Spacer()
+                VStack(spacing: 8) {
                     photoButton(photo: pair.photoA)
                     photoButton(photo: pair.photoB)
                 }
+                .padding(.horizontal, 8)
                 .disabled(isSubmitting)
+                Spacer()
             }
 
             HStack {
@@ -66,6 +70,23 @@ struct ComparisonView: View {
             .padding()
         }
         .task { await fetchNextPair() }
+        .fullScreenCover(item: $fullscreenPhoto) { photo in
+            ZStack {
+                Color.black.ignoresSafeArea()
+                AsyncImage(url: URL(string: photo.signedUrl)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                    default:
+                        ProgressView()
+                            .tint(.white)
+                    }
+                }
+            }
+            .onTapGesture { fullscreenPhoto = nil }
+        }
     }
 
     // MARK: - Private
@@ -75,29 +96,41 @@ struct ComparisonView: View {
         Button {
             Task { @MainActor in await choose(winner: photo) }
         } label: {
-            AsyncImage(url: URL(string: photo.signedUrl)) { phase in
-                switch phase {
-                case .empty:
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(.secondarySystemBackground))
-                case .success(let image):
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .clipped()
-                case .failure:
-                    Image(systemName: "photo")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(.secondarySystemBackground))
-                @unknown default:
-                    EmptyView()
+            // Color drives layout; AsyncImage overlay never affects sizing.
+            Color(.secondarySystemBackground)
+                .frame(maxWidth: .infinity)
+                .aspectRatio(4/3, contentMode: .fit)
+                .overlay {
+                    AsyncImage(url: URL(string: photo.signedUrl)) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView()
+                        case .success(let image):
+                            image.resizable().scaledToFill()
+                        case .failure:
+                            Image(systemName: "photo")
+                                .font(.largeTitle)
+                                .foregroundStyle(.secondary)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
                 }
-            }
+                .clipped()
+                .overlay(alignment: .topTrailing) {
+                    Button {
+                        fullscreenPhoto = photo
+                    } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(8)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                    .padding(8)
+                }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 

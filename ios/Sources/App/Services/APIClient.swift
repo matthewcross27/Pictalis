@@ -59,7 +59,7 @@ final class APIClient: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id": sessionId.uuidString,
+            "session_id": sessionId.uuidString.lowercased().lowercased(),
             "storage_path": storagePath,
         ])
         let (data, response) = try await URLSession.shared.data(for: req)
@@ -72,7 +72,7 @@ final class APIClient: ObservableObject {
 
     func nextPair(sessionId: UUID) async throws -> NextPairResponse {
         var comps = URLComponents(url: functionsBase.appending(path: "next-pair"), resolvingAgainstBaseURL: false)!
-        comps.queryItems = [URLQueryItem(name: "session_id", value: sessionId.uuidString)]
+        comps.queryItems = [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
         var req = URLRequest(url: comps.url!)
         req.httpMethod = "GET"
         req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
@@ -91,8 +91,8 @@ final class APIClient: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "comparison_id": comparisonId.uuidString,
-            "winner_id": winnerId.uuidString,
+            "comparison_id": comparisonId.uuidString.lowercased(),
+            "winner_id": winnerId.uuidString.lowercased(),
         ])
         let (data, response) = try await URLSession.shared.data(for: req)
         try validate(response, data: data)
@@ -105,7 +105,7 @@ final class APIClient: ObservableObject {
     func results(sessionId: UUID, limit: Int = 20) async throws -> [RankedPhoto] {
         var comps = URLComponents(url: functionsBase.appending(path: "results"), resolvingAgainstBaseURL: false)!
         comps.queryItems = [
-            URLQueryItem(name: "session_id", value: sessionId.uuidString),
+            URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased()),
             URLQueryItem(name: "limit", value: "\(limit)"),
         ]
         var req = URLRequest(url: comps.url!)

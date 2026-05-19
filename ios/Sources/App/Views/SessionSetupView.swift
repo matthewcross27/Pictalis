@@ -1,6 +1,5 @@
 import SwiftUI
 import PhotosUI
-import Photos
 
 struct SessionSetupView: View {
     @EnvironmentObject private var auth: AuthService
@@ -15,6 +14,7 @@ struct SessionSetupView: View {
     @State private var errorMessage: String?
 
     private var selectionCount: Int { selectedItems.count }
+    private var canStart: Bool { selectionCount >= 2 && auth.isAuthenticated && !isStarting }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -49,7 +49,13 @@ struct SessionSetupView: View {
             }
             .padding(.horizontal)
 
-            if let errorMessage {
+            if let authError = auth.authError {
+                Text("Sign-in failed: \(authError)")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            } else if let errorMessage {
                 Text(errorMessage)
                     .font(.caption)
                     .foregroundStyle(.red)
@@ -66,11 +72,11 @@ struct SessionSetupView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(selectionCount >= 2 ? Color.accentColor : Color.gray)
+                .background(canStart ? Color.accentColor : Color.gray)
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
-            .disabled(selectionCount < 2 || isStarting || !auth.isAuthenticated)
+            .disabled(!canStart)
             .padding(.horizontal)
 
             Spacer()
@@ -93,14 +99,8 @@ struct SessionSetupView: View {
                 let session = try await api.createSession(photoCount: count)
                 let sessionId = session.id
 
-                // Convert PhotosPickerItem → PHAsset via local identifiers
-                let identifiers = items.compactMap { $0.itemIdentifier }
-                let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: identifiers, options: nil)
-                var assets: [PHAsset] = []
-                fetchResult.enumerateObjects { asset, _, _ in assets.append(asset) }
-
                 let uploadService = UploadService(supabase: auth.supabase, api: api)
-                uploadService.start(assets: assets, sessionId: sessionId, userId: userId)
+                uploadService.start(items: items, sessionId: sessionId, userId: userId)
 
                 onStart(sessionId, uploadService)
             } catch {
