@@ -43,3 +43,6 @@ backend/supabase/functions/.cache/
 *.p8
 *.p12
 *.mobileprovision
+
+# iOS — Supabase credentials (real values only, never commit)
+ios/Sources/App/SupabaseConfig.swift
