@@ -10,6 +10,7 @@ struct ResultsView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var exportingId: UUID?
+    @State private var exportAlertMessage: String?
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
@@ -43,6 +44,14 @@ struct ResultsView: View {
             }
         }
         .task { await fetchResults() }
+        .alert("Saved to Photos", isPresented: Binding(
+            get: { exportAlertMessage != nil },
+            set: { if !$0 { exportAlertMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(exportAlertMessage ?? "")
+        }
     }
 
     // MARK: - Private
@@ -75,7 +84,11 @@ struct ResultsView: View {
 
             // Export button overlay
             Button {
-                Task { @MainActor in await exportPhoto(photo: photo) }
+                Task { @MainActor in
+                    if await exportPhoto(photo: photo) {
+                        exportAlertMessage = "Photo saved to your library."
+                    }
+                }
             } label: {
                 Group {
                     if exportingId == photo.id {
@@ -105,25 +118,33 @@ struct ResultsView: View {
         isLoading = false
     }
 
-    private func exportPhoto(photo: RankedPhoto) async {
-        guard let url = URL(string: photo.signedUrl) else { return }
+    @discardableResult
+    private func exportPhoto(photo: RankedPhoto) async -> Bool {
+        guard let url = URL(string: photo.signedUrl) else { return false }
         exportingId = photo.id
         defer { exportingId = nil }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            guard let image = UIImage(data: data) else { return }
+            guard let image = UIImage(data: data) else { return false }
             try await PHPhotoLibrary.shared().performChanges {
                 PHAssetCreationRequest.creationRequestForAsset(from: image)
             }
+            return true
         } catch {
             print("Export failed: \(error)")
+            return false
         }
     }
 
     private func exportAll() {
         Task { @MainActor in
+            var saved = 0
             for photo in photos {
-                await exportPhoto(photo: photo)
+                if await exportPhoto(photo: photo) { saved += 1 }
+            }
+            if saved > 0 {
+                let noun = saved == 1 ? "photo" : "photos"
+                exportAlertMessage = "\(saved) \(noun) saved to your library."
             }
         }
     }
