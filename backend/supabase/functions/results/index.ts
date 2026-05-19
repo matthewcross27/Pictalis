@@ -42,6 +42,13 @@ Deno.serve(async (req) => {
     { global: { headers: { Authorization: authHeader } } }
   );
 
+  // Fetch session stage so iOS can show "Complete" / "In Progress" badge.
+  const { data: session } = await supabase
+    .from('sessions')
+    .select('stage')
+    .eq('id', parsed.data.session_id)
+    .single();
+
   const { data: photos, error } = await supabase
     .from('photos')
     .select(
@@ -80,8 +87,17 @@ Deno.serve(async (req) => {
     });
   }
 
-  return new Response(JSON.stringify({ photos: photosWithUrls }), {
-    status: 200,
-    headers: { ...CORS, 'Content-Type': 'application/json' },
-  });
+  return new Response(
+    JSON.stringify({
+      photos: photosWithUrls,
+      session: {
+        stage: session?.stage ?? 'stage1',
+        is_complete: session?.stage === 'complete',
+      },
+    }),
+    {
+      status: 200,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    }
+  );
 });
