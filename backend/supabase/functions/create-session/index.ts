@@ -10,6 +10,10 @@ const CreateSessionBody = z.object({
   photo_count: z.number().int().min(2).max(300),
 });
 
+function computeTopK(photoCount: number): number {
+  return Math.min(40, Math.max(5, Math.round(2.5 * Math.sqrt(photoCount))));
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS });
@@ -55,10 +59,11 @@ Deno.serve(async (req) => {
     });
   }
 
+  const topK = computeTopK(parsed.data.photo_count);
   const { data: session, error } = await supabase
     .from('sessions')
-    .insert({ photo_count: parsed.data.photo_count, user_id: user.id })
-    .select('id, created_at, expires_at, status, photo_count')
+    .insert({ photo_count: parsed.data.photo_count, user_id: user.id, top_k: topK })
+    .select('id, created_at, expires_at, status, photo_count, top_k')
     .single();
 
   if (error) {
