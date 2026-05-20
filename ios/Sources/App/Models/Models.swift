@@ -52,11 +52,13 @@ struct NextPairResponse: Decodable {
     let comparisonId: UUID
     let photoA: PairPhoto
     let photoB: PairPhoto
+    let stage: String?
 
     enum CodingKeys: String, CodingKey {
         case comparisonId = "comparison_id"
         case photoA = "photo_a"
         case photoB = "photo_b"
+        case stage
     }
 }
 
@@ -98,6 +100,17 @@ struct SubmitComparisonResponse: Decodable {
 
 struct ResultsResponse: Decodable {
     let photos: [RankedPhoto]
+    let session: SessionInfo?
+}
+
+struct SessionInfo: Decodable {
+    let stage: String
+    let isComplete: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case stage
+        case isComplete = "is_complete"
+    }
 }
 
 struct RankedPhoto: Decodable, Identifiable {
@@ -121,6 +134,24 @@ struct RankedPhoto: Decodable, Identifiable {
         case isSuppressed = "is_suppressed"
         case clusterId = "cluster_id"
         case signedUrl = "signed_url"
+        // quality_flags omitted: JSONB object type not displayed in UI;
+        // JSONDecoder silently skips JSON keys not present in the struct.
+    }
+}
+
+// MARK: - session-status
+
+struct SessionStatus: Decodable {
+    let stage: String
+    let isComplete: Bool
+    let topPhotoCount: Int
+    let totalComparisons: Int
+
+    enum CodingKeys: String, CodingKey {
+        case stage
+        case isComplete = "is_complete"
+        case topPhotoCount = "top_photo_count"
+        case totalComparisons = "total_comparisons"
     }
 }
 

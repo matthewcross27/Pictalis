@@ -99,10 +99,24 @@ final class APIClient: ObservableObject {
         return try decoder.decode(SubmitComparisonResponse.self, from: data)
     }
 
-    // MARK: - results
-    // GET ?session_id=...&limit=20 → { photos: [...] }
+    // MARK: - session-status
+    // GET ?session_id=... → { stage, is_complete, top_photo_count, total_comparisons }
 
-    func results(sessionId: UUID, limit: Int = 20) async throws -> [RankedPhoto] {
+    func sessionStatus(sessionId: UUID) async throws -> SessionStatus {
+        var comps = URLComponents(url: functionsBase.appending(path: "session-status"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
+        var req = URLRequest(url: comps.url!)
+        req.httpMethod = "GET"
+        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validate(response, data: data)
+        return try decoder.decode(SessionStatus.self, from: data)
+    }
+
+    // MARK: - results
+    // GET ?session_id=...&limit=20 → { photos: [...], session: { stage, is_complete } }
+
+    func results(sessionId: UUID, limit: Int = 20) async throws -> ResultsResponse {
         var comps = URLComponents(url: functionsBase.appending(path: "results"), resolvingAgainstBaseURL: false)!
         comps.queryItems = [
             URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased()),
@@ -113,6 +127,6 @@ final class APIClient: ObservableObject {
         req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: req)
         try validate(response, data: data)
-        return try decoder.decode(ResultsResponse.self, from: data).photos
+        return try decoder.decode(ResultsResponse.self, from: data)
     }
 }
