@@ -15,6 +15,8 @@ struct ComparisonView: View {
     @State private var comparisonCount = 0
     @State private var fullscreenPhoto: PairPhoto?
     @State private var currentStage: String?
+    @State private var prefetchedPair: NextPairResponse?
+    @State private var prefetchTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,6 +81,13 @@ struct ComparisonView: View {
             .padding()
         }
         .task { await fetchNextPair() }
+        .onChange(of: pair?.comparisonId) { _, newId in
+            if newId != nil { startPrefetch() }
+        }
+        .onDisappear {
+            prefetchTask?.cancel()
+            prefetchedPair = nil
+        }
         .fullScreenCover(item: $fullscreenPhoto) { photo in
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -99,6 +108,16 @@ struct ComparisonView: View {
     }
 
     // MARK: - Private
+
+    private func startPrefetch() {
+        prefetchTask?.cancel()
+        prefetchedPair = nil
+        prefetchTask = Task {
+            guard let response = try? await api.nextPair(sessionId: sessionId) else { return }
+            guard !Task.isCancelled else { return }
+            prefetchedPair = response
+        }
+    }
 
     private func stageLabel(_ stage: String) -> String {
         switch stage {
