@@ -23,6 +23,11 @@ targets:
         UILaunchScreen: {}
         NSPhotoLibraryUsageDescription: "picHelper needs access to your photos to help you curate your favorites."
         NSPhotoLibraryAddUsageDescription: "picHelper saves your favorite photos back to your library."
+        UIUserInterfaceStyle: Light
+        UIAppFonts:
+          - Fraunces-Regular.ttf
+          - Fraunces-Medium.ttf
+          - Fraunces-SemiBold.ttf
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
     settings:

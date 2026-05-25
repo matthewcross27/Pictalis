@@ -19,66 +19,44 @@ struct ComparisonView: View {
     @State private var prefetchTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Upload progress banner while photos are still uploading
-            if !uploadService.isComplete {
-                HStack {
-                    ProgressView(
-                        value: Double(uploadService.completed),
-                        total: Double(max(uploadService.total, 1))
-                    )
-                    Text("\(uploadService.completed)/\(uploadService.total)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(Color(.secondarySystemBackground))
-            }
+        ZStack {
+            Color.filmWhite.ignoresSafeArea()
 
-            if isLoading {
-                Spacer()
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("Loading photos…")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            } else if let errorMessage {
-                Spacer()
-                Text(errorMessage)
-                    .foregroundStyle(.red)
-                    .padding()
-                Spacer()
-            } else if let pair {
-                Spacer()
-                VStack(spacing: 8) {
-                    photoButton(photo: pair.photoA)
-                    photoButton(photo: pair.photoB)
-                }
-                .padding(.horizontal, 8)
-                .disabled(isSubmitting)
-                Spacer()
-            }
+            VStack(spacing: 0) {
+                uploadBanner
 
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("\(comparisonCount) comparisons")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    if let stage = currentStage {
-                        Text(stageLabel(stage))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                if isLoading {
+                    Spacer()
+                    VStack(spacing: 12) {
+                        ProgressView().tint(Color.terracotta)
+                        Text("Loading photos…")
+                            .font(.captionSerif)
+                            .foregroundStyle(Color.secondaryText)
                     }
+                    Spacer()
+                } else if let errorMessage {
+                    Spacer()
+                    Text(errorMessage)
+                        .font(.bodySerif)
+                        .foregroundStyle(Color.terracotta)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                    Spacer()
+                } else if let pair {
+                    Spacer()
+                    VStack(spacing: 8) {
+                        photoButton(photo: pair.photoA)
+                        photoButton(photo: pair.photoB)
+                    }
+                    .padding(.horizontal, 8)
+                    .opacity(isSubmitting ? 0.7 : 1.0)
+                    .disabled(isSubmitting)
+                    .animation(.buttonPress, value: isSubmitting)
+                    Spacer()
                 }
-                Spacer()
-                Button("Skip to Results") { onSkipToResults() }
-                    .font(.subheadline)
-                    .disabled(comparisonCount < 1)
+
+                bottomBar
             }
-            .padding()
         }
         .task { await fetchNextPair() }
         .onChange(of: pair?.comparisonId) { _, newId in
@@ -90,21 +68,116 @@ struct ComparisonView: View {
         }
         .fullScreenCover(item: $fullscreenPhoto) { photo in
             ZStack {
-                Color.black.ignoresSafeArea()
+                Color(red: 0.059, green: 0.055, blue: 0.043).ignoresSafeArea()
                 AsyncImage(url: URL(string: photo.signedUrl)) { phase in
                     switch phase {
                     case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFit()
+                        image.resizable().scaledToFit()
                     default:
-                        ProgressView()
-                            .tint(.white)
+                        ProgressView().tint(Color.filmWhite)
                     }
                 }
             }
             .onTapGesture { fullscreenPhoto = nil }
         }
+    }
+
+    // MARK: - Subviews
+
+    @ViewBuilder
+    private var uploadBanner: some View {
+        if !uploadService.isComplete {
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    // Custom terracotta progress bar
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.divider)
+                                .frame(height: 2)
+                            RoundedRectangle(cornerRadius: 1)
+                                .fill(Color.terracotta)
+                                .frame(
+                                    width: geo.size.width * CGFloat(uploadService.completed) / CGFloat(max(uploadService.total, 1)),
+                                    height: 2
+                                )
+                                .animation(.easeOut, value: uploadService.completed)
+                        }
+                    }
+                    .frame(height: 2)
+
+                    Text("\(uploadService.completed)/\(uploadService.total)")
+                        .font(.captionSerif)
+                        .foregroundStyle(Color.secondaryText)
+                        .monospacedDigit()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.grainPaper)
+            }
+        }
+    }
+
+    private var bottomBar: some View {
+        HStack {
+            if let stage = currentStage {
+                StageBadge(stage: stage)
+            }
+
+            Spacer()
+
+            Button("Skip") { onSkipToResults() }
+                .font(.labelSerif)
+                .foregroundStyle(Color.secondaryText)
+                .opacity(comparisonCount < 1 ? 0.35 : 1.0)
+                .disabled(comparisonCount < 1)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.filmWhite)
+    }
+
+    @ViewBuilder
+    private func photoButton(photo: PairPhoto) -> some View {
+        Button {
+            Task { @MainActor in await choose(winner: photo) }
+        } label: {
+            Color.grainPaper
+                .frame(maxWidth: .infinity)
+                .aspectRatio(4 / 3, contentMode: .fit)
+                .overlay {
+                    AsyncImage(url: URL(string: photo.signedUrl)) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView().tint(Color.secondaryText)
+                        case .success(let image):
+                            image.resizable().scaledToFill()
+                        case .failure:
+                            Image(systemName: "photo")
+                                .font(.largeTitle)
+                                .foregroundStyle(Color.secondaryText)
+                        @unknown default:
+                            EmptyView()
+                        }
+                    }
+                }
+                .clipped()
+                .overlay(alignment: .topTrailing) {
+                    Button {
+                        fullscreenPhoto = photo
+                    } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(8)
+                            .background(Color.photoOverlay)
+                            .clipShape(Capsule())
+                    }
+                    .padding(8)
+                }
+        }
+        .buttonStyle(PhotoTapStyle())
+        .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
     }
 
     // MARK: - Private
@@ -117,58 +190,6 @@ struct ComparisonView: View {
             guard !Task.isCancelled else { return }
             prefetchedPair = response
         }
-    }
-
-    private func stageLabel(_ stage: String) -> String {
-        switch stage {
-        case "stage1": return "Broad discovery"
-        case "stage2": return "Refining top photos"
-        case "stage3": return "Choosing between similar shots"
-        default: return ""
-        }
-    }
-
-    @ViewBuilder
-    private func photoButton(photo: PairPhoto) -> some View {
-        Button {
-            Task { @MainActor in await choose(winner: photo) }
-        } label: {
-            // Color drives layout; AsyncImage overlay never affects sizing.
-            Color(.secondarySystemBackground)
-                .frame(maxWidth: .infinity)
-                .aspectRatio(4/3, contentMode: .fit)
-                .overlay {
-                    AsyncImage(url: URL(string: photo.signedUrl)) { phase in
-                        switch phase {
-                        case .empty:
-                            ProgressView()
-                        case .success(let image):
-                            image.resizable().scaledToFill()
-                        case .failure:
-                            Image(systemName: "photo")
-                                .font(.largeTitle)
-                                .foregroundStyle(.secondary)
-                        @unknown default:
-                            EmptyView()
-                        }
-                    }
-                }
-                .clipped()
-                .overlay(alignment: .topTrailing) {
-                    Button {
-                        fullscreenPhoto = photo
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(8)
-                            .background(Color.black.opacity(0.5))
-                            .clipShape(Circle())
-                    }
-                    .padding(8)
-                }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private func choose(winner: PairPhoto) async {
@@ -202,7 +223,7 @@ struct ComparisonView: View {
         }
         isSubmitting = false
         if let next = prefetchedPair {
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(.pairTransition) {
                 currentStage = next.stage
                 self.pair = next
             }

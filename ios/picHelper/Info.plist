@@ -24,6 +24,12 @@
 	<string>picHelper saves your favorite photos back to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>picHelper needs access to your photos to help you curate your favorites.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Fraunces-Regular.ttf</string>
+		<string>Fraunces-Medium.ttf</string>
+		<string>Fraunces-SemiBold.ttf</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -31,5 +37,7 @@
 	</dict>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 </dict>
 </plist>

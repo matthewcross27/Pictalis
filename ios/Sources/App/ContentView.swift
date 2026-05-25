@@ -1,6 +1,5 @@
 import SwiftUI
 
-// Root state machine. Drives navigation between the four screens.
 enum AppState {
     case setup
     case comparing(sessionId: UUID, upload: UploadService)
@@ -50,12 +49,14 @@ struct ContentView: View {
                 ResultsView(sessionId: sessionId)
             }
         }
-        .animation(.easeInOut, value: {
+        .background(Color.filmWhite.ignoresSafeArea())
+        .tint(Color.terracotta)
+        .animation(.screenTransition, value: {
             switch appState {
-            case .setup: return 0
-            case .comparing: return 1
-            case .complete: return 2
-            case .results: return 3
+            case .setup:      return 0
+            case .comparing:  return 1
+            case .complete:   return 2
+            case .results:    return 3
             }
         }())
     }
