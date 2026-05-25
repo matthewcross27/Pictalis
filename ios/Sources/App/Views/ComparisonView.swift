@@ -15,6 +15,8 @@ struct ComparisonView: View {
     @State private var comparisonCount = 0
     @State private var fullscreenPhoto: PairPhoto?
     @State private var currentStage: String?
+    @State private var prefetchedPair: NextPairResponse?
+    @State private var prefetchTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,6 +81,13 @@ struct ComparisonView: View {
             .padding()
         }
         .task { await fetchNextPair() }
+        .onChange(of: pair?.comparisonId) { _, newId in
+            if newId != nil { startPrefetch() }
+        }
+        .onDisappear {
+            prefetchTask?.cancel()
+            prefetchedPair = nil
+        }
         .fullScreenCover(item: $fullscreenPhoto) { photo in
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -99,6 +108,16 @@ struct ComparisonView: View {
     }
 
     // MARK: - Private
+
+    private func startPrefetch() {
+        prefetchTask?.cancel()
+        prefetchedPair = nil
+        prefetchTask = Task {
+            guard let response = try? await api.nextPair(sessionId: sessionId) else { return }
+            guard !Task.isCancelled else { return }
+            prefetchedPair = response
+        }
+    }
 
     private func stageLabel(_ stage: String) -> String {
         switch stage {
@@ -156,23 +175,42 @@ struct ComparisonView: View {
         guard let pair else { return }
         isSubmitting = true
         do {
-            _ = try await api.submitComparison(
+            async let submitResult = api.submitComparison(
                 comparisonId: pair.comparisonId,
                 winnerId: winner.id
             )
+            async let statusResult = api.sessionStatus(sessionId: sessionId)
+
+            _ = try await submitResult
             comparisonCount += 1
-            if let status = try? await api.sessionStatus(sessionId: sessionId),
-               status.isComplete {
+
+            if let status = try? await statusResult, status.isComplete {
+                prefetchTask?.cancel()
+                prefetchedPair = nil
                 isSubmitting = false
                 onComplete(status.totalComparisons)
                 return
             }
         } catch {
             print("Submit failed: \(error)")
+            prefetchedPair = nil
+            prefetchTask?.cancel()
+            isSubmitting = false
+            self.pair = nil
+            await fetchNextPair()
+            return
         }
         isSubmitting = false
-        self.pair = nil
-        await fetchNextPair()
+        if let next = prefetchedPair {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                currentStage = next.stage
+                self.pair = next
+            }
+            prefetchedPair = nil
+        } else {
+            self.pair = nil
+            await fetchNextPair()
+        }
     }
 
     private func fetchNextPair(retryCount: Int = 0) async {
@@ -184,10 +222,10 @@ struct ComparisonView: View {
             pair = response
             isLoading = false
         } catch APIError.httpError(statusCode: 422, _) {
-            // 422 means either "not enough photos yet" (upload in progress)
-            // or "session complete" — check status to disambiguate.
             if let status = try? await api.sessionStatus(sessionId: sessionId),
                status.isComplete {
+                prefetchTask?.cancel()
+                prefetchedPair = nil
                 isLoading = false
                 onComplete(status.totalComparisons)
                 return

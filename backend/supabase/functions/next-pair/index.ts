@@ -78,12 +78,12 @@ Deno.serve(async (req) => {
   const topK           = session.top_k ?? computeTopK(session.photo_count);
   const minComparisons = computeMinComparisons(session.photo_count, topK);
 
-  // 3. Fetch completed comparisons upfront (pair counts + coverage check)
+  // 3. Fetch all comparisons (pending + completed) for pair-count deduplication.
+  // Pending comparisons must be counted so prefetch doesn't re-select an in-flight pair.
   const { data: rawComparisons } = await supabase
     .from('comparisons')
     .select('photo_a_id, photo_b_id')
-    .eq('session_id', session_id)
-    .not('completed_at', 'is', null);
+    .eq('session_id', session_id);
 
   const comparisons = (rawComparisons ?? []) as CompletedComparison[];
   const pairCounts  = buildPairCounts(comparisons);
