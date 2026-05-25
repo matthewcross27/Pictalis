@@ -1,5 +1,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
+import { computeTopK, computeMinComparisons, isBoundaryStable } from '../_shared/ranking-logic.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -7,27 +8,6 @@ const CORS = {
 };
 
 const QuerySchema = z.object({ session_id: z.string().uuid() });
-
-function computeTopK(n: number): number {
-  return Math.min(40, Math.max(5, Math.round(2.5 * Math.sqrt(n))));
-}
-
-function computeMinComparisons(n: number, topK: number): number {
-  return Math.max(1, Math.ceil(Math.log2(n / topK) + 1));
-}
-
-function isBoundaryStable(
-  photos: { elo_rating: number; uncertainty: number; comparison_count: number }[],
-  topK: number,
-): boolean {
-  if (photos.length <= topK) return true;
-  const byElo      = [...photos].sort((a, b) => b.elo_rating - a.elo_rating);
-  const boundary   = byElo[topK - 1]!;
-  const contenders = byElo.slice(topK, Math.min(topK + 3, byElo.length));
-  return !contenders.some(
-    (c) => Math.abs(c.elo_rating - boundary.elo_rating) < (c.uncertainty + boundary.uncertainty) * 0.5,
-  );
-}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
