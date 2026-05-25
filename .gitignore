@@ -20,6 +20,7 @@ worker/.mypy_cache/
 
 # TypeScript / Node
 ranking-engine/node_modules/
+backend/supabase/functions/node_modules/
 ranking-engine/dist/
 ranking-engine/.tsbuildinfo
 npm-debug.log*
@@ -38,6 +39,11 @@ npm-debug.log*
 # Supabase
 backend/supabase/.temp/
 backend/supabase/functions/.cache/
+
+# Claude Code — local dev tool state, not project artifacts
+.agents/
+.claude/
+skills-lock.json
 
 # iOS signing artifacts
 *.p8
