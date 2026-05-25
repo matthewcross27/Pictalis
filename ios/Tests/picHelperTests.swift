@@ -42,6 +42,35 @@ final class ModelsTests: XCTestCase {
         let response = try decoder.decode(APIErrorResponse.self, from: json)
         XCTAssertEqual(response.error, "Comparison not found")
     }
+
+    func testSessionStatusDecodes() throws {
+        let json = """
+        {"stage":"stage2","is_complete":false,"top_photo_count":20,"total_comparisons":47}
+        """.data(using: .utf8)!
+        let status = try decoder.decode(SessionStatus.self, from: json)
+        XCTAssertEqual(status.stage, "stage2")
+        XCTAssertFalse(status.isComplete)
+        XCTAssertEqual(status.topPhotoCount, 20)
+        XCTAssertEqual(status.totalComparisons, 47)
+    }
+
+    func testResultsResponseDecodesWithSession() throws {
+        let json = """
+        {"photos":[{"id":"11112222-e29b-41d4-a716-446655440000","storage_path":"uid/sid/a.jpg","thumbnail_path":null,"elo_rating":1350.0,"uncertainty":null,"comparison_count":5,"is_suppressed":false,"cluster_id":null,"signed_url":"https://example.com/a.jpg"}],"session":{"stage":"complete","is_complete":true}}
+        """.data(using: .utf8)!
+        let response = try decoder.decode(ResultsResponse.self, from: json)
+        XCTAssertEqual(response.photos.count, 1)
+        XCTAssertEqual(response.session?.stage, "complete")
+        XCTAssertEqual(response.session?.isComplete, true)
+    }
+
+    func testNextPairResponseDecodesWithStage() throws {
+        let json = """
+        {"comparison_id":"aaaabbbb-e29b-41d4-a716-446655440000","stage":"stage2","photo_a":{"id":"11112222-e29b-41d4-a716-446655440000","storage_path":"uid/sid/a.jpg","thumbnail_path":null,"elo_rating":1200.0,"comparison_count":0,"signed_url":"https://example.com/a.jpg"},"photo_b":{"id":"33334444-e29b-41d4-a716-446655440000","storage_path":"uid/sid/b.jpg","thumbnail_path":null,"elo_rating":1200.0,"comparison_count":0,"signed_url":"https://example.com/b.jpg"}}
+        """.data(using: .utf8)!
+        let response = try decoder.decode(NextPairResponse.self, from: json)
+        XCTAssertEqual(response.stage, "stage2")
+    }
 }
 
 final class APIClientTests: XCTestCase {

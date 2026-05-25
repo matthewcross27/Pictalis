@@ -1,93 +1,112 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
+import { type Photo, type CompletedComparison, computeTopK, computeMinComparisons, isBoundaryStable } from '../_shared/ranking-logic.ts';
+import { buildPairCounts, selectPhotoA, selectPhotoB, totalComparisons, computeProgress } from '../_shared/pair-selection.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const QuerySchema = z.object({
-  session_id: z.string().uuid(),
-});
+const QuerySchema = z.object({ session_id: z.string().uuid() });
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS });
-  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) {
     return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-      status: 401,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
-  const url = new URL(req.url);
-  const parsed = QuerySchema.safeParse({
-    session_id: url.searchParams.get('session_id'),
-  });
+  const url    = new URL(req.url);
+  const parsed = QuerySchema.safeParse({ session_id: url.searchParams.get('session_id') });
   if (!parsed.success) {
     return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
-      status: 400,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-    { global: { headers: { Authorization: authHeader } } }
+    { global: { headers: { Authorization: authHeader } } },
   );
 
   const { session_id } = parsed.data;
 
+  // 1. Fetch session
+  const { data: session, error: sessionError } = await supabase
+    .from('sessions')
+    .select('id, stage, photo_count, top_k')
+    .eq('id', session_id)
+    .single();
+
+  if (sessionError || !session) {
+    return new Response(JSON.stringify({ error: 'Session not found' }), {
+      status: 404, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Already marked complete (e.g. by session-status)
+  if (session.stage === 'complete') {
+    return new Response(JSON.stringify({ error: 'Session already complete' }), {
+      status: 422, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // 2. Fetch non-suppressed photos
   const { data: photos, error: photosError } = await supabase
     .from('photos')
-    .select('id, storage_path, thumbnail_path, elo_rating, comparison_count')
+    .select('id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, cluster_id')
     .eq('session_id', session_id)
-    .eq('is_suppressed', false)
-    .order('comparison_count', { ascending: true });
+    .eq('is_suppressed', false);
 
   if (photosError) {
     return new Response(JSON.stringify({ error: photosError.message }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
   if (!photos || photos.length < 2) {
     return new Response(JSON.stringify({ error: 'Not enough photos to compare' }), {
-      status: 422,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 422, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
-  // Photo A: fewest comparisons, random tiebreak
-  const minCount = photos[0]!.comparison_count;
-  const aPool = photos.filter((p) => p.comparison_count === minCount);
-  const photoA = aPool[Math.floor(Math.random() * aPool.length)]!;
+  const topK           = session.top_k ?? computeTopK(session.photo_count);
+  const minComparisons = computeMinComparisons(session.photo_count, topK);
 
-  // Find which photos have already been paired with A
-  const { data: priorComparisons } = await supabase
+  // 3. Fetch completed comparisons upfront (pair counts + coverage check)
+  const { data: rawComparisons } = await supabase
     .from('comparisons')
     .select('photo_a_id, photo_b_id')
     .eq('session_id', session_id)
-    .or(`photo_a_id.eq.${photoA.id},photo_b_id.eq.${photoA.id}`);
+    .not('completed_at', 'is', null);
 
-  const seenWithA = new Set<string>();
-  for (const c of priorComparisons ?? []) {
-    seenWithA.add(c.photo_a_id === photoA.id ? c.photo_b_id : c.photo_a_id);
+  const comparisons = (rawComparisons ?? []) as CompletedComparison[];
+  const pairCounts  = buildPairCounts(comparisons);
+
+  // 4. Check completion (safety net — session-status also writes this)
+  // Guard against vacuous truth: [].every(...) === true in JS (photos.length < 2 already guarded above)
+  const allHaveCoverage = photos.every((p) => p.comparison_count >= minComparisons);
+  const stable          = isBoundaryStable(photos as Photo[], topK);
+  const exhausted       = totalComparisons(photos as Photo[]) >= session.photo_count * 4;
+
+  if ((allHaveCoverage && stable) || exhausted) {
+    await supabase.from('sessions').update({ stage: 'complete' }).eq('id', session_id);
+    return new Response(JSON.stringify({ error: 'Session complete' }), {
+      status: 422, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
   }
 
-  // Photo B: fewest comparisons among photos not yet paired with A
-  const eligible = photos.filter((p) => p.id !== photoA.id && !seenWithA.has(p.id));
-  const bPool = eligible.length > 0 ? eligible : photos.filter((p) => p.id !== photoA.id);
-  const bMinCount = bPool[0]!.comparison_count;
-  const bTied = bPool.filter((p) => p.comparison_count === bMinCount);
-  const photoB = bTied[Math.floor(Math.random() * bTied.length)]!;
+  // 5. Select Photo A and Photo B
+  const inCoverage = !allHaveCoverage;
+  const photoA     = selectPhotoA(photos as Photo[], topK, minComparisons);
+  const photoB     = selectPhotoB(photos as Photo[], photoA, pairCounts, inCoverage);
 
-  // Generate signed URLs (1-hour expiry)
+  // 6. Generate signed URLs (1-hour expiry)
   const [signedA, signedB] = await Promise.all([
     supabase.storage.from('working-copies').createSignedUrl(photoA.storage_path, 3600),
     supabase.storage.from('working-copies').createSignedUrl(photoB.storage_path, 3600),
@@ -95,12 +114,11 @@ Deno.serve(async (req) => {
 
   if (!signedA.data?.signedUrl || !signedB.data?.signedUrl) {
     return new Response(JSON.stringify({ error: 'Failed to generate photo URLs' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
-  // Create a pending comparison record
+  // 7. Insert pending comparison record
   const { data: comparison, error: compError } = await supabase
     .from('comparisons')
     .insert({ session_id, photo_a_id: photoA.id, photo_b_id: photoB.id })
@@ -109,20 +127,18 @@ Deno.serve(async (req) => {
 
   if (compError || !comparison) {
     return new Response(JSON.stringify({ error: 'Failed to create comparison' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
   return new Response(
     JSON.stringify({
       comparison_id: comparison.id,
+      stage: 'ranking',
+      progress: computeProgress(photos as Photo[], topK),
       photo_a: { ...photoA, signed_url: signedA.data.signedUrl },
       photo_b: { ...photoB, signed_url: signedB.data.signedUrl },
     }),
-    {
-      status: 200,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    }
+    { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } },
   );
 });

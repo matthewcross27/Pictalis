@@ -5,7 +5,8 @@ struct ComparisonView: View {
 
     let sessionId: UUID
     @ObservedObject var uploadService: UploadService
-    var onFinish: () -> Void
+    var onSkipToResults: () -> Void
+    var onComplete: (Int) -> Void
 
     @State private var pair: NextPairResponse?
     @State private var isLoading = true
@@ -13,6 +14,7 @@ struct ComparisonView: View {
     @State private var errorMessage: String?
     @State private var comparisonCount = 0
     @State private var fullscreenPhoto: PairPhoto?
+    @State private var currentStage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,11 +61,18 @@ struct ComparisonView: View {
             }
 
             HStack {
-                Text("\(comparisonCount) comparisons")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(comparisonCount) comparisons")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    if let stage = currentStage {
+                        Text(stageLabel(stage))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Spacer()
-                Button("See Results") { onFinish() }
+                Button("Skip to Results") { onSkipToResults() }
                     .font(.subheadline)
                     .disabled(comparisonCount < 1)
             }
@@ -90,6 +99,15 @@ struct ComparisonView: View {
     }
 
     // MARK: - Private
+
+    private func stageLabel(_ stage: String) -> String {
+        switch stage {
+        case "stage1": return "Broad discovery"
+        case "stage2": return "Refining top photos"
+        case "stage3": return "Choosing between similar shots"
+        default: return ""
+        }
+    }
 
     @ViewBuilder
     private func photoButton(photo: PairPhoto) -> some View {
@@ -143,6 +161,12 @@ struct ComparisonView: View {
                 winnerId: winner.id
             )
             comparisonCount += 1
+            if let status = try? await api.sessionStatus(sessionId: sessionId),
+               status.isComplete {
+                isSubmitting = false
+                onComplete(status.totalComparisons)
+                return
+            }
         } catch {
             print("Submit failed: \(error)")
         }
@@ -155,10 +179,19 @@ struct ComparisonView: View {
         isLoading = true
         errorMessage = nil
         do {
-            pair = try await api.nextPair(sessionId: sessionId)
+            let response = try await api.nextPair(sessionId: sessionId)
+            currentStage = response.stage
+            pair = response
             isLoading = false
         } catch APIError.httpError(statusCode: 422, _) {
-            // Not enough photos registered yet — wait and retry (max 30 attempts = 30 s)
+            // 422 means either "not enough photos yet" (upload in progress)
+            // or "session complete" — check status to disambiguate.
+            if let status = try? await api.sessionStatus(sessionId: sessionId),
+               status.isComplete {
+                isLoading = false
+                onComplete(status.totalComparisons)
+                return
+            }
             guard retryCount < 30 else {
                 errorMessage = "Not enough photos available. Please go back and try again."
                 isLoading = false

@@ -11,6 +11,8 @@ struct ResultsView: View {
     @State private var errorMessage: String?
     @State private var exportingId: UUID?
     @State private var exportAlertMessage: String?
+    @State private var sessionStage: String?
+    @State private var isSessionComplete = false
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
@@ -37,6 +39,19 @@ struct ResultsView: View {
             }
             .navigationTitle("Your Favorites")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if sessionStage != nil {
+                        Text(isSessionComplete ? "Complete" : "In Progress")
+                            .font(.caption.bold())
+                            .foregroundStyle(isSessionComplete ? .green : .orange)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(isSessionComplete ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
+                            )
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Export All") { exportAll() }
                         .disabled(photos.isEmpty)
@@ -111,7 +126,10 @@ struct ResultsView: View {
     private func fetchResults() async {
         isLoading = true
         do {
-            photos = try await api.results(sessionId: sessionId)
+            let response = try await api.results(sessionId: sessionId)
+            photos = response.photos
+            sessionStage = response.session?.stage
+            isSessionComplete = response.session?.isComplete ?? false
         } catch {
             errorMessage = "Failed to load results: \(error.localizedDescription)"
         }
