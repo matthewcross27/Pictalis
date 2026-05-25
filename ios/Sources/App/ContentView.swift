@@ -40,6 +40,9 @@ struct ContentView: View {
                     totalComparisons: totalComparisons,
                     onSeeFullRankings: {
                         appState = .results(sessionId: sessionId)
+                    },
+                    onStartOver: {
+                        appState = .setup
                     }
                 )
 

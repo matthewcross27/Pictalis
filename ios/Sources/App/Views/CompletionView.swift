@@ -7,6 +7,7 @@ struct CompletionView: View {
     let sessionId: UUID
     let totalComparisons: Int
     var onSeeFullRankings: () -> Void
+    var onStartOver: () -> Void
 
     @State private var photos: [RankedPhoto] = []
     @State private var isLoading = true
@@ -77,6 +78,10 @@ struct CompletionView: View {
 
                         Button("See Full Rankings") { onSeeFullRankings() }
                             .font(.subheadline)
+
+                        Button("Start Over") { onStartOver() }
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.bottom, 24)
                 }
