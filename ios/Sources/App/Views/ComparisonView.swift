@@ -156,13 +156,16 @@ struct ComparisonView: View {
         guard let pair else { return }
         isSubmitting = true
         do {
-            _ = try await api.submitComparison(
+            async let submitResult = api.submitComparison(
                 comparisonId: pair.comparisonId,
                 winnerId: winner.id
             )
+            async let statusResult = api.sessionStatus(sessionId: sessionId)
+
+            _ = try await submitResult
             comparisonCount += 1
-            if let status = try? await api.sessionStatus(sessionId: sessionId),
-               status.isComplete {
+
+            if let status = try? await statusResult, status.isComplete {
                 isSubmitting = false
                 onComplete(status.totalComparisons)
                 return
