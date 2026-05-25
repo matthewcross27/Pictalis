@@ -205,7 +205,6 @@ struct ComparisonView: View {
             currentStage = next.stage
             self.pair = next
             prefetchedPair = nil
-            startPrefetch()
         } else {
             self.pair = nil
             await fetchNextPair()
