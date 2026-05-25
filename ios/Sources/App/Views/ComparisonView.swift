@@ -202,8 +202,10 @@ struct ComparisonView: View {
         }
         isSubmitting = false
         if let next = prefetchedPair {
-            currentStage = next.stage
-            self.pair = next
+            withAnimation(.easeInOut(duration: 0.15)) {
+                currentStage = next.stage
+                self.pair = next
+            }
             prefetchedPair = nil
         } else {
             self.pair = nil
