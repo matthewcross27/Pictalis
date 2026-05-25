@@ -202,6 +202,7 @@ Deno.serve(async (req) => {
   const pairCounts  = buildPairCounts(comparisons);
 
   // 4. Check completion (safety net — session-status also writes this)
+  // Guard against vacuous truth: [].every(...) === true in JS (photos.length < 2 already guarded above)
   const allHaveCoverage = photos.every((p) => p.comparison_count >= minComparisons);
   const stable          = isBoundaryStable(photos, topK);
   const exhausted       = totalComparisons(photos) >= session.photo_count * 4;

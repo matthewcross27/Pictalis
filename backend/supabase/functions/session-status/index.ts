@@ -87,7 +87,8 @@ Deno.serve(async (req) => {
   // Detect and persist completion
   let currentStage = session.stage as string;
   if (currentStage !== 'complete') {
-    const allHaveCoverage = photoList.every((p) => p.comparison_count >= minComparisons);
+    // Guard against vacuous truth: [].every(...) === true in JS
+    const allHaveCoverage = photoList.length > 0 && photoList.every((p) => p.comparison_count >= minComparisons);
     const stable          = isBoundaryStable(photoList, topK);
     const exhausted       = totalComps >= session.photo_count * 4;
     if ((allHaveCoverage && stable) || exhausted) {
