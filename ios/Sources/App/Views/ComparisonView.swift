@@ -185,16 +185,31 @@ struct ComparisonView: View {
             comparisonCount += 1
 
             if let status = try? await statusResult, status.isComplete {
+                prefetchTask?.cancel()
+                prefetchedPair = nil
                 isSubmitting = false
                 onComplete(status.totalComparisons)
                 return
             }
         } catch {
             print("Submit failed: \(error)")
+            prefetchedPair = nil
+            prefetchTask?.cancel()
+            isSubmitting = false
+            self.pair = nil
+            await fetchNextPair()
+            return
         }
         isSubmitting = false
-        self.pair = nil
-        await fetchNextPair()
+        if let next = prefetchedPair {
+            currentStage = next.stage
+            self.pair = next
+            prefetchedPair = nil
+            startPrefetch()
+        } else {
+            self.pair = nil
+            await fetchNextPair()
+        }
     }
 
     private func fetchNextPair(retryCount: Int = 0) async {
@@ -206,10 +221,10 @@ struct ComparisonView: View {
             pair = response
             isLoading = false
         } catch APIError.httpError(statusCode: 422, _) {
-            // 422 means either "not enough photos yet" (upload in progress)
-            // or "session complete" — check status to disambiguate.
             if let status = try? await api.sessionStatus(sessionId: sessionId),
                status.isComplete {
+                prefetchTask?.cancel()
+                prefetchedPair = nil
                 isLoading = false
                 onComplete(status.totalComparisons)
                 return
