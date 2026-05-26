@@ -88,3 +88,86 @@ export function computeProgress(photos: Photo[], topK: number): number {
   const boundary = byElo[Math.min(topK - 1, byElo.length - 1)]!;
   return Math.min(1, 1 - boundary.uncertainty / 350);
 }
+
+type IntraComparison = { photo_a_id: string; photo_b_id: string; completed_at: string | null };
+
+function buildClusterGroups(photos: Photo[]): Map<string, Photo[]> {
+  const groups = new Map<string, Photo[]>();
+  for (const p of photos) {
+    if (!p.cluster_id) continue;
+    const arr = groups.get(p.cluster_id) ?? [];
+    arr.push(p);
+    groups.set(p.cluster_id, arr);
+  }
+  return groups;
+}
+
+export function isDedupComplete(photos: Photo[], comparisons: IntraComparison[]): boolean {
+  const clusterGroups = buildClusterGroups(photos);
+  if (clusterGroups.size === 0) return true;
+
+  const completedIntraCount = new Map<string, number>();
+  for (const c of comparisons) {
+    if (!c.completed_at) continue;
+    const photoA = photos.find((p) => p.id === c.photo_a_id);
+    const photoB = photos.find((p) => p.id === c.photo_b_id);
+    if (!photoA?.cluster_id || photoA.cluster_id !== photoB?.cluster_id) continue;
+    const clusterId = photoA.cluster_id;
+    completedIntraCount.set(clusterId, (completedIntraCount.get(clusterId) ?? 0) + 1);
+  }
+
+  for (const [clusterId, members] of clusterGroups) {
+    if (members.length < 2) continue;
+    const needed = members.length - 1;
+    if ((completedIntraCount.get(clusterId) ?? 0) < needed) return false;
+  }
+  return true;
+}
+
+export function selectDedupPair(photos: Photo[], comparisons: IntraComparison[]): [Photo, Photo] {
+  const clusterGroups = buildClusterGroups(photos);
+
+  const completedIntraCount = new Map<string, number>();
+  for (const c of comparisons) {
+    if (!c.completed_at) continue;
+    const photoA = photos.find((p) => p.id === c.photo_a_id);
+    const photoB = photos.find((p) => p.id === c.photo_b_id);
+    if (!photoA?.cluster_id || photoA.cluster_id !== photoB?.cluster_id) continue;
+    completedIntraCount.set(photoA.cluster_id, (completedIntraCount.get(photoA.cluster_id) ?? 0) + 1);
+  }
+
+  // Find the unresolved cluster with the fewest completed comparisons.
+  let targetCluster: Photo[] | null = null;
+  let targetCount = Infinity;
+  for (const [clusterId, members] of clusterGroups) {
+    if (members.length < 2) continue;
+    const done   = completedIntraCount.get(clusterId) ?? 0;
+    const needed = members.length - 1;
+    if (done >= needed) continue;
+    if (done < targetCount) { targetCount = done; targetCluster = members; }
+  }
+
+  if (!targetCluster) throw new Error('selectDedupPair called when dedup is already complete');
+
+  // Build seen-pair set for this cluster.
+  const clusterIds = new Set(targetCluster.map((p) => p.id));
+  const seenPairs  = new Set<string>();
+  for (const c of comparisons) {
+    if (clusterIds.has(c.photo_a_id) && clusterIds.has(c.photo_b_id)) {
+      seenPairs.add(pairKey(c.photo_a_id, c.photo_b_id));
+    }
+  }
+
+  // Find the first unseen pair (sorted by id for determinism).
+  const sorted = [...targetCluster].sort((a, b) => a.id.localeCompare(b.id));
+  for (let i = 0; i < sorted.length; i++) {
+    for (let j = i + 1; j < sorted.length; j++) {
+      if (!seenPairs.has(pairKey(sorted[i]!.id, sorted[j]!.id))) {
+        return [sorted[i]!, sorted[j]!];
+      }
+    }
+  }
+
+  // All pairs seen (cycle) — return the lowest-index pair as tiebreak.
+  return [sorted[0]!, sorted[1]!];
+}
