@@ -1,10 +1,10 @@
-# picHelper
+# Pictalis
 
-A mobile-first iOS app that helps you quickly find your favorite photos from a large batch using rapid pairwise comparisons and an Elo-style ranking system.
+A mobile-first iOS app that helps you distill a large batch of photos into a curated set of your best memories, using rapid pairwise comparisons and an Elo-style ranking system.
 
 ## What it does
 
-Upload 100–300 photos from a trip, party, or shoot. The app shows you two photos at a time and asks which you prefer. After a few dozen quick picks, it surfaces your top 10–20 favorites — without you having to scroll through everything manually.
+Upload 100–300 photos from a trip, party, or shoot. The app shows you two photos at a time and asks which you prefer. After a few dozen quick picks, it surfaces your top 10–20 favorites — the ones worth keeping, like a talisman. No scrolling, no file management.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ Monorepo with four subsystems:
 ```bash
 cd ios
 xcodegen generate
-open picHelper.xcodeproj
+open Pictalis.xcodeproj
 ```
 
 ### Ranking engine

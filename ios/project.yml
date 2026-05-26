@@ -1,4 +1,4 @@
-name: picHelper
+name: Pictalis
 options:
   bundleIdPrefix: com.matthewcross
   deploymentTarget:
@@ -11,18 +11,18 @@ packages:
     from: 2.0.0
 
 targets:
-  picHelper:
+  Pictalis:
     type: application
     platform: iOS
     sources:
       - path: Sources
     info:
-      path: picHelper/Info.plist
+      path: Pictalis/Info.plist
       properties:
-        CFBundleDisplayName: picHelper
+        CFBundleDisplayName: Pictalis
         UILaunchScreen: {}
-        NSPhotoLibraryUsageDescription: "picHelper needs access to your photos to help you curate your favorites."
-        NSPhotoLibraryAddUsageDescription: "picHelper saves your favorite photos back to your library."
+        NSPhotoLibraryUsageDescription: "Pictalis needs access to your photos to help you curate your favorites."
+        NSPhotoLibraryAddUsageDescription: "Pictalis saves your favorite photos back to your library."
         UIUserInterfaceStyle: Light
         UIAppFonts:
           - Fraunces-Regular.ttf
@@ -40,13 +40,13 @@ targets:
       - package: Supabase
         product: Supabase
 
-  picHelperTests:
+  PictalisTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: Tests
     dependencies:
-      - target: picHelper
+      - target: Pictalis
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

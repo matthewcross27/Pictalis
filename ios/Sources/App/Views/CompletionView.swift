@@ -42,7 +42,7 @@ struct CompletionView: View {
                     // Photo grid
                     if isLoading {
                         ProgressView()
-                            .tint(Color.terracotta)
+                            .tint(Color.amber)
                             .padding(.vertical, 40)
                     } else if !photos.isEmpty {
                         LazyVGrid(columns: columns, spacing: 4) {

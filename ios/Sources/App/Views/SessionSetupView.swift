@@ -23,7 +23,7 @@ struct SessionSetupView: View {
 
                 // App identity
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("picHelper")
+                    Text("Pictalis")
                         .font(.displaySerif)
                         .foregroundStyle(Color.ink)
                         .tracking(-0.72)
@@ -74,12 +74,12 @@ struct SessionSetupView: View {
                     if let err = auth.authError {
                         Text("Sign-in error: \(err)")
                             .font(.captionSerif)
-                            .foregroundStyle(Color.terracotta)
+                            .foregroundStyle(Color.amber)
                             .padding(.horizontal, 4)
                     } else if let err = errorMessage {
                         Text(err)
                             .font(.captionSerif)
-                            .foregroundStyle(Color.terracotta)
+                            .foregroundStyle(Color.amber)
                             .padding(.horizontal, 4)
                     }
 
