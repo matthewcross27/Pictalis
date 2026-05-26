@@ -140,33 +140,40 @@ struct ComparisonView: View {
 
     @ViewBuilder
     private func photoButton(photo: PairPhoto) -> some View {
-        Button {
-            Task { @MainActor in await choose(winner: photo) }
-        } label: {
-            Color.grainPaper
-                .frame(maxWidth: .infinity)
-                .aspectRatio(4 / 3, contentMode: .fit)
-                .overlay {
-                    AsyncImage(url: URL(string: photo.signedUrl)) { phase in
-                        switch phase {
-                        case .empty:
-                            ProgressView().tint(Color.secondaryText)
-                        case .success(let image):
-                            image.resizable().scaledToFill()
-                        case .failure:
-                            Image(systemName: "photo")
-                                .font(.largeTitle)
-                                .foregroundStyle(Color.secondaryText)
-                        @unknown default:
-                            EmptyView()
+        ZStack {
+            Button {
+                Task { @MainActor in await choose(winner: photo) }
+            } label: {
+                Color.grainPaper
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(4 / 3, contentMode: .fit)
+                    .overlay {
+                        AsyncImage(url: URL(string: photo.signedUrl)) { phase in
+                            switch phase {
+                            case .empty:
+                                ProgressView().tint(Color.secondaryText)
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                            case .failure:
+                                Image(systemName: "photo")
+                                    .font(.largeTitle)
+                                    .foregroundStyle(Color.secondaryText)
+                            @unknown default:
+                                EmptyView()
+                            }
                         }
                     }
-                }
-                .clipped()
-                .overlay(alignment: .topTrailing) {
-                    Button {
-                        fullscreenPhoto = photo
-                    } label: {
+                    .clipped()
+            }
+            .buttonStyle(PhotoTapStyle())
+
+            // Action buttons at ZStack level — above the photo card, so they
+            // unambiguously own their tap area without gesture conflict with
+            // the outer choose button.
+            VStack {
+                HStack {
+                    Spacer()
+                    Button { fullscreenPhoto = photo } label: {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.white)
@@ -174,9 +181,11 @@ struct ComparisonView: View {
                             .background(Color.photoOverlay)
                             .clipShape(Capsule())
                     }
+                    .buttonStyle(.plain)
                     .padding(8)
                 }
-                .overlay(alignment: .bottomLeading) {
+                Spacer()
+                HStack {
                     Button {
                         Task { @MainActor in await remove(photo: photo) }
                     } label: {
@@ -187,10 +196,12 @@ struct ComparisonView: View {
                             .background(Color.red.opacity(0.85))
                             .clipShape(Capsule())
                     }
+                    .buttonStyle(.plain)
                     .padding(8)
+                    Spacer()
                 }
+            }
         }
-        .buttonStyle(PhotoTapStyle())
         .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
     }
 
