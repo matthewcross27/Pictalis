@@ -1,6 +1,6 @@
 import XCTest
 import UIKit
-@testable import picHelper
+@testable import Pictalis
 
 final class ModelsTests: XCTestCase {
     private let decoder = JSONDecoder()

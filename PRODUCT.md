@@ -10,11 +10,17 @@ Casual iPhone users aged 18-35. They've just come back from a trip, a graduation
 
 ## Product Purpose
 
-picHelper helps users quickly find the photos they'll actually come back to. It removes the cognitive weight of scanning a long gallery by breaking the decision into the simplest possible unit — "which of these two do I prefer?" — and surfaces a ranked shortlist with minimal comparisons. The job is done when the user has a set of 10-20 favorites they're glad they found.
+Pictalis helps users quickly find the photos they'll actually come back to. It removes the cognitive weight of scanning a long gallery by breaking the decision into the simplest possible unit — "which of these two do I prefer?" — and surfaces a ranked shortlist with minimal comparisons. The job is done when the user has a set of 10-20 favorites they're glad they found.
+
+The name is a portmanteau of "Pic" (photography) and the root of "Talisman" — a small, cherished object of deep sentimental value. The framing is deliberate: this is not file management, it is preservation of keepsakes.
 
 ## Brand Personality
 
-Artsy, light, satisfying. The app has a strong visual character — photographic, quietly stylized — but it stays out of the way during use. Choosing a photo should feel like a small pleasure, not a chore. The energy is closer to a well-designed zine or photobook than a productivity tool.
+Artsy, warm, satisfying. The brand draws thematic and aesthetic inspiration from *Pyralis pictalis*, a species of moth characterized by warm, organic coloration. Just as a moth is drawn to light, the app helps users sort through chaotic digital noise to locate the glowing, standout moments in a collection.
+
+The visual character is photographic and quietly stylized — it stays out of the way during use. Choosing a photo should feel like a small pleasure, not a chore. The energy is closer to a well-designed zine or photobook than a productivity tool.
+
+**Color direction:** Warm, nostalgic tones derived from nature — ochres, dusty ambers, soft creams, and velvety grays. Avoid clinical blues and stark blacks. The palette should feel like an old photograph, not a SaaS dashboard.
 
 ## Anti-references
 

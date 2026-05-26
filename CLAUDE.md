@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`picHelper` is a new project with no code yet. Update this file once the project structure and tooling are established.
+`Pictalis` is a photo curation iOS app. See docs/PRD.md for the full spec.
 
-# Photo Ranking & Curation App — Claude Code Constitution
+# Pictalis — Claude Code Constitution
 
 ## Project Overview
 A mobile-first iOS app (SwiftUI) that helps users curate 100–300 photos

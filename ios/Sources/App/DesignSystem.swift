@@ -9,7 +9,7 @@ extension Color {
     static let ink           = Color(red: 0.157, green: 0.141, blue: 0.098)
     static let secondaryText = Color(red: 0.514, green: 0.494, blue: 0.467)
     static let divider       = Color(red: 0.855, green: 0.835, blue: 0.804)
-    static let terracotta    = Color(red: 0.647, green: 0.325, blue: 0.212)
+    static let amber         = Color(red: 0.700, green: 0.480, blue: 0.060)
     static let photoOverlay  = Color(red: 0.098, green: 0.094, blue: 0.071).opacity(0.55)
 
     // Status badges
@@ -72,7 +72,7 @@ struct PrimaryButtonStyle: ButtonStyle {
 
     private func backgroundColor(isPressed: Bool) -> Color {
         guard isEnabled else { return .divider }
-        return isPressed ? Color(red: 0.549, green: 0.251, blue: 0.157) : .terracotta
+        return isPressed ? Color(red: 0.600, green: 0.400, blue: 0.045) : .amber
     }
 }
 

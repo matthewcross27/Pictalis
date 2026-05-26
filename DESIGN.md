@@ -1,5 +1,5 @@
 ---
-name: picHelper
+name: Pictalis
 description: Find the photos you'll actually come back to.
 colors:
   film-white: "oklch(97% 0.008 65)"
@@ -7,8 +7,8 @@ colors:
   ink: "oklch(17% 0.010 65)"
   secondary-text: "oklch(52% 0.008 65)"
   divider: "oklch(85% 0.008 65)"
-  terracotta: "oklch(55% 0.120 35)"
-  terracotta-dim: "oklch(55% 0.055 35)"
+  amber: "oklch(57% 0.125 62)"
+  amber-dim: "oklch(57% 0.060 62)"
   photo-overlay: "oklch(10% 0 0 / 55%)"
 typography:
   display:
@@ -56,7 +56,7 @@ spacing:
   xl: "32px"
 components:
   button-primary:
-    backgroundColor: "{colors.terracotta}"
+    backgroundColor: "{colors.amber}"
     textColor: "{colors.film-white}"
     rounded: "{rounded.interactive}"
     padding: "14px 20px"
@@ -67,7 +67,7 @@ components:
     rounded: "{rounded.interactive}"
     padding: "14px 20px"
   button-primary-hover:
-    backgroundColor: "oklch(50% 0.120 35)"
+    backgroundColor: "oklch(52% 0.125 62)"
     textColor: "{colors.film-white}"
     rounded: "{rounded.interactive}"
     padding: "14px 20px"
@@ -95,13 +95,15 @@ components:
     padding: "4px 10px"
 ---
 
-# Design System: picHelper
+# Design System: Pictalis
 
 ## 1. Overview
 
-**Creative North Star: "The Developed Print"**
+**Creative North Star: "The Moth and the Light"**
 
-picHelper is the quiet room where a batch of 200 photos gets edited down to the twelve you'll actually keep. The interface should feel like sitting under a single lamp with a stack of prints and a marker — warm, private, unhurried in spirit but quick in motion. Everything that isn't a photo exists to move you toward the next choice. Decoration is forbidden; the grain is in the palette.
+Pictalis is the quiet room where a batch of 200 photos gets edited down to the twelve you'll actually keep. The interface should feel like sitting under a single lamp with a stack of prints and a marker — warm, private, unhurried in spirit but quick in motion. Everything that isn't a photo exists to move you toward the next choice. Decoration is forbidden; the grain is in the palette.
+
+The brand draws from *Pyralis pictalis*, a moth known for its warm ochre and amber coloration. Just as a moth navigates toward light, the app helps users navigate through digital noise toward the glowing moments worth preserving. The palette echoes this: dusty ambers, soft ochres, aged cream, and velvety grays — organic, warm, and emphatically not technological.
 
 The type is Fraunces throughout — a variable-weight optical serif with organic warmth that resists the cold precision of the default iOS san-serif. At display sizes it feels editorial, like a photo zine. At label sizes it has just enough character to remind you this isn't a file manager. Motion is fast but not mechanical: pairs arrive at 120ms ease-out, giving a sense of momentum rather than instant teleportation. A session should feel like forward motion, not checklist processing.
 
@@ -109,7 +111,7 @@ This system explicitly rejects: the cream-and-purple gradient of generic SaaS ap
 
 **Key Characteristics:**
 - Warm off-white base — aged paper, not clinical white
-- Single accent color (terracotta) used sparingly; photos supply all other color
+- Single accent color (amber) used sparingly; photos supply all other color
 - Fraunces at every text size — weight contrast replaces typeface switching
 - Photos presented as near-frameless prints (4px radius, maximum surface area)
 - Motion snappy at 120ms, never mechanical; screen transitions at 220ms
@@ -119,7 +121,7 @@ This system explicitly rejects: the cream-and-purple gradient of generic SaaS ap
 A warm neutral field with one earthy accent. Photos supply all the color that matters — the chrome steps aside.
 
 ### Primary
-- **Terracotta** (`oklch(55% 0.120 35)`): The single interaction color. Used on the primary CTA button, active taps, and links. Appears on ≤10% of any given screen. Its rarity signals that something can be done.
+- **Amber** (`oklch(57% 0.125 62)`): The single interaction color. Warm golden ochre, derived from the coloration of *Pyralis pictalis*. Used on the primary CTA button, active taps, and links. Appears on ≤10% of any given screen. Its rarity signals that something can be done.
 
 ### Neutral
 - **Film White** (`oklch(97% 0.008 65)`): App background. Not pure white — tinted faintly warm toward amber so photos don't appear to float on clinical white. All screens use this as the base.
@@ -131,7 +133,7 @@ A warm neutral field with one earthy accent. Photos supply all the color that ma
 
 ### Named Rules
 
-**The One Voice Rule.** Terracotta appears on ≤10% of any given screen. Its rarity is the point. Never use it for decoration — only for the single most important action in the current context.
+**The One Voice Rule.** Amber appears on ≤10% of any given screen. Its rarity is the point. Never use it for decoration — only for the single most important action in the current context.
 
 **The No-White Rule.** Never use pure `#ffffff` or `#000000`. Film White and Ink have been calibrated with warm undertones; straying to pure values breaks the photographic feel.
 
@@ -157,7 +159,7 @@ A warm neutral field with one earthy accent. Photos supply all the color that ma
 
 ## 4. Elevation
 
-picHelper is flat by default. No shadows anywhere in the interface. Depth is conveyed through background color steps (Film White → Grain Paper) and the photos themselves, which naturally advance from any surface around them.
+Pictalis is flat by default. No shadows anywhere in the interface. Depth is conveyed through background color steps (Film White → Grain Paper) and the photos themselves, which naturally advance from any surface around them.
 
 The single exception is the photo overlay button (fullscreen expand, download icon): a 55% dark translucent background on a `pill` shape that sits over the image. This is not elevation — it is legibility. It has no shadow.
 
@@ -181,8 +183,8 @@ The heart of the app. Two cells stacked vertically, each filling the full width 
 Buttons are small in this app — they exist at the edge of the photo experience, never at the center of it.
 
 - **Shape:** 8px radius (`{rounded.interactive}`). Medium-rounded. Not pill, not sharp.
-- **Primary** (`{components.button-primary}`): Terracotta background, Film White text, weight 500 Fraunces. Used once per screen, for the singular primary action (Start Curating, Export All Favorites).
-- **Primary Hover/Press:** Darkens to `oklch(50% 0.120 35)` over 80ms ease-out. No scale, no shadow.
+- **Primary** (`{components.button-primary}`): Amber background, Film White text, weight 500 Fraunces. Used once per screen, for the singular primary action (Start Curating, Export All Favorites).
+- **Primary Hover/Press:** Darkens to `oklch(52% 0.125 62)` over 80ms ease-out. No scale, no shadow.
 - **Primary Disabled** (`{components.button-primary-disabled}`): Divider background, Secondary Text color. Clearly unavailable; not interactive-looking.
 - **Ghost** (`{components.button-ghost}`): No background, Secondary Text color. Skip to Results, Start Over, See Full Rankings. These actions exist but should not compete.
 
@@ -220,7 +222,7 @@ A thin strip above the comparison cells, visible only while upload is in progres
 
 ### Do:
 - **Do** present photos at maximum possible size. The frame should feel like looking through a window, not a thumbnail preview.
-- **Do** use Terracotta for exactly one interactive element per screen — the primary action. Its singularity is what makes it work.
+- **Do** use Amber for exactly one interactive element per screen — the primary action. Its singularity is what makes it work.
 - **Do** use weight contrast (400 → 600) to create hierarchy within Fraunces before reaching for size differences.
 - **Do** keep motion snappy: 120ms ease-out for pair transitions, 60ms for tap feedback, 220ms for full-screen transitions. Faster than you think is right.
 - **Do** use Film White and Grain Paper — not pure `#fff` or `#f5f5f5` — to maintain the warm-paper feel throughout.

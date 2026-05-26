@@ -2,7 +2,7 @@ import SwiftUI
 import Supabase
 
 @main
-struct picHelperApp: App {
+struct PictalisApp: App {
     @StateObject private var auth: AuthService
     @StateObject private var api: APIClient
 
@@ -46,6 +46,6 @@ struct picHelperApp: App {
         UINavigationBar.appearance().standardAppearance  = appearance
         UINavigationBar.appearance().compactAppearance   = appearance
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
-        UINavigationBar.appearance().tintColor = UIColor(red: 0.647, green: 0.325, blue: 0.212, alpha: 1)
+        UINavigationBar.appearance().tintColor = UIColor(red: 0.700, green: 0.480, blue: 0.060, alpha: 1)
     }
 }
