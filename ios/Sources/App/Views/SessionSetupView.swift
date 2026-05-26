@@ -5,8 +5,6 @@ struct SessionSetupView: View {
     @EnvironmentObject private var auth: AuthService
     @EnvironmentObject private var api: APIClient
 
-    // Called when session is created and upload has started.
-    // Receives the sessionId and a ready UploadService.
     var onStart: (UUID, UploadService) -> Void
 
     @State private var selectedItems: [PhotosPickerItem] = []
@@ -17,69 +15,88 @@ struct SessionSetupView: View {
     private var canStart: Bool { selectionCount >= 2 && auth.isAuthenticated && !isStarting }
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        ZStack {
+            Color.filmWhite.ignoresSafeArea()
 
-            Image(systemName: "photo.stack")
-                .font(.system(size: 64))
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 0) {
+                Spacer()
 
-            Text("picHelper")
-                .font(.largeTitle.bold())
+                // App identity
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("picHelper")
+                        .font(.displaySerif)
+                        .foregroundStyle(Color.ink)
+                        .tracking(-0.72)
 
-            Text("Pick 2–300 photos to start curating your favorites.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-
-            PhotosPicker(
-                selection: $selectedItems,
-                maxSelectionCount: 300,
-                matching: .images
-            ) {
-                Label(
-                    selectionCount > 0 ? "\(selectionCount) photos selected" : "Select Photos",
-                    systemImage: "photo.on.rectangle.angled"
-                )
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .padding(.horizontal)
-
-            if let authError = auth.authError {
-                Text("Sign-in failed: \(authError)")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            } else if let errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-            Button(action: startSession) {
-                Group {
-                    if isStarting {
-                        ProgressView()
-                    } else {
-                        Text("Start Curating")
-                            .font(.headline)
-                    }
+                    Text("Find the photos you'll actually come back to.")
+                        .font(.bodySerif)
+                        .foregroundStyle(Color.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(canStart ? Color.accentColor : Color.gray)
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            .disabled(!canStart)
-            .padding(.horizontal)
+                .padding(.horizontal, 24)
 
-            Spacer()
+                Spacer()
+
+                // Bottom action stack
+                VStack(spacing: 10) {
+                    // Photo picker
+                    PhotosPicker(
+                        selection: $selectedItems,
+                        maxSelectionCount: 300,
+                        matching: .images
+                    ) {
+                        HStack(spacing: 12) {
+                            Image(systemName: selectionCount > 0 ? "photo.stack" : "plus")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(selectionCount > 0 ? Color.ink : Color.secondaryText)
+
+                            Text(selectionCount > 0 ? "\(selectionCount) photos" : "Choose photos")
+                                .font(.titleSerif)
+                                .foregroundStyle(selectionCount > 0 ? Color.ink : Color.secondaryText)
+
+                            Spacer()
+
+                            if selectionCount > 0 {
+                                Text("Change")
+                                    .font(.captionSerif)
+                                    .foregroundStyle(Color.secondaryText)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: .interactiveRadius)
+                                .fill(Color.grainPaper)
+                        )
+                    }
+
+                    // Error state
+                    if let err = auth.authError {
+                        Text("Sign-in error: \(err)")
+                            .font(.captionSerif)
+                            .foregroundStyle(Color.terracotta)
+                            .padding(.horizontal, 4)
+                    } else if let err = errorMessage {
+                        Text(err)
+                            .font(.captionSerif)
+                            .foregroundStyle(Color.terracotta)
+                            .padding(.horizontal, 4)
+                    }
+
+                    // Primary CTA
+                    Button(action: startSession) {
+                        if isStarting {
+                            ProgressView().tint(Color.filmWhite)
+                        } else {
+                            Text("Start Curating")
+                        }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(!canStart)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 40)
+            }
         }
     }
 
@@ -87,8 +104,6 @@ struct SessionSetupView: View {
 
     private func startSession() {
         guard let userId = auth.userId else { return }
-        // Capture main-actor-isolated state before entering the Task to avoid
-        // Sendable closure warnings from the strict concurrency checker.
         let count = selectionCount
         let items = selectedItems
         isStarting = true
@@ -97,14 +112,11 @@ struct SessionSetupView: View {
         Task { @MainActor in
             do {
                 let session = try await api.createSession(photoCount: count)
-                let sessionId = session.id
-
                 let uploadService = UploadService(supabase: auth.supabase, api: api)
-                uploadService.start(items: items, sessionId: sessionId, userId: userId)
-
-                onStart(sessionId, uploadService)
+                uploadService.start(items: items, sessionId: session.id, userId: userId)
+                onStart(session.id, uploadService)
             } catch {
-                errorMessage = "Could not start session: \(error.localizedDescription)"
+                errorMessage = "Could not start: \(error.localizedDescription)"
                 isStarting = false
             }
         }

@@ -1,11 +1,10 @@
 import SwiftUI
 
-// Root state machine. Drives navigation between the four screens.
 enum AppState {
     case setup
     case comparing(sessionId: UUID, upload: UploadService)
     case complete(sessionId: UUID, totalComparisons: Int)
-    case results(sessionId: UUID)
+    case results(sessionId: UUID, previousComparisons: Int? = nil)
 }
 
 struct ContentView: View {
@@ -39,23 +38,30 @@ struct ContentView: View {
                     sessionId: sessionId,
                     totalComparisons: totalComparisons,
                     onSeeFullRankings: {
-                        appState = .results(sessionId: sessionId)
+                        appState = .results(sessionId: sessionId, previousComparisons: totalComparisons)
                     },
                     onStartOver: {
                         appState = .setup
                     }
                 )
 
-            case .results(let sessionId):
-                ResultsView(sessionId: sessionId)
+            case .results(let sessionId, let previousComparisons):
+                ResultsView(
+                    sessionId: sessionId,
+                    onBack: previousComparisons.map { comps in
+                        { appState = .complete(sessionId: sessionId, totalComparisons: comps) }
+                    }
+                )
             }
         }
-        .animation(.easeInOut, value: {
+        .background(Color.filmWhite.ignoresSafeArea())
+        .tint(Color.amber)
+        .animation(.screenTransition, value: {
             switch appState {
-            case .setup: return 0
-            case .comparing: return 1
-            case .complete: return 2
-            case .results: return 3
+            case .setup:      return 0
+            case .comparing:  return 1
+            case .complete:   return 2
+            case .results:    return 3
             }
         }())
     }

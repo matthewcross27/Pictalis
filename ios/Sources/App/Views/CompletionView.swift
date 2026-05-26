@@ -17,77 +17,86 @@ struct CompletionView: View {
     private let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    VStack(spacing: 8) {
-                        Image(systemName: "star.fill")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.yellow)
-                        Text("Your favorites are ready!")
-                            .font(.title2.bold())
-                        Text("\(totalComparisons) comparisons · \(photos.count) photos ranked")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.top, 24)
+        ZStack {
+            Color.filmWhite.ignoresSafeArea()
 
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Header
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Your favorites\nare ready.")
+                            .font(.displaySerif)
+                            .foregroundStyle(Color.ink)
+                            .tracking(-0.72)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text(photos.isEmpty ? "Here are your top picks." : "Here are your top \(photos.count).")
+                            .font(.bodySerif)
+                            .foregroundStyle(Color.secondaryText)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 48)
+                    .padding(.bottom, 32)
+
+                    // Photo grid
                     if isLoading {
                         ProgressView()
-                            .padding()
+                            .tint(Color.terracotta)
+                            .padding(.vertical, 40)
                     } else if !photos.isEmpty {
                         LazyVGrid(columns: columns, spacing: 4) {
                             ForEach(photos.prefix(10)) { photo in
                                 AsyncImage(url: URL(string: photo.signedUrl)) { phase in
                                     switch phase {
                                     case .empty:
-                                        Color(.secondarySystemBackground)
-                                            .aspectRatio(1, contentMode: .fill)
+                                        Color.grainPaper.aspectRatio(1, contentMode: .fill)
                                     case .success(let image):
-                                        image
-                                            .resizable()
-                                            .aspectRatio(1, contentMode: .fill)
+                                        image.resizable().aspectRatio(1, contentMode: .fill)
                                     case .failure:
-                                        Color(.secondarySystemBackground)
+                                        Color.grainPaper
                                             .aspectRatio(1, contentMode: .fill)
                                             .overlay {
                                                 Image(systemName: "photo")
-                                                    .foregroundStyle(.secondary)
+                                                    .foregroundStyle(Color.secondaryText)
                                             }
                                     @unknown default:
                                         EmptyView()
                                     }
                                 }
                                 .clipped()
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
                             }
                         }
                         .padding(.horizontal, 8)
+                        .padding(.bottom, 32)
                     }
 
-                    VStack(spacing: 12) {
+                    // Action buttons
+                    VStack(spacing: 8) {
                         Button {
                             Task { @MainActor in await exportAll() }
                         } label: {
-                            Label("Export All Favorites", systemImage: "square.and.arrow.down")
-                                .frame(maxWidth: .infinity)
+                            HStack(spacing: 8) {
+                                Image(systemName: "square.and.arrow.down")
+                                Text("Export All Favorites")
+                            }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(photos.isEmpty || isExporting)
-                        .padding(.horizontal)
+                        .padding(.horizontal, 24)
 
                         Button("See Full Rankings") { onSeeFullRankings() }
-                            .font(.subheadline)
+                            .buttonStyle(GhostButtonStyle())
 
                         Button("Start Over") { onStartOver() }
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .font(.captionSerif)
+                            .foregroundStyle(Color.secondaryText)
+                            .padding(.vertical, 10)
                     }
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 40)
                 }
             }
-            .navigationTitle("Done!")
-            .navigationBarTitleDisplayMode(.inline)
         }
         .task { await fetchTopPhotos() }
         .alert("Saved to Photos", isPresented: Binding(

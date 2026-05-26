@@ -121,6 +121,27 @@ Deno.test('selectPhotoB — coverage mode uses WEIGHTS_COVER (freshness-dominant
   assertEquals(selected.id, 'c');
 });
 
+Deno.test('selectPhotoB — hard-excludes pending pairs even when they score best', () => {
+  // pending and eligible are identical in every scoring dimension;
+  // only the pending hard-exclusion should distinguish them.
+  const photoA   = makePhoto('a', 1500, 200, 3);
+  const pending  = makePhoto('b', 1500, 200, 3);
+  const eligible = makePhoto('c', 1500, 200, 3);
+  const pendingPairs = new Set([pairKey('a', 'b')]);
+  const selected = selectPhotoB([photoA, pending, eligible], photoA, new Map(), false, pendingPairs);
+  assertEquals(selected.id, 'c');
+});
+
+Deno.test('selectPhotoB — falls back to full candidate pool when all candidates are pending', () => {
+  // Only one other photo; it happens to be pending.
+  // Must still return it (there's no other choice) rather than throwing.
+  const photoA = makePhoto('a', 1500, 200, 3);
+  const only   = makePhoto('b', 1500, 200, 3);
+  const pendingPairs = new Set([pairKey('a', 'b')]);
+  const selected = selectPhotoB([photoA, only], photoA, new Map(), false, pendingPairs);
+  assertEquals(selected.id, 'b');
+});
+
 // --- totalComparisons ---
 
 Deno.test('totalComparisons — sums comparison_count / 2', () => {
@@ -153,4 +174,76 @@ Deno.test('computeProgress — partial uncertainty → between 0 and 1', () => {
 Deno.test('computeProgress — clamped to 1 even if uncertainty is negative (defensive)', () => {
   const photos = [makePhoto('a', 1600, -50, 10)];
   assertEquals(computeProgress(photos, 1), 1);
+});
+
+// ─── isDedupComplete ────────────────────────────────────────────────────────
+
+import { selectDedupPair, isDedupComplete } from './pair-selection.ts';
+
+Deno.test('isDedupComplete — no clusters → immediately complete', () => {
+  const photos = [
+    makePhoto('a', 1500, 200, 0, null),
+    makePhoto('b', 1500, 200, 0, null),
+  ];
+  assertEquals(isDedupComplete(photos, []), true);
+});
+
+Deno.test('isDedupComplete — singleton clusters count as complete', () => {
+  const photos = [
+    makePhoto('a', 1500, 200, 0, 'X'),
+    makePhoto('b', 1500, 200, 0, null),
+  ];
+  assertEquals(isDedupComplete(photos, []), true);
+});
+
+Deno.test('isDedupComplete — cluster of 2 needs 1 intra comparison', () => {
+  const photos = [
+    makePhoto('a', 1500, 200, 0, 'X'),
+    makePhoto('b', 1480, 200, 0, 'X'),
+  ];
+  assertEquals(isDedupComplete(photos, []), false);
+  const comps = [{ photo_a_id: 'a', photo_b_id: 'b', completed_at: '2026-01-01' }];
+  assertEquals(isDedupComplete(photos, comps), true);
+});
+
+Deno.test('isDedupComplete — cluster of 3 needs 2 intra comparisons', () => {
+  const photos = [
+    makePhoto('a', 1500, 200, 0, 'Y'),
+    makePhoto('b', 1480, 200, 0, 'Y'),
+    makePhoto('c', 1460, 200, 0, 'Y'),
+  ];
+  const oneComp = [{ photo_a_id: 'a', photo_b_id: 'b', completed_at: '2026-01-01' }];
+  assertEquals(isDedupComplete(photos, oneComp), false);
+  const twoComps = [
+    { photo_a_id: 'a', photo_b_id: 'b', completed_at: '2026-01-01' },
+    { photo_a_id: 'b', photo_b_id: 'c', completed_at: '2026-01-01' },
+  ];
+  assertEquals(isDedupComplete(photos, twoComps), true);
+});
+
+// ─── selectDedupPair ────────────────────────────────────────────────────────
+
+Deno.test('selectDedupPair — returns two photos from the same cluster', () => {
+  const photos = [
+    makePhoto('a', 1500, 200, 0, 'X'),
+    makePhoto('b', 1480, 200, 0, 'X'),
+    makePhoto('c', 1500, 200, 0, null),
+  ];
+  const [p1, p2] = selectDedupPair(photos, []);
+  assertEquals(p1.cluster_id, 'X');
+  assertEquals(p2.cluster_id, 'X');
+});
+
+Deno.test('selectDedupPair — prefers unseen intra-cluster pairs', () => {
+  const photos = [
+    makePhoto('a', 1500, 200, 2, 'X'),
+    makePhoto('b', 1480, 200, 2, 'X'),
+    makePhoto('c', 1460, 200, 0, 'X'),
+  ];
+  // a-b already compared; a-c and b-c are fresh
+  const done = [{ photo_a_id: 'a', photo_b_id: 'b', completed_at: '2026-01-01' }];
+  const [p1, p2] = selectDedupPair(photos, done);
+  const ids = [p1.id, p2.id].sort();
+  // should NOT be a:b again
+  assertEquals(ids.join(':') !== 'a:b', true);
 });

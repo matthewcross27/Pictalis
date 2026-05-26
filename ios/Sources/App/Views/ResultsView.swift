@@ -5,6 +5,7 @@ struct ResultsView: View {
     @EnvironmentObject private var api: APIClient
 
     let sessionId: UUID
+    var onBack: (() -> Void)? = nil
 
     @State private var photos: [RankedPhoto] = []
     @State private var isLoading = true
@@ -18,42 +19,55 @@ struct ResultsView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading {
-                    ProgressView("Loading results…")
-                } else if let errorMessage {
-                    Text(errorMessage).foregroundStyle(.red).padding()
-                } else if photos.isEmpty {
-                    Text("No photos ranked yet.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 4) {
-                            ForEach(photos) { photo in
-                                photoCell(photo: photo)
-                            }
+            ZStack {
+                Color.filmWhite.ignoresSafeArea()
+
+                Group {
+                    if isLoading {
+                        VStack(spacing: 12) {
+                            ProgressView().tint(Color.amber)
+                            Text("Loading results…")
+                                .font(.captionSerif)
+                                .foregroundStyle(Color.secondaryText)
                         }
-                        .padding(4)
+                    } else if let errorMessage {
+                        Text(errorMessage)
+                            .font(.bodySerif)
+                            .foregroundStyle(Color.amber)
+                            .padding(.horizontal, 32)
+                    } else if photos.isEmpty {
+                        Text("No photos ranked yet.")
+                            .font(.bodySerif)
+                            .foregroundStyle(Color.secondaryText)
+                    } else {
+                        ScrollView {
+                            LazyVGrid(columns: columns, spacing: 4) {
+                                ForEach(photos) { photo in
+                                    photoCell(photo: photo)
+                                }
+                            }
+                            .padding(4)
+                        }
                     }
                 }
             }
             .navigationTitle("Your Favorites")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    if sessionStage != nil {
-                        Text(isSessionComplete ? "Complete" : "In Progress")
-                            .font(.caption.bold())
-                            .foregroundStyle(isSessionComplete ? .green : .orange)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(isSessionComplete ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
-                            )
+                    if let onBack {
+                        Button(action: onBack) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.ink)
+                        }
+                    } else if sessionStage != nil {
+                        StageBadge(stage: sessionStage ?? "", isComplete: isSessionComplete)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Export All") { exportAll() }
+                        .font(.labelSerif)
+                        .foregroundStyle(Color.amber)
                         .disabled(photos.isEmpty)
                 }
             }
@@ -77,9 +91,8 @@ struct ResultsView: View {
             AsyncImage(url: URL(string: photo.signedUrl)) { phase in
                 switch phase {
                 case .empty:
-                    ProgressView()
+                    Color.grainPaper
                         .frame(maxWidth: .infinity, maxHeight: 180)
-                        .background(Color(.secondarySystemBackground))
                 case .success(let image):
                     image
                         .resizable()
@@ -87,17 +100,17 @@ struct ResultsView: View {
                         .frame(height: 180)
                         .clipped()
                 case .failure:
-                    Image(systemName: "photo")
-                        .font(.largeTitle)
-                        .foregroundStyle(.secondary)
+                    Color.grainPaper
                         .frame(maxWidth: .infinity, minHeight: 180)
-                        .background(Color(.secondarySystemBackground))
+                        .overlay {
+                            Image(systemName: "photo")
+                                .foregroundStyle(Color.secondaryText)
+                        }
                 @unknown default:
                     EmptyView()
                 }
             }
 
-            // Export button overlay
             Button {
                 Task { @MainActor in
                     if await exportPhoto(photo: photo) {
@@ -113,14 +126,15 @@ struct ResultsView: View {
                             .foregroundStyle(.white)
                     }
                 }
+                .font(.system(size: 12, weight: .medium))
                 .padding(8)
-                .background(.black.opacity(0.5))
-                .clipShape(Circle())
+                .background(Color.photoOverlay)
+                .clipShape(Capsule())
             }
             .padding(8)
             .disabled(exportingId != nil)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
     }
 
     private func fetchResults() async {

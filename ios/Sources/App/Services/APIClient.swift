@@ -99,6 +99,23 @@ final class APIClient: ObservableObject {
         return try decoder.decode(SubmitComparisonResponse.self, from: data)
     }
 
+    // MARK: - remove-photo
+    // POST { session_id, photo_id } → { photo_id }
+
+    func removePhoto(sessionId: UUID, photoId: UUID) async throws {
+        let url = functionsBase.appending(path: "remove-photo")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "session_id": sessionId.uuidString.lowercased(),
+            "photo_id":   photoId.uuidString.lowercased(),
+        ])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validate(response, data: data)
+    }
+
     // MARK: - session-status
     // GET ?session_id=... → { stage, is_complete, top_photo_count, total_comparisons }
 
