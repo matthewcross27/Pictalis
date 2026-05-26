@@ -146,4 +146,70 @@ final class APIClient: ObservableObject {
         try validate(response, data: data)
         return try decoder.decode(ResultsResponse.self, from: data)
     }
+
+    // MARK: - start-cull
+    // POST { session_id } → { stage }
+
+    func startCull(sessionId: UUID) async throws -> StartCullResponse {
+        let url = functionsBase.appending(path: "start-cull")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "session_id": sessionId.uuidString.lowercased(),
+        ])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validate(response, data: data)
+        return try decoder.decode(StartCullResponse.self, from: data)
+    }
+
+    // MARK: - next-cull
+    // GET ?session_id=... → CullCard (done:true when empty)
+
+    func nextCull(sessionId: UUID) async throws -> CullCard {
+        var comps = URLComponents(url: functionsBase.appending(path: "next-cull"), resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
+        var req = URLRequest(url: comps.url!)
+        req.httpMethod = "GET"
+        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validate(response, data: data)
+        return try decoder.decode(CullCard.self, from: data)
+    }
+
+    // MARK: - submit-cull
+    // POST { session_id, photo_id, decision } → { done }
+
+    func submitCull(sessionId: UUID, photoId: UUID, decision: String) async throws -> CullActionResponse {
+        let url = functionsBase.appending(path: "submit-cull")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "session_id": sessionId.uuidString.lowercased(),
+            "photo_id":   photoId.uuidString.lowercased(),
+            "decision":   decision,
+        ])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validate(response, data: data)
+        return try decoder.decode(CullActionResponse.self, from: data)
+    }
+
+    // MARK: - finish-cull
+    // POST { session_id } → { stage }
+
+    func finishCull(sessionId: UUID) async throws {
+        let url = functionsBase.appending(path: "finish-cull")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "session_id": sessionId.uuidString.lowercased(),
+        ])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validate(response, data: data)
+    }
 }
