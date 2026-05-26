@@ -28,7 +28,7 @@ struct ComparisonView: View {
                 if isLoading {
                     Spacer()
                     VStack(spacing: 12) {
-                        ProgressView().tint(Color.terracotta)
+                        ProgressView().tint(Color.amber)
                         Text("Loading photos…")
                             .font(.captionSerif)
                             .foregroundStyle(Color.secondaryText)
@@ -38,7 +38,7 @@ struct ComparisonView: View {
                     Spacer()
                     Text(errorMessage)
                         .font(.bodySerif)
-                        .foregroundStyle(Color.terracotta)
+                        .foregroundStyle(Color.amber)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                     Spacer()
@@ -89,14 +89,14 @@ struct ComparisonView: View {
         if !uploadService.isComplete {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
-                    // Custom terracotta progress bar
+                    // Amber progress bar
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             RoundedRectangle(cornerRadius: 1)
                                 .fill(Color.divider)
                                 .frame(height: 2)
                             RoundedRectangle(cornerRadius: 1)
-                                .fill(Color.terracotta)
+                                .fill(Color.amber)
                                 .frame(
                                     width: geo.size.width * CGFloat(uploadService.completed) / CGFloat(max(uploadService.total, 1)),
                                     height: 2
@@ -196,22 +196,11 @@ struct ComparisonView: View {
         guard let pair else { return }
         isSubmitting = true
         do {
-            async let submitResult = api.submitComparison(
+            _ = try await api.submitComparison(
                 comparisonId: pair.comparisonId,
                 winnerId: winner.id
             )
-            async let statusResult = api.sessionStatus(sessionId: sessionId)
-
-            _ = try await submitResult
             comparisonCount += 1
-
-            if let status = try? await statusResult, status.isComplete {
-                prefetchTask?.cancel()
-                prefetchedPair = nil
-                isSubmitting = false
-                onComplete(status.totalComparisons)
-                return
-            }
         } catch {
             print("Submit failed: \(error)")
             prefetchedPair = nil
