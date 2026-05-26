@@ -251,7 +251,11 @@ struct ComparisonView: View {
         }
         isRemoving = false
         self.pair = nil
-        await fetchNextPair()
+        if let status = try? await api.sessionStatus(sessionId: sessionId), status.isComplete {
+            onComplete(status.totalComparisons)
+        } else {
+            await fetchNextPair()
+        }
     }
 
     private func fetchNextPair(retryCount: Int = 0) async {
