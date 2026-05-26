@@ -60,6 +60,14 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Delete open comparison rows involving this photo so the partner can be re-paired.
+  await supabase
+    .from('comparisons')
+    .delete()
+    .eq('session_id', session_id)
+    .is('completed_at', null)
+    .or(`photo_a_id.eq.${data.id},photo_b_id.eq.${data.id}`);
+
   return new Response(
     JSON.stringify({ photo_id: data.id }),
     { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } },
