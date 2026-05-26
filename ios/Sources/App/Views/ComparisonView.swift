@@ -17,6 +17,7 @@ struct ComparisonView: View {
     @State private var currentStage: String?
     @State private var prefetchedPair: NextPairResponse?
     @State private var prefetchTask: Task<Void, Never>?
+    @State private var isRemoving = false
 
     var body: some View {
         ZStack {
@@ -49,8 +50,8 @@ struct ComparisonView: View {
                         photoButton(photo: pair.photoB)
                     }
                     .padding(.horizontal, 8)
-                    .opacity(isSubmitting ? 0.7 : 1.0)
-                    .disabled(isSubmitting)
+                    .opacity((isSubmitting || isRemoving) ? 0.7 : 1.0)
+                    .disabled(isSubmitting || isRemoving)
                     .animation(.buttonPress, value: isSubmitting)
                     Spacer()
                 }
@@ -175,6 +176,19 @@ struct ComparisonView: View {
                     }
                     .padding(8)
                 }
+                .overlay(alignment: .bottomLeading) {
+                    Button {
+                        Task { @MainActor in await remove(photo: photo) }
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(8)
+                            .background(Color.red.opacity(0.85))
+                            .clipShape(Capsule())
+                    }
+                    .padding(8)
+                }
         }
         .buttonStyle(PhotoTapStyle())
         .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
@@ -221,6 +235,23 @@ struct ComparisonView: View {
             self.pair = nil
             await fetchNextPair()
         }
+    }
+
+    private func remove(photo: PairPhoto) async {
+        guard !isRemoving, !isSubmitting else { return }
+        isRemoving = true
+        prefetchTask?.cancel()
+        prefetchedPair = nil
+        do {
+            try await api.removePhoto(sessionId: sessionId, photoId: photo.id)
+        } catch {
+            print("Remove failed: \(error)")
+            isRemoving = false
+            return
+        }
+        isRemoving = false
+        self.pair = nil
+        await fetchNextPair()
     }
 
     private func fetchNextPair(retryCount: Int = 0) async {
