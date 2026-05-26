@@ -1,7 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
 import { type Photo, type CompletedComparison, computeTopK, computeMinComparisons, isBoundaryStable } from '../_shared/ranking-logic.ts';
-import { pairKey, buildPairCounts, selectPhotoA, selectPhotoB, totalComparisons, computeProgress } from '../_shared/pair-selection.ts';
+import { pairKey, buildPairCounts, selectPhotoA, selectPhotoB, selectDedupPair, isDedupComplete, totalComparisons, computeProgress } from '../_shared/pair-selection.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -93,6 +93,96 @@ Deno.serve(async (req) => {
       .filter((c) => !c.completed_at)
       .map((c) => pairKey(c.photo_a_id, c.photo_b_id)),
   );
+
+  // ── Dedup stage ────────────────────────────────────────────────────────────
+  // On first next-pair call: if clusters exist, auto-promote to dedup.
+  const hasMultiMemberClusters = (() => {
+    const clusterSizes = new Map<string, number>();
+    for (const p of photos) {
+      if (p.cluster_id) clusterSizes.set(p.cluster_id, (clusterSizes.get(p.cluster_id) ?? 0) + 1);
+    }
+    return [...clusterSizes.values()].some((n) => n >= 2);
+  })();
+
+  if (session.stage === 'ranking' && hasMultiMemberClusters && allComparisons.length === 0) {
+    await supabase.from('sessions').update({ stage: 'dedup' }).eq('id', session_id);
+    session.stage = 'dedup';
+  }
+
+  if (session.stage === 'dedup') {
+    const dedupDone = isDedupComplete(photos as Photo[], allComparisons);
+
+    if (dedupDone) {
+      // Suppress cluster losers and transition to ranking.
+      const clusterGroups = new Map<string, Photo[]>();
+      for (const p of photos as Photo[]) {
+        if (!p.cluster_id) continue;
+        const arr = clusterGroups.get(p.cluster_id) ?? [];
+        arr.push(p);
+        clusterGroups.set(p.cluster_id, arr);
+      }
+      for (const members of clusterGroups.values()) {
+        if (members.length < 2) continue;
+        const sorted = [...members].sort((a, b) => b.elo_rating - a.elo_rating);
+        const loserIds = sorted.slice(1).map((p) => p.id);
+        if (loserIds.length > 0) {
+          await supabase.from('photos').update({ is_suppressed: true }).in('id', loserIds);
+        }
+      }
+      await supabase.from('sessions').update({ stage: 'ranking' }).eq('id', session_id);
+      // Re-fetch non-suppressed photos for the ranking stage.
+      const { data: rankingPhotos, error: rankingError } = await supabase
+        .from('photos')
+        .select('id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, cluster_id')
+        .eq('session_id', session_id)
+        .eq('is_suppressed', false);
+      if (rankingError || !rankingPhotos || rankingPhotos.length < 2) {
+        return new Response(JSON.stringify({ error: 'Not enough photos after dedup' }), {
+          status: 422, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      // Fall through to ranking logic using the post-dedup photo set.
+      (photos as unknown as Photo[]) = rankingPhotos as Photo[];
+    } else {
+      // Serve an intra-cluster pair.
+      const [dedupA, dedupB] = selectDedupPair(photos as Photo[], allComparisons);
+
+      const [signedA, signedB] = await Promise.all([
+        supabase.storage.from('working-copies').createSignedUrl(dedupA.storage_path, 3600),
+        supabase.storage.from('working-copies').createSignedUrl(dedupB.storage_path, 3600),
+      ]);
+
+      if (!signedA.data?.signedUrl || !signedB.data?.signedUrl) {
+        return new Response(JSON.stringify({ error: 'Failed to generate photo URLs' }), {
+          status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: comparison, error: compError } = await supabase
+        .from('comparisons')
+        .insert({ session_id, photo_a_id: dedupA.id, photo_b_id: dedupB.id })
+        .select('id')
+        .single();
+
+      if (compError || !comparison) {
+        return new Response(JSON.stringify({ error: 'Failed to create comparison' }), {
+          status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          comparison_id: comparison.id,
+          stage: 'dedup',
+          progress: 0,
+          photo_a: { ...dedupA, signed_url: signedA.data.signedUrl },
+          photo_b: { ...dedupB, signed_url: signedB.data.signedUrl },
+        }),
+        { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } },
+      );
+    }
+  }
+  // ── End dedup stage ────────────────────────────────────────────────────────
 
   // 4. Check completion (safety net — session-status also writes this)
   // Guard against vacuous truth: [].every(...) === true in JS (photos.length < 2 already guarded above)
