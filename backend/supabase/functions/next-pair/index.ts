@@ -1,7 +1,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
 import { type Photo, type CompletedComparison, computeTopK, computeMinComparisons, isBoundaryStable } from '../_shared/ranking-logic.ts';
-import { buildPairCounts, selectPhotoA, selectPhotoB, totalComparisons, computeProgress } from '../_shared/pair-selection.ts';
+import { pairKey, buildPairCounts, selectPhotoA, selectPhotoB, totalComparisons, computeProgress } from '../_shared/pair-selection.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -79,14 +79,20 @@ Deno.serve(async (req) => {
   const minComparisons = computeMinComparisons(session.photo_count, topK);
 
   // 3. Fetch all comparisons (pending + completed) for pair-count deduplication.
-  // Pending comparisons must be counted so prefetch doesn't re-select an in-flight pair.
+  // Pending comparisons (completed_at IS NULL) are hard-excluded from re-selection.
   const { data: rawComparisons } = await supabase
     .from('comparisons')
-    .select('photo_a_id, photo_b_id')
+    .select('photo_a_id, photo_b_id, completed_at')
     .eq('session_id', session_id);
 
-  const comparisons = (rawComparisons ?? []) as CompletedComparison[];
-  const pairCounts  = buildPairCounts(comparisons);
+  type RawComparison = CompletedComparison & { completed_at: string | null };
+  const allComparisons = (rawComparisons ?? []) as RawComparison[];
+  const pairCounts     = buildPairCounts(allComparisons);
+  const pendingPairs   = new Set(
+    allComparisons
+      .filter((c) => !c.completed_at)
+      .map((c) => pairKey(c.photo_a_id, c.photo_b_id)),
+  );
 
   // 4. Check completion (safety net — session-status also writes this)
   // Guard against vacuous truth: [].every(...) === true in JS (photos.length < 2 already guarded above)
@@ -104,7 +110,7 @@ Deno.serve(async (req) => {
   // 5. Select Photo A and Photo B
   const inCoverage = !allHaveCoverage;
   const photoA     = selectPhotoA(photos as Photo[], topK, minComparisons);
-  const photoB     = selectPhotoB(photos as Photo[], photoA, pairCounts, inCoverage);
+  const photoB     = selectPhotoB(photos as Photo[], photoA, pairCounts, inCoverage, pendingPairs);
 
   // 6. Generate signed URLs (1-hour expiry)
   const [signedA, signedB] = await Promise.all([

@@ -49,16 +49,21 @@ export function selectPhotoB(
   photoA: Photo,
   pairCounts: Map<string, number>,
   inCoverage: boolean,
+  pendingPairs: Set<string> = new Set(),
 ): Photo {
-  const candidates = photos.filter((p) => p.id !== photoA.id);
+  const allCandidates = photos.filter((p) => p.id !== photoA.id);
+  // Hard-exclude in-flight pending pairs; fall back to full pool if no eligible candidates remain.
+  const candidates = allCandidates.filter((p) => !pendingPairs.has(pairKey(photoA.id, p.id)));
+  const pool = candidates.length > 0 ? candidates : allCandidates;
+
   const w = inCoverage ? WEIGHTS_COVER : WEIGHTS_POST;
 
-  const maxEloDiff = Math.max(...candidates.map((c) => Math.abs(c.elo_rating - photoA.elo_rating)), 1);
-  const maxCount   = Math.max(...candidates.map((c) => c.comparison_count), 1);
+  const maxEloDiff = Math.max(...pool.map((c) => Math.abs(c.elo_rating - photoA.elo_rating)), 1);
+  const maxCount   = Math.max(...pool.map((c) => c.comparison_count), 1);
 
   let best = -Infinity;
-  let bestB = candidates[0]!;
-  for (const b of candidates) {
+  let bestB = pool[0]!;
+  for (const b of pool) {
     const eloSim  = 1 - Math.abs(b.elo_rating - photoA.elo_rating) / maxEloDiff;
     const overlap = (b.uncertainty + photoA.uncertainty) / 700;
     const fresh   = 1 - b.comparison_count / maxCount;

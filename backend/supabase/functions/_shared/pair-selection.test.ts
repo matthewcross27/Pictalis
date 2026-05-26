@@ -121,6 +121,27 @@ Deno.test('selectPhotoB — coverage mode uses WEIGHTS_COVER (freshness-dominant
   assertEquals(selected.id, 'c');
 });
 
+Deno.test('selectPhotoB — hard-excludes pending pairs even when they score best', () => {
+  // pending and eligible are identical in every scoring dimension;
+  // only the pending hard-exclusion should distinguish them.
+  const photoA   = makePhoto('a', 1500, 200, 3);
+  const pending  = makePhoto('b', 1500, 200, 3);
+  const eligible = makePhoto('c', 1500, 200, 3);
+  const pendingPairs = new Set([pairKey('a', 'b')]);
+  const selected = selectPhotoB([photoA, pending, eligible], photoA, new Map(), false, pendingPairs);
+  assertEquals(selected.id, 'c');
+});
+
+Deno.test('selectPhotoB — falls back to full candidate pool when all candidates are pending', () => {
+  // Only one other photo; it happens to be pending.
+  // Must still return it (there's no other choice) rather than throwing.
+  const photoA = makePhoto('a', 1500, 200, 3);
+  const only   = makePhoto('b', 1500, 200, 3);
+  const pendingPairs = new Set([pairKey('a', 'b')]);
+  const selected = selectPhotoB([photoA, only], photoA, new Map(), false, pendingPairs);
+  assertEquals(selected.id, 'b');
+});
+
 // --- totalComparisons ---
 
 Deno.test('totalComparisons — sums comparison_count / 2', () => {
