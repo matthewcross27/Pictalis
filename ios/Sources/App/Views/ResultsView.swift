@@ -5,6 +5,7 @@ struct ResultsView: View {
     @EnvironmentObject private var api: APIClient
 
     let sessionId: UUID
+    var onBack: (() -> Void)? = nil
 
     @State private var photos: [RankedPhoto] = []
     @State private var isLoading = true
@@ -24,7 +25,7 @@ struct ResultsView: View {
                 Group {
                     if isLoading {
                         VStack(spacing: 12) {
-                            ProgressView().tint(Color.terracotta)
+                            ProgressView().tint(Color.amber)
                             Text("Loading results…")
                                 .font(.captionSerif)
                                 .foregroundStyle(Color.secondaryText)
@@ -32,7 +33,7 @@ struct ResultsView: View {
                     } else if let errorMessage {
                         Text(errorMessage)
                             .font(.bodySerif)
-                            .foregroundStyle(Color.terracotta)
+                            .foregroundStyle(Color.amber)
                             .padding(.horizontal, 32)
                     } else if photos.isEmpty {
                         Text("No photos ranked yet.")
@@ -53,14 +54,20 @@ struct ResultsView: View {
             .navigationTitle("Your Favorites")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    if sessionStage != nil {
+                    if let onBack {
+                        Button(action: onBack) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.ink)
+                        }
+                    } else if sessionStage != nil {
                         StageBadge(stage: sessionStage ?? "", isComplete: isSessionComplete)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Export All") { exportAll() }
                         .font(.labelSerif)
-                        .foregroundStyle(Color.terracotta)
+                        .foregroundStyle(Color.amber)
                         .disabled(photos.isEmpty)
                 }
             }
