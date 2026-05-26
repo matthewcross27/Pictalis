@@ -155,6 +155,38 @@ struct SessionStatus: Decodable {
     }
 }
 
+// MARK: - start-cull
+
+struct StartCullResponse: Decodable {
+    let stage: String
+}
+
+// MARK: - next-cull
+
+struct CullCard: Decodable {
+    let done: Bool
+    let photoId: UUID?
+    let photoUrl: String?
+    let clusterId: UUID?
+    let clusterSize: Int?
+    let cardsRemaining: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case done
+        case photoId        = "photo_id"
+        case photoUrl       = "photo_url"
+        case clusterId      = "cluster_id"
+        case clusterSize    = "cluster_size"
+        case cardsRemaining = "cards_remaining"
+    }
+}
+
+// MARK: - submit-cull / finish-cull
+
+struct CullActionResponse: Decodable {
+    let done: Bool
+}
+
 // MARK: - Errors
 
 struct APIErrorResponse: Decodable {
