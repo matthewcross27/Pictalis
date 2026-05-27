@@ -2,6 +2,8 @@ import SwiftUI
 
 enum AppState {
     case setup
+    case choosingCullMode(sessionId: UUID, upload: UploadService)
+    case culling(sessionId: UUID, upload: UploadService)
     case comparing(sessionId: UUID, upload: UploadService)
     case complete(sessionId: UUID, totalComparisons: Int)
     case results(sessionId: UUID, previousComparisons: Int? = nil)
@@ -18,8 +20,29 @@ struct ContentView: View {
             switch appState {
             case .setup:
                 SessionSetupView { sessionId, uploadService in
-                    appState = .comparing(sessionId: sessionId, upload: uploadService)
+                    appState = .choosingCullMode(sessionId: sessionId, upload: uploadService)
                 }
+
+            case .choosingCullMode(let sessionId, let upload):
+                CullChoiceView(
+                    sessionId: sessionId,
+                    uploadService: upload,
+                    onFilterThenRank: {
+                        appState = .culling(sessionId: sessionId, upload: upload)
+                    },
+                    onRankOnly: {
+                        appState = .comparing(sessionId: sessionId, upload: upload)
+                    }
+                )
+
+            case .culling(let sessionId, let upload):
+                CullView(
+                    sessionId: sessionId,
+                    uploadService: upload,
+                    onComplete: {
+                        appState = .comparing(sessionId: sessionId, upload: upload)
+                    }
+                )
 
             case .comparing(let sessionId, let upload):
                 ComparisonView(
@@ -58,10 +81,12 @@ struct ContentView: View {
         .tint(Color.amber)
         .animation(.screenTransition, value: {
             switch appState {
-            case .setup:      return 0
-            case .comparing:  return 1
-            case .complete:   return 2
-            case .results:    return 3
+            case .setup:              return 0
+            case .choosingCullMode:   return 1
+            case .culling:            return 2
+            case .comparing:          return 3
+            case .complete:           return 4
+            case .results:            return 5
             }
         }())
     }
