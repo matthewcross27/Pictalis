@@ -201,6 +201,7 @@ struct CullView: View {
         isSubmitting = true
         do {
             try await api.finishCull(sessionId: sessionId)
+            isSubmitting = false
             onComplete()
         } catch {
             errorMessage = "Couldn't finish. Try again."
