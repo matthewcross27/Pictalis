@@ -191,6 +191,7 @@ struct CullView: View {
                 }
                 await fetchNext()
             } catch {
+                isLoading = false
                 errorMessage = "Failed to submit. Try again."
             }
             isSubmitting = false
@@ -215,6 +216,7 @@ struct CullView: View {
         do {
             let next = try await api.nextCull(sessionId: sessionId)
             if next.done {
+                isLoading = false
                 onComplete()
                 return
             }

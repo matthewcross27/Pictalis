@@ -167,7 +167,7 @@ struct CullCard: Decodable {
     let done: Bool
     let photoId: UUID?
     let photoUrl: String?
-    let clusterId: UUID?
+    let clusterId: String?
     let clusterSize: Int?
     let cardsRemaining: Int?
 
