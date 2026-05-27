@@ -47,6 +47,7 @@ Deno.serve(async (req) => {
     .eq('session_id', session_id)
     .eq('is_suppressed', false)
     .is('cull_decision', null)
+    .not('cluster_id', 'is', null)
     .order('cluster_id')
     .order('id');
 

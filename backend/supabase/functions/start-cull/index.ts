@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     });
   }
 
-  if (!error && count === 0) {
+  if (count === 0) {
     return new Response(JSON.stringify({ error: 'Session already in progress' }), {
       status: 409, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
