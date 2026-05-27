@@ -77,7 +77,8 @@ Deno.serve(async (req) => {
     .from('photos')
     .update(update)
     .eq('cluster_id', cluster_id)
-    .eq('session_id', session_id);
+    .eq('session_id', session_id)
+    .is('cull_decision', null);
 
   if (updateError) {
     return new Response(JSON.stringify({ error: updateError.message }), {

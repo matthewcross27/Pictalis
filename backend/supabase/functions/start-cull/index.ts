@@ -40,14 +40,21 @@ Deno.serve(async (req) => {
 
   const { session_id } = parsed.data;
 
-  const { error } = await supabase
+  const { error, count } = await supabase
     .from('sessions')
-    .update({ stage: 'cull' })
-    .eq('id', session_id);
+    .update({ stage: 'cull' }, { count: 'exact' })
+    .eq('id', session_id)
+    .not('stage', 'in', '("ranking","complete")');
 
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (!error && count === 0) {
+    return new Response(JSON.stringify({ error: 'Session already in progress' }), {
+      status: 409, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 

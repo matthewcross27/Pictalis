@@ -46,7 +46,9 @@ Deno.serve(async (req) => {
     .select('id, storage_path, cluster_id, quality_flags')
     .eq('session_id', session_id)
     .eq('is_suppressed', false)
-    .is('cull_decision', null);
+    .is('cull_decision', null)
+    .order('cluster_id')
+    .order('id');
 
   if (photosError) {
     return new Response(JSON.stringify({ error: photosError.message }), {
