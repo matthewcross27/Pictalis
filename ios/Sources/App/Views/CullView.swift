@@ -176,6 +176,7 @@ struct CullView: View {
         }
         Task {
             try? await Task.sleep(for: .milliseconds(250))
+            isLoading = true
             dragOffset = 0
             do {
                 let result = try await api.submitCull(
@@ -184,6 +185,7 @@ struct CullView: View {
                     decision: decision
                 )
                 if result.done {
+                    isSubmitting = false
                     onComplete()
                     return
                 }
