@@ -42,6 +42,7 @@ final class UploadService: ObservableObject {
             for await _ in group { addNext() }
         }
         isComplete = true
+        try? await api.markUploadComplete(sessionId: sessionId)
     }
 
     private func uploadOne(item: PhotosPickerItem, sessionId: UUID, userId: UUID) async {
