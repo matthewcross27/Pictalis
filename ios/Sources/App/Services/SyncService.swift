@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import UIKit
 
 @MainActor
 final class SyncService {

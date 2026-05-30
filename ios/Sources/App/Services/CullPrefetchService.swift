@@ -27,12 +27,12 @@ final class CullPrefetchService {
     private var isFetching                    = false
     private var inFlightIds: Set<UUID>        = []
     private var serverExhausted               = false
-    private var currentMaxQueueSize           = Self.normalQueueSize
+    private var currentMaxQueueSize           = 20
 
     private let api:           APIClient
     private let decisionStore: DecisionStore
     private let sessionId:     UUID
-    private var memoryWarningObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
 
     init(sessionId: UUID, api: APIClient, decisionStore: DecisionStore) {
         self.sessionId     = sessionId
