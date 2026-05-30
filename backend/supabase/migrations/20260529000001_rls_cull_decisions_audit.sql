@@ -1,0 +1,14 @@
+-- Integrity audit 2026-05-29: cull_decision column RLS coverage
+--
+-- cull_decision is a column on public.photos (added in 20260525000002_cull_stage.sql).
+-- It is covered by the "Users own photos in their sessions" policy defined in
+-- 20260517000002_rls_policies.sql, which uses FOR ALL — no additional policy needed.
+--
+-- Verified:
+--   sessions    — RLS enabled, FOR ALL policy, user_id = auth.uid()
+--   photos      — RLS enabled, FOR ALL policy, scoped via session ownership
+--   comparisons — RLS enabled, FOR ALL policy, scoped via session ownership
+--   storage     — policies in 20260517000004_storage_hardening.sql, user-scoped by folder
+--
+-- No schema changes in this migration.
+SELECT 1;
