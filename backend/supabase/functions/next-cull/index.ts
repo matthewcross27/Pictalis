@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
   }
 
   if (!photos || photos.length === 0) {
+    await supabase.from('sessions').update({ stage: 'ranking' }).eq('id', session_id);
     return new Response(JSON.stringify({ done: true }), {
       status: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
