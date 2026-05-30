@@ -13,7 +13,7 @@ const BodySchema = z.object({
   decisions:  z.array(z.object({
     photo_id: z.string().uuid(),
     decision: z.enum(['keep', 'drop']),
-  })).min(1),
+  })).min(1).max(300),
 });
 
 Deno.serve(async (req) => {
@@ -69,12 +69,15 @@ Deno.serve(async (req) => {
             ? { cull_decision: 'keep' }
             : { cull_decision: 'drop', is_suppressed: true };
 
-          const { error: updateError } = await supabase
-            .from('photos')
-            .update(update)
-            .eq('cluster_id', photo.cluster_id)
-            .eq('session_id', session_id)
-            .is('cull_decision', null);
+          const { error: updateError } = photo.cluster_id
+            ? await supabase.from('photos').update(update)
+                .eq('cluster_id', photo.cluster_id)
+                .eq('session_id', session_id)
+                .is('cull_decision', null)
+            : await supabase.from('photos').update(update)
+                .eq('id', photo_id)
+                .eq('session_id', session_id)
+                .is('cull_decision', null);
 
           if (updateError) {
             return { photo_id, success: false, error: updateError.message };
