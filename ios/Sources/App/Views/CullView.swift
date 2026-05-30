@@ -107,7 +107,7 @@ struct CullView: View {
                 .cornerRadius(.photoRadius)
                 .overlay(ProgressView().tint(Color.amber))
                 .padding(.horizontal, 12)
-        } else if let card, !card.done {
+        } else if let card {
             cardStack(card: card)
         }
     }
@@ -235,7 +235,7 @@ struct CullView: View {
                     sessionId: sessionId,
                     photoId: photoId,
                     decision: decision,
-                    attemptsRemaining: 3
+                    totalAttempts: 3
                 )
             }
 
@@ -324,7 +324,7 @@ struct CullView: View {
         sessionId: UUID,
         photoId: UUID,
         decision: String,
-        attemptsRemaining: Int
+        totalAttempts: Int
     ) async {
         do {
             _ = try await api.submitCull(
@@ -338,13 +338,13 @@ struct CullView: View {
                 pendingRetry = nil
             }
         } catch {
-            if attemptsRemaining > 1 {
+            if totalAttempts > 1 {
                 try? await Task.sleep(for: .milliseconds(500))
                 await submitWithRetry(
                     sessionId: sessionId,
                     photoId: photoId,
                     decision: decision,
-                    attemptsRemaining: attemptsRemaining - 1
+                    totalAttempts: totalAttempts - 1
                 )
             } else {
                 // All retries exhausted — show inline error banner
@@ -360,7 +360,7 @@ struct CullView: View {
                                 sessionId: sessionId,
                                 photoId: photoId,
                                 decision: decision,
-                                attemptsRemaining: 3
+                                totalAttempts: 3
                             )
                         }
                     }
