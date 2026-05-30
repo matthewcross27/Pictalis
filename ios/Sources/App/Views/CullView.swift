@@ -8,7 +8,6 @@ struct CullView: View {
     var onComplete: () -> Void
 
     @State private var card: CullCard?
-    @State private var nextCard: CullCard?
     @State private var isLoading = true
     @State private var isSubmitting = false
     @State private var dragOffset: CGFloat = 0
@@ -18,8 +17,6 @@ struct CullView: View {
     @State private var submitErrorBanner: String?
     @State private var pendingRetry: (() -> Void)?
 
-    // Remaining count — snapshot on first fetch, decremented locally
-    @State private var remainingSnapshot: Int?
     @State private var localDecisionsMade: Int = 0
 
     private var screenWidth: CGFloat { UIScreen.main.bounds.width }
@@ -79,8 +76,8 @@ struct CullView: View {
 
     private var topBar: some View {
         HStack {
-            if let snapshot = remainingSnapshot {
-                let displayed = max(0, snapshot - localDecisionsMade)
+            if uploadService.total > 0 {
+                let displayed = max(0, uploadService.total - localDecisionsMade)
                 Text("\(displayed) remaining")
                     .font(.captionSerif)
                     .foregroundStyle(Color.secondaryText)
@@ -225,43 +222,21 @@ struct CullView: View {
         }
 
         Task {
+            // Submit races with the fly animation; both must complete before advancing.
+            // The server records the decision before the next nextCull call, which
+            // prevents getting the same card back again.
+            async let submitted: Void = submitWithRetry(
+                sessionId: sessionId,
+                photoId: photoId,
+                decision: decision,
+                totalAttempts: 3
+            )
             try? await Task.sleep(for: .milliseconds(250))
             dragOffset = 0
-
-            // Fire submit immediately — parallel with card advance
-            // Retry up to 2 times on failure; surface inline banner if all fail
-            Task.detached(priority: .background) {
-                await submitWithRetry(
-                    sessionId: sessionId,
-                    photoId: photoId,
-                    decision: decision,
-                    totalAttempts: 3
-                )
-            }
-
-            // Advance to next card — use prefetch if ready, else fall back to fetch
-            if let prefetched = nextCard {
-                // Happy path: instant swap
-                self.card = prefetched
-                self.nextCard = nil
-                isLoading = false
-                isSubmitting = false
-
-                if prefetched.done {
-                    onComplete()
-                    return
-                }
-
-                // Kick off prefetch for the card after this one
-                Task.detached(priority: .background) {
-                    await prefetchNextCard()
-                }
-            } else {
-                // Prefetch not ready — show card-area loading placeholder
-                isLoading = true
-                await fetchNext()
-                isSubmitting = false
-            }
+            isLoading = true
+            await submitted
+            await fetchNext()
+            isSubmitting = false
         }
     }
 
@@ -287,35 +262,11 @@ struct CullView: View {
                 onComplete()
                 return
             }
-            // Capture remaining count on first fetch only
-            if remainingSnapshot == nil, let remaining = next.cardsRemaining {
-                remainingSnapshot = remaining
-            }
             card = next
         } catch {
             errorMessage = "Couldn't load next photo. Check connection."
         }
         isLoading = false
-
-        // Kick off silent prefetch after first load
-        if card != nil, nextCard == nil {
-            Task.detached(priority: .background) {
-                await prefetchNextCard()
-            }
-        }
-    }
-
-    // MARK: - Prefetch
-
-    private nonisolated func prefetchNextCard() async {
-        do {
-            let peeked = try await api.nextCull(sessionId: sessionId)
-            await MainActor.run {
-                nextCard = peeked
-            }
-        } catch {
-            // Silent failure — fall back to normal fetch on next swipe
-        }
     }
 
     // MARK: - Submit with retry
