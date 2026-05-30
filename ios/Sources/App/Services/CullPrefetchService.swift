@@ -26,6 +26,7 @@ final class CullPrefetchService {
     private(set) var state: CullQueueState    = .loading
     private var isFetching                    = false
     private var inFlightIds: Set<UUID>        = []
+    private var servedIds:   Set<UUID>        = []
     private var serverExhausted               = false
     private var currentMaxQueueSize           = 20
 
@@ -67,6 +68,7 @@ final class CullPrefetchService {
             return nil
         }
         let card = queue.removeFirst()
+        servedIds.insert(card.photoId)
         if queue.isEmpty && serverExhausted {
             state = .exhausted
         } else if !serverExhausted && queue.count <= refillThreshold && !isFetching {
@@ -86,8 +88,9 @@ final class CullPrefetchService {
         guard !isFetching else { return }
         isFetching = true
 
-        // Full exclusion: decided + queued + actively downloading
+        // Full exclusion: decided + currently on screen + queued + actively downloading
         let excludeIds = Set(initialExclude ?? decisionStore.allDecidedIds)
+            .union(servedIds)
             .union(queue.map(\.photoId))
             .union(inFlightIds)
 
