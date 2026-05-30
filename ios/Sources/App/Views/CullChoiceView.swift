@@ -103,11 +103,11 @@ struct CullChoiceView: View {
                                     .frame(height: 2)
                                 RoundedRectangle(cornerRadius: 1)
                                     .fill(Color.amber)
-                                    .frame(width: geo.size.width * CGFloat(uploadService.progress), height: 2)
+                                    .frame(width: geo.size.width * (uploadService.total > 0 ? CGFloat(uploadService.completed) / CGFloat(uploadService.total) : 0), height: 2)
                             }
                         }
                         .frame(height: 2)
-                        Text("\(Int(uploadService.progress * 100))%")
+                        Text("\(uploadService.total > 0 ? Int(CGFloat(uploadService.completed) / CGFloat(uploadService.total) * 100) : 0)%")
                             .font(.captionSerif)
                             .foregroundStyle(Color.secondaryText)
                             .monospacedDigit()

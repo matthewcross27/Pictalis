@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     .from('sessions')
     .update({ stage: 'cull' }, { count: 'exact' })
     .eq('id', session_id)
-    .not('stage', 'in', '("ranking","complete")');
+    .not('stage', 'eq', 'complete');
 
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
   }
 
   if (count === 0) {
-    return new Response(JSON.stringify({ error: 'Session already in progress' }), {
+    return new Response(JSON.stringify({ error: 'Session not found or already complete' }), {
       status: 409, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
