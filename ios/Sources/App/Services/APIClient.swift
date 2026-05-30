@@ -212,4 +212,65 @@ final class APIClient: ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: req)
         try validate(response, data: data)
     }
+
+    // MARK: - prefetch-cull
+    // POST { session_id, count, exclude_ids, thumbnail_width } → { cards, has_more }
+
+    func prefetchCull(
+        sessionId: UUID,
+        count: Int,
+        excludeIds: [UUID],
+        thumbnailWidth: Int
+    ) async throws -> PrefetchCullResponse {
+        let url = functionsBase.appending(path: "prefetch-cull")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "session_id":      sessionId.uuidString.lowercased(),
+            "count":           count,
+            "exclude_ids":     excludeIds.map { $0.uuidString.lowercased() },
+            "thumbnail_width": thumbnailWidth,
+        ])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validate(response, data: data)
+        return try decoder.decode(PrefetchCullResponse.self, from: data)
+    }
+
+    // MARK: - batch-submit-cull
+    // POST { session_id, decisions } → { results }
+
+    func batchSubmitCull(sessionId: UUID, decisions: [StoredDecision]) async throws -> BatchSubmitResponse {
+        let url = functionsBase.appending(path: "batch-submit-cull")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "session_id": sessionId.uuidString.lowercased(),
+            "decisions":  decisions.map { d in
+                ["photo_id": d.photoId.uuidString.lowercased(), "decision": d.decision.rawValue]
+            },
+        ])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validate(response, data: data)
+        return try decoder.decode(BatchSubmitResponse.self, from: data)
+    }
+
+    // MARK: - mark-upload-complete
+    // POST { session_id } → { ok }
+
+    func markUploadComplete(sessionId: UUID) async throws {
+        let url = functionsBase.appending(path: "mark-upload-complete")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "session_id": sessionId.uuidString.lowercased(),
+        ])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validate(response, data: data)
+    }
 }
