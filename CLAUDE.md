@@ -44,6 +44,7 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
 - Never commit .env files or API keys
 
 ## Workflow
+- Default branch is `main` — all feature branches and PRs target `main`
 - Branch per feature, PR for review
 - Run `npm test` in backend/ before pushing ranking engine changes
 - Use /clear between unrelated tasks to manage context
