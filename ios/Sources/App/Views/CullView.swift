@@ -41,13 +41,6 @@ struct CullView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                     Spacer()
-                } else if let card, card.done {
-                    // Done terminal state — full-screen takeover
-                    Spacer()
-                    Text("All photos reviewed!")
-                        .font(.bodySerif)
-                        .foregroundStyle(Color.secondaryText)
-                    Spacer()
                 } else {
                     // Normal state: card area + always-visible buttons
                     Spacer()
@@ -235,6 +228,17 @@ struct CullView: View {
             try? await Task.sleep(for: .milliseconds(250))
             dragOffset = 0
 
+            // Fire submit immediately — parallel with card advance
+            // Retry up to 2 times on failure; surface inline banner if all fail
+            Task.detached(priority: .background) {
+                await submitWithRetry(
+                    sessionId: sessionId,
+                    photoId: photoId,
+                    decision: decision,
+                    attemptsRemaining: 3
+                )
+            }
+
             // Advance to next card — use prefetch if ready, else fall back to fetch
             if let prefetched = nextCard {
                 // Happy path: instant swap
@@ -258,17 +262,6 @@ struct CullView: View {
                 isSubmitting = false
                 await fetchNext()
             }
-
-            // Fire submit in the background, parallel with card advance
-            // Retry up to 2 times on failure; surface inline banner if all fail
-            Task.detached(priority: .background) {
-                await submitWithRetry(
-                    sessionId: sessionId,
-                    photoId: photoId,
-                    decision: decision,
-                    attemptsRemaining: 3
-                )
-            }
         }
     }
 
@@ -291,7 +284,7 @@ struct CullView: View {
             let next = try await api.nextCull(sessionId: sessionId)
             if next.done {
                 isLoading = false
-                card = next
+                onComplete()
                 return
             }
             // Capture remaining count on first fetch only
