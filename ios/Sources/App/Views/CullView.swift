@@ -7,19 +7,15 @@ struct CullView: View {
     @ObservedObject var uploadService: UploadService
     var onComplete: () -> Void
 
-    @State private var card: CullCard?
-    @State private var isLoading = true
-    @State private var isSubmitting = false
-    @State private var dragOffset: CGFloat = 0
-    @State private var errorMessage: String?
+    @State private var decisionStore  = DecisionStore()
+    @State private var prefetchService: CullPrefetchService?
+    @State private var syncService:     SyncService?
+    @State private var currentCard:     CullPrefetchService.PrefetchedCard?
+    @State private var dragOffset:      CGFloat = 0
+    @State private var isFinishing      = false
+    @State private var finishFailed     = false
 
-    // Inline submit-error banner state (does not block UI)
-    @State private var submitErrorBanner: String?
-    @State private var pendingRetry: (() -> Void)?
-
-    @State private var localDecisionsMade: Int = 0
-
-    private var screenWidth: CGFloat { UIScreen.main.bounds.width }
+    private var screenWidth: CGFloat  { UIScreen.main.bounds.width }
     private var dragProgress: CGFloat { dragOffset / (screenWidth * 0.4) }
 
     var body: some View {
@@ -29,47 +25,60 @@ struct CullView: View {
             VStack(spacing: 0) {
                 topBar
 
-                if let errorMessage {
-                    // Terminal error — full-screen takeover
+                switch prefetchService?.state ?? .loading {
+                case .loading:
                     Spacer()
-                    Text(errorMessage)
-                        .font(.bodySerif)
-                        .foregroundStyle(Color.amber)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                    Spacer()
-                } else {
-                    // Normal state: card area + always-visible buttons
-                    Spacer()
-                    cardArea
+                    ProgressView().tint(Color.amber)
                     Spacer()
 
-                    // Inline submit-error banner above buttons
-                    if let banner = submitErrorBanner {
-                        Button(action: {
-                            pendingRetry?()
-                        }) {
-                            Text(banner)
-                                .font(.captionSerif)
-                                .foregroundStyle(Color.filmWhite)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .frame(maxWidth: .infinity)
-                                .background(Color.red.opacity(0.8))
-                                .cornerRadius(8)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 8)
-                    }
-
-                    if let card {
+                case .ready:
+                    if let card = currentCard {
+                        Spacer()
+                        cardStack(card: card)
+                        Spacer()
                         bottomButtons(card: card)
                     }
+
+                case .exhausted:
+                    Color.clear.onAppear { onComplete() }
+
+                case .error(let message):
+                    Spacer()
+                    VStack(spacing: 12) {
+                        Text(message)
+                            .font(.bodySerif)
+                            .foregroundStyle(Color.amber)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                        Button("Retry") { prefetchService?.retry() }
+                            .font(.labelSerif)
+                            .foregroundStyle(Color.filmWhite)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color.amber)
+                            .cornerRadius(.interactiveRadius)
+                    }
+                    Spacer()
                 }
             }
         }
-        .task { await fetchNext() }
+        .task { await initialize() }
+    }
+
+    // MARK: - Initialization
+
+    private func initialize() async {
+        let ps = CullPrefetchService(sessionId: sessionId, api: api, decisionStore: decisionStore)
+        let ss = SyncService(sessionId: sessionId, api: api)
+        prefetchService = ps
+        syncService     = ss
+
+        async let syncReady: Void = ss.start(store: decisionStore)
+        let decidedIds = await decisionStore.load(sessionId: sessionId)
+        await ps.start(excluding: decidedIds)
+        await syncReady
+
+        currentCard = ps.advance()
     }
 
     // MARK: - Top bar
@@ -77,88 +86,61 @@ struct CullView: View {
     private var topBar: some View {
         HStack {
             if uploadService.total > 0 {
-                let displayed = max(0, uploadService.total - localDecisionsMade)
-                Text("\(displayed) remaining")
+                let remaining = max(0, uploadService.total - decisionStore.decisions.count)
+                Text("\(remaining) remaining")
                     .font(.captionSerif)
                     .foregroundStyle(Color.secondaryText)
             }
             Spacer()
-            Button("Done — start comparing") {
+            Button(isFinishing ? "Finishing…" : "Done — start comparing") {
+                guard !isFinishing else { return }
+                isFinishing  = true
+                finishFailed = false
                 Task { await finish() }
             }
             .font(.labelSerif)
-            .foregroundStyle(Color.amber)
-            .disabled(isSubmitting)
+            .foregroundStyle(finishFailed ? Color.red : Color.amber)
+            .disabled(isFinishing)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }
 
-    // MARK: - Card area (fixed slot — shows image or loading placeholder)
-
-    @ViewBuilder
-    private var cardArea: some View {
-        if isLoading {
-            // Card-area loading placeholder — buttons still visible below
-            Color.grainPaper
-                .cornerRadius(.photoRadius)
-                .overlay(ProgressView().tint(Color.amber))
-                .padding(.horizontal, 12)
-        } else if let card {
-            cardStack(card: card)
-        }
-    }
-
     // MARK: - Card stack
 
     @ViewBuilder
-    private func cardStack(card: CullCard) -> some View {
+    private func cardStack(card: CullPrefetchService.PrefetchedCard) -> some View {
         ZStack(alignment: .topTrailing) {
-            AsyncImage(url: URL(string: card.photoUrl ?? "")) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFit()
-                        .cornerRadius(.photoRadius)
-                case .failure:
-                    Color.grainPaper.cornerRadius(.photoRadius)
-                default:
-                    Color.grainPaper
-                        .cornerRadius(.photoRadius)
-                        .overlay(ProgressView().tint(Color.amber))
-                }
-            }
-            .overlay(
-                Group {
-                    if dragOffset > 0 {
-                        Color.green.opacity(min(dragProgress, 1.0) * 0.35)
-                            .cornerRadius(.photoRadius)
-                    } else if dragOffset < 0 {
-                        Color.red.opacity(min(-dragProgress, 1.0) * 0.35)
-                            .cornerRadius(.photoRadius)
-                    }
-                }
-            )
-            .offset(x: dragOffset)
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        guard !isSubmitting else { return }
-                        dragOffset = value.translation.width
-                    }
-                    .onEnded { value in
-                        guard !isSubmitting else { return }
-                        let threshold = screenWidth * 0.4
-                        if value.translation.width > threshold {
-                            commitDecision("keep", card: card)
-                        } else if value.translation.width < -threshold {
-                            commitDecision("drop", card: card)
-                        } else {
-                            withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
+            Image(uiImage: card.image)
+                .resizable()
+                .scaledToFit()
+                .cornerRadius(.photoRadius)
+                .overlay(
+                    Group {
+                        if dragOffset > 0 {
+                            Color.green.opacity(min(dragProgress, 1.0) * 0.35)
+                                .cornerRadius(.photoRadius)
+                        } else if dragOffset < 0 {
+                            Color.red.opacity(min(-dragProgress, 1.0) * 0.35)
+                                .cornerRadius(.photoRadius)
                         }
                     }
-            )
+                )
+                .offset(x: dragOffset)
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in dragOffset = value.translation.width }
+                        .onEnded { value in
+                            let threshold = screenWidth * 0.4
+                            if value.translation.width > threshold {
+                                commitDecision(.keep, card: card)
+                            } else if value.translation.width < -threshold {
+                                commitDecision(.drop, card: card)
+                            } else {
+                                withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
+                            }
+                        }
+                )
 
             if let size = card.clusterSize, size > 1 {
                 Text("1 of \(size) similar")
@@ -177,9 +159,9 @@ struct CullView: View {
     // MARK: - Bottom buttons
 
     @ViewBuilder
-    private func bottomButtons(card: CullCard) -> some View {
+    private func bottomButtons(card: CullPrefetchService.PrefetchedCard) -> some View {
         HStack(spacing: 20) {
-            Button(action: { commitDecision("drop", card: card) }) {
+            Button(action: { commitDecision(.drop, card: card) }) {
                 Label("Drop", systemImage: "xmark")
                     .font(.labelSerif)
                     .frame(maxWidth: .infinity)
@@ -192,7 +174,7 @@ struct CullView: View {
                             .stroke(Color.divider, lineWidth: 1)
                     )
             }
-            Button(action: { commitDecision("keep", card: card) }) {
+            Button(action: { commitDecision(.keep, card: card) }) {
                 Label("Keep", systemImage: "checkmark")
                     .font(.labelSerif)
                     .frame(maxWidth: .infinity)
@@ -204,119 +186,32 @@ struct CullView: View {
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 32)
-        .disabled(isSubmitting)
     }
 
     // MARK: - Actions
 
-    private func commitDecision(_ decision: String, card: CullCard) {
-        guard !isSubmitting, let photoId = card.photoId else { return }
-        isSubmitting = true
-        submitErrorBanner = nil
-        pendingRetry = nil
-        localDecisionsMade += 1
+    private func commitDecision(_ decision: CullDecision, card: CullPrefetchService.PrefetchedCard) {
+        // Hot path: zero blocking — record in-memory, pop next card from queue
+        decisionStore.record(photoId: card.photoId, decision: decision)
 
-        let flyDirection: CGFloat = decision == "keep" ? 1 : -1
+        let flyDirection: CGFloat = decision == .keep ? 1 : -1
         withAnimation(.easeOut(duration: 0.2)) {
             dragOffset = flyDirection * screenWidth * 1.5
         }
-
         Task {
-            // Submit races with the fly animation; both must complete before advancing.
-            // The server records the decision before the next nextCull call, which
-            // prevents getting the same card back again.
-            async let submitted: Void = submitWithRetry(
-                sessionId: sessionId,
-                photoId: photoId,
-                decision: decision,
-                totalAttempts: 3
-            )
-            try? await Task.sleep(for: .milliseconds(250))
-            dragOffset = 0
-            isLoading = true
-            await submitted
-            await fetchNext()
-            isSubmitting = false
+            try? await Task.sleep(for: .milliseconds(200))
+            dragOffset  = 0
+            currentCard = prefetchService?.advance()
         }
     }
 
     private func finish() async {
-        isSubmitting = true
         do {
             try await api.finishCull(sessionId: sessionId)
-            isSubmitting = false
             onComplete()
         } catch {
-            errorMessage = "Couldn't finish. Try again."
-            isSubmitting = false
+            finishFailed = true
         }
-    }
-
-    private func fetchNext() async {
-        isLoading = true
-        errorMessage = nil
-        do {
-            let next = try await api.nextCull(sessionId: sessionId)
-            if next.done {
-                isLoading = false
-                onComplete()
-                return
-            }
-            card = next
-        } catch {
-            errorMessage = "Couldn't load next photo. Check connection."
-        }
-        isLoading = false
-    }
-
-    // MARK: - Submit with retry
-
-    private nonisolated func submitWithRetry(
-        sessionId: UUID,
-        photoId: UUID,
-        decision: String,
-        totalAttempts: Int
-    ) async {
-        do {
-            _ = try await api.submitCull(
-                sessionId: sessionId,
-                photoId: photoId,
-                decision: decision
-            )
-            // Clear any lingering error banner on success
-            await MainActor.run {
-                submitErrorBanner = nil
-                pendingRetry = nil
-            }
-        } catch {
-            if totalAttempts > 1 {
-                try? await Task.sleep(for: .milliseconds(500))
-                await submitWithRetry(
-                    sessionId: sessionId,
-                    photoId: photoId,
-                    decision: decision,
-                    totalAttempts: totalAttempts - 1
-                )
-            } else {
-                // All retries exhausted — show inline error banner
-                await MainActor.run {
-                    submitErrorBanner = "Couldn't save last decision — tap to retry"
-                    pendingRetry = {
-                        Task { @MainActor in
-                            submitErrorBanner = nil
-                            pendingRetry = nil
-                        }
-                        Task.detached(priority: .background) {
-                            await submitWithRetry(
-                                sessionId: sessionId,
-                                photoId: photoId,
-                                decision: decision,
-                                totalAttempts: 3
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        isFinishing = false
     }
 }
