@@ -41,14 +41,16 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('sessions')
       .update({ upload_complete: true })
-      .eq('id', parsed.data.session_id);
+      .eq('id', parsed.data.session_id)
+      .select('id')
+      .single();
 
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+    if (error || !data) {
+      return new Response(JSON.stringify({ error: 'Session not found' }), {
+        status: 404, headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
