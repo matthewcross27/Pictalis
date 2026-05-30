@@ -13,7 +13,7 @@ const QuerySchema = z.object({ session_id: z.string().uuid() });
 type PhotoRow = {
   id: string;
   storage_path: string;
-  cluster_id: string;
+  cluster_id: string | null;
   quality_flags: Record<string, unknown> | null;
 };
 
@@ -50,7 +50,6 @@ Deno.serve(async (req) => {
       .eq('session_id', session_id)
       .eq('is_suppressed', false)
       .is('cull_decision', null)
-      .not('cluster_id', 'is', null)
       .order('cluster_id')
       .order('id');
 
@@ -72,9 +71,10 @@ Deno.serve(async (req) => {
 
     for (const p of photos as PhotoRow[]) {
       const blurScore = typeof p.quality_flags?.blur_score === 'number' ? p.quality_flags.blur_score : 0;
-      const existing = clusters.get(p.cluster_id);
+      const clusterKey = p.cluster_id ?? p.id;
+      const existing = clusters.get(clusterKey);
       if (!existing) {
-        clusters.set(p.cluster_id, { representative: p, count: 1, blurScore });
+        clusters.set(clusterKey, { representative: p, count: 1, blurScore });
       } else {
         existing.count++;
         if (blurScore > existing.blurScore) {

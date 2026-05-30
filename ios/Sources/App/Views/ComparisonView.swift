@@ -18,6 +18,8 @@ struct ComparisonView: View {
     @State private var prefetchedPair: NextPairResponse?
     @State private var prefetchTask: Task<Void, Never>?
     @State private var isRemoving = false
+    @State private var dragOffsetA: CGFloat = 0
+    @State private var dragOffsetB: CGFloat = 0
 
     var body: some View {
         ZStack {
@@ -46,8 +48,8 @@ struct ComparisonView: View {
                 } else if let pair {
                     Spacer()
                     VStack(spacing: 8) {
-                        photoButton(photo: pair.photoA)
-                        photoButton(photo: pair.photoB)
+                        photoCard(photo: pair.photoA, dragOffset: $dragOffsetA)
+                        photoCard(photo: pair.photoB, dragOffset: $dragOffsetB)
                     }
                     .padding(.horizontal, 8)
                     .opacity((isSubmitting || isRemoving) ? 0.7 : 1.0)
@@ -61,6 +63,8 @@ struct ComparisonView: View {
         }
         .task { await fetchNextPair() }
         .onChange(of: pair?.comparisonId) { _, newId in
+            dragOffsetA = 0
+            dragOffsetB = 0
             if newId != nil { startPrefetch() }
         }
         .onDisappear {
@@ -139,70 +143,80 @@ struct ComparisonView: View {
     }
 
     @ViewBuilder
-    private func photoButton(photo: PairPhoto) -> some View {
-        ZStack {
-            Button {
-                Task { @MainActor in await choose(winner: photo) }
-            } label: {
-                Color.grainPaper
-                    .frame(maxWidth: .infinity)
-                    .aspectRatio(4 / 3, contentMode: .fit)
-                    .overlay {
-                        AsyncImage(url: URL(string: photo.signedUrl)) { phase in
-                            switch phase {
-                            case .empty:
-                                ProgressView().tint(Color.secondaryText)
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                            case .failure:
-                                Image(systemName: "photo")
-                                    .font(.largeTitle)
-                                    .foregroundStyle(Color.secondaryText)
-                            @unknown default:
-                                EmptyView()
+    private func photoCard(photo: PairPhoto, dragOffset: Binding<CGFloat>) -> some View {
+        ZStack(alignment: .trailing) {
+            RoundedRectangle(cornerRadius: .photoRadius)
+                .fill(Color.red.opacity(0.85))
+                .overlay(alignment: .trailing) {
+                    Label("Remove", systemImage: "trash")
+                        .font(.labelSerif)
+                        .foregroundStyle(.white)
+                        .padding(.trailing, 20)
+                }
+
+            ZStack {
+                Button {
+                    Task { @MainActor in await choose(winner: photo) }
+                } label: {
+                    Color.grainPaper
+                        .frame(maxWidth: .infinity)
+                        .aspectRatio(4 / 3, contentMode: .fit)
+                        .overlay {
+                            AsyncImage(url: URL(string: photo.signedUrl)) { phase in
+                                switch phase {
+                                case .empty:
+                                    ProgressView().tint(Color.secondaryText)
+                                case .success(let image):
+                                    image.resizable().scaledToFill()
+                                case .failure:
+                                    Image(systemName: "photo")
+                                        .font(.largeTitle)
+                                        .foregroundStyle(Color.secondaryText)
+                                @unknown default:
+                                    EmptyView()
+                                }
                             }
                         }
-                    }
-                    .clipped()
-            }
-            .buttonStyle(PhotoTapStyle())
+                        .clipped()
+                }
+                .buttonStyle(PhotoTapStyle())
 
-            // Action buttons at ZStack level — above the photo card, so they
-            // unambiguously own their tap area without gesture conflict with
-            // the outer choose button.
-            VStack {
-                HStack {
-                    Spacer()
-                    Button { fullscreenPhoto = photo } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(8)
-                            .background(Color.photoOverlay)
-                            .clipShape(Capsule())
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button { fullscreenPhoto = photo } label: {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(8)
+                                .background(Color.photoOverlay)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(8)
                     }
-                    .buttonStyle(.plain)
-                    .padding(8)
-                }
-                Spacer()
-                HStack {
-                    Button {
-                        Task { @MainActor in await remove(photo: photo) }
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(8)
-                            .background(Color.red.opacity(0.85))
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(8)
                     Spacer()
                 }
             }
+            .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+            .offset(x: min(0, dragOffset.wrappedValue))
         }
-        .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+        .gesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                .onChanged { value in
+                    guard value.translation.width < 0 else { return }
+                    dragOffset.wrappedValue = value.translation.width
+                }
+                .onEnded { value in
+                    let triggered = value.translation.width < -80
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        dragOffset.wrappedValue = 0
+                    }
+                    if triggered {
+                        Task { @MainActor in await remove(photo: photo) }
+                    }
+                }
+        )
     }
 
     // MARK: - Private
