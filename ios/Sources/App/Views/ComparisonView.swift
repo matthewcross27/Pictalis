@@ -144,9 +144,8 @@ struct ComparisonView: View {
 
     @ViewBuilder
     private func photoCard(photo: PairPhoto, dragOffset: Binding<CGFloat>) -> some View {
-        ZStack(alignment: .trailing) {
-            RoundedRectangle(cornerRadius: .photoRadius)
-                .fill(Color.red.opacity(0.85))
+        ZStack {
+            Color.red.opacity(0.85)
                 .overlay(alignment: .trailing) {
                     Label("Remove", systemImage: "trash")
                         .font(.labelSerif)
@@ -201,7 +200,10 @@ struct ComparisonView: View {
             .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
             .offset(x: min(0, dragOffset.wrappedValue))
         }
-        .gesture(
+        .frame(maxWidth: .infinity)
+        .aspectRatio(4 / 3, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+        .simultaneousGesture(
             DragGesture(minimumDistance: 20, coordinateSpace: .local)
                 .onChanged { value in
                     guard value.translation.width < 0 else { return }
