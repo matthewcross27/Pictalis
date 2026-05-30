@@ -259,8 +259,8 @@ struct CullView: View {
             } else {
                 // Prefetch not ready — show card-area loading placeholder
                 isLoading = true
-                isSubmitting = false
                 await fetchNext()
+                isSubmitting = false
             }
         }
     }
@@ -307,7 +307,7 @@ struct CullView: View {
 
     // MARK: - Prefetch
 
-    private func prefetchNextCard() async {
+    private nonisolated func prefetchNextCard() async {
         do {
             let peeked = try await api.nextCull(sessionId: sessionId)
             await MainActor.run {
@@ -320,22 +320,22 @@ struct CullView: View {
 
     // MARK: - Submit with retry
 
-    private func submitWithRetry(
+    private nonisolated func submitWithRetry(
         sessionId: UUID,
         photoId: UUID,
         decision: String,
         attemptsRemaining: Int
     ) async {
         do {
-            let result = try await api.submitCull(
+            _ = try await api.submitCull(
                 sessionId: sessionId,
                 photoId: photoId,
                 decision: decision
             )
-            if result.done {
-                await MainActor.run {
-                    onComplete()
-                }
+            // Clear any lingering error banner on success
+            await MainActor.run {
+                submitErrorBanner = nil
+                pendingRetry = nil
             }
         } catch {
             if attemptsRemaining > 1 {
@@ -351,6 +351,10 @@ struct CullView: View {
                 await MainActor.run {
                     submitErrorBanner = "Couldn't save last decision — tap to retry"
                     pendingRetry = {
+                        Task { @MainActor in
+                            submitErrorBanner = nil
+                            pendingRetry = nil
+                        }
                         Task.detached(priority: .background) {
                             await submitWithRetry(
                                 sessionId: sessionId,
