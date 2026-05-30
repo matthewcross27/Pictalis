@@ -1,4 +1,6 @@
 import SwiftUI
+import Sentry
+
 import Supabase
 
 @main
@@ -7,6 +9,12 @@ struct PictalisApp: App {
     @StateObject private var api: APIClient
 
     init() {
+        SentrySDK.start { options in
+            options.dsn = "https://f04eecf4335b7b4a400ff6327ea33968@o4511400662597632.ingest.us.sentry.io/4511476467302400"
+            options.debug = false
+            options.tracesSampleRate = 0
+        }
+
         let client = SupabaseClient(
             supabaseURL: SupabaseConfig.url,
             supabaseKey: SupabaseConfig.anonKey
