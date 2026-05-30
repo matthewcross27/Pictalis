@@ -55,3 +55,5 @@ jobs:
             echo "Checking $f"
             deno check "$f"
           done
+      - name: Test edge functions
+        run: deno test --allow-env backend/supabase/functions/_shared/

@@ -20,6 +20,7 @@ worker/.mypy_cache/
 
 # TypeScript / Node
 ranking-engine/node_modules/
+backend/supabase/functions/node_modules/
 ranking-engine/dist/
 ranking-engine/.tsbuildinfo
 npm-debug.log*
@@ -39,7 +40,15 @@ npm-debug.log*
 backend/supabase/.temp/
 backend/supabase/functions/.cache/
 
+# Claude Code — local dev tool state, not project artifacts
+.agents/
+.claude/
+skills-lock.json
+
 # iOS signing artifacts
 *.p8
 *.p12
 *.mobileprovision
+
+# iOS — Supabase credentials (real values only, never commit)
+ios/Sources/App/SupabaseConfig.swift

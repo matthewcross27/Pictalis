@@ -1,10 +1,10 @@
-# picHelper
+# Pictalis
 
-A mobile-first iOS app that helps you quickly find your favorite photos from a large batch using rapid pairwise comparisons and an Elo-style ranking system.
+A mobile-first iOS app that helps you distill a large batch of photos into a curated set of your best memories, using rapid pairwise comparisons and an Elo-style ranking system.
 
 ## What it does
 
-Upload 100–300 photos from a trip, party, or shoot. The app shows you two photos at a time and asks which you prefer. After a few dozen quick picks, it surfaces your top 10–20 favorites — without you having to scroll through everything manually.
+Upload 100–300 photos from a trip, party, or shoot. The app shows you two photos at a time and asks which you prefer. After a few dozen quick picks, it surfaces your top 10–20 favorites — the ones worth keeping, like a talisman. No scrolling, no file management.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ Monorepo with four subsystems:
 ```bash
 cd ios
 xcodegen generate
-open picHelper.xcodeproj
+open Pictalis.xcodeproj
 ```
 
 ### Ranking engine
@@ -75,6 +75,20 @@ GitHub Actions runs on every push and PR to `main`:
 
 ## Project status
 
-Early development — scaffolding complete, feature implementation in progress.
+MVP feature-complete. Core flow is end-to-end functional:
+
+| Subsystem | Status |
+|-----------|--------|
+| iOS app | Full flow: session setup → photo selection → pairwise comparison → results/completion |
+| Backend edge functions | 7 deployed: `create-session`, `register-photo`, `next-pair`, `submit-comparison`, `session-status`, `results`, `remove-photo` |
+| Database | 9 migrations applied: schema, storage, RLS, atomic comparison, phash, session stages, adaptive ranking, dedup stage |
+| Ranking engine | Elo + adaptive pair selection + cluster-first dedup stage (9 tests passing) |
+| Processing worker | Scaffolded — embeddings/clustering not yet wired |
+
+Notable implemented features:
+- Cluster-first dedup stage: surfaces intra-cluster comparisons before broad ranking begins
+- Photo removal during comparison: suppresses a photo and clears open comparisons
+- Session stage tracking: `dedup → ranking → refine → complete`
+- Adaptive pair selection: prioritizes high-uncertainty pairs for efficient convergence
 
 See [`docs/PRD.md`](docs/PRD.md) for the full product spec.

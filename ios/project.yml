@@ -1,23 +1,33 @@
-name: picHelper
+name: Pictalis
 options:
   bundleIdPrefix: com.matthewcross
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
 
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: 2.0.0
+
 targets:
-  picHelper:
+  Pictalis:
     type: application
     platform: iOS
     sources:
       - path: Sources
     info:
-      path: picHelper/Info.plist
+      path: Pictalis/Info.plist
       properties:
-        CFBundleDisplayName: picHelper
-        UILaunchStoryboardName: ""
-        NSPhotoLibraryUsageDescription: "picHelper needs access to your photos to help you curate your favorites."
-        NSPhotoLibraryAddUsageDescription: "picHelper saves your favorite photos back to your library."
+        CFBundleDisplayName: Pictalis
+        UILaunchScreen: {}
+        NSPhotoLibraryUsageDescription: "Pictalis needs access to your photos to help you curate your favorites."
+        NSPhotoLibraryAddUsageDescription: "Pictalis saves your favorite photos back to your library."
+        UIUserInterfaceStyle: Light
+        UIAppFonts:
+          - Fraunces-Regular.ttf
+          - Fraunces-Medium.ttf
+          - Fraunces-SemiBold.ttf
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
     settings:
@@ -26,11 +36,17 @@ targets:
         DEVELOPMENT_TEAM: ""
         SWIFT_STRICT_CONCURRENCY: complete
         ENABLE_USER_SCRIPT_SANDBOXING: YES
+    dependencies:
+      - package: Supabase
+        product: Supabase
 
-  picHelperTests:
+  PictalisTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - path: Tests
     dependencies:
-      - target: picHelper
+      - target: Pictalis
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES

@@ -1,6 +1,6 @@
 # Product Requirements Document (PRD)
 
-# Photo Ranking & Curation App (MVP)
+# Pictalis (MVP)
 
 ## Overview
 

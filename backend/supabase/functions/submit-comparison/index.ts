@@ -54,20 +54,13 @@ Deno.serve(async (req) => {
   // RLS ensures this comparison belongs to the caller's session
   const { data: comparison, error: compError } = await supabase
     .from('comparisons')
-    .select('id, photo_a_id, photo_b_id, completed_at')
+    .select('id, photo_a_id, photo_b_id')
     .eq('id', comparison_id)
     .single();
 
   if (compError || !comparison) {
     return new Response(JSON.stringify({ error: 'Comparison not found' }), {
       status: 404,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
-  }
-
-  if (comparison.completed_at != null) {
-    return new Response(JSON.stringify({ error: 'Comparison already submitted' }), {
-      status: 409,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
@@ -94,40 +87,36 @@ Deno.serve(async (req) => {
     });
   }
 
-  const winner = photoPair.find((p) => p.id === winner_id)!;
-  const loser = photoPair.find((p) => p.id === loser_id)!;
-  const { winnerNew, loserNew } = updateElo(winner.elo_rating, loser.elo_rating);
-
-  // Mark comparison complete first to prevent duplicate submissions
-  const { error: compError2 } = await supabase
-    .from('comparisons')
-    .update({ winner_id, completed_at: new Date().toISOString() })
-    .eq('id', comparison_id);
-
-  if (compError2) {
-    return new Response(JSON.stringify({ error: 'Failed to record comparison result' }), {
+  const winner = photoPair.find((p) => p.id === winner_id);
+  const loser = photoPair.find((p) => p.id === loser_id);
+  if (!winner || !loser) {
+    return new Response(JSON.stringify({ error: 'Failed to fetch photo ratings' }), {
       status: 500,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
+  const { winnerNew, loserNew } = updateElo(winner.elo_rating, loser.elo_rating);
 
-  // Update Elo ratings after comparison is committed
-  const [winnerUpdate, loserUpdate] = await Promise.all([
-    supabase
-      .from('photos')
-      .update({ elo_rating: winnerNew, comparison_count: winner.comparison_count + 1 })
-      .eq('id', winner_id),
-    supabase
-      .from('photos')
-      .update({ elo_rating: loserNew, comparison_count: loser.comparison_count + 1 })
-      .eq('id', loser_id),
-  ]);
+  // Single atomic transaction: claim comparison + update both Elo ratings.
+  // The RPC raises 'already_submitted' if completed_at was already set,
+  // preventing the TOCTOU race from the previous multi-step write approach.
+  const { error: submitError } = await supabase.rpc('submit_comparison_atomic', {
+    p_comparison_id: comparison_id,
+    p_winner_id: winner_id,
+    p_loser_id: loser_id,
+    p_winner_new_rating: winnerNew,
+    p_loser_new_rating: loserNew,
+  });
 
-  if (winnerUpdate.error || loserUpdate.error) {
-    return new Response(JSON.stringify({ error: 'Failed to update photo ratings' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
+  if (submitError) {
+    const isAlreadyDone = submitError.code === 'UE001';
+    return new Response(
+      JSON.stringify({ error: isAlreadyDone ? 'Comparison already submitted' : 'Failed to record comparison result' }),
+      {
+        status: isAlreadyDone ? 409 : 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      }
+    );
   }
 
   return new Response(

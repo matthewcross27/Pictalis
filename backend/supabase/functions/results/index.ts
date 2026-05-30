@@ -42,6 +42,13 @@ Deno.serve(async (req) => {
     { global: { headers: { Authorization: authHeader } } }
   );
 
+  // Fetch session stage so iOS can show "Complete" / "In Progress" badge.
+  const { data: session } = await supabase
+    .from('sessions')
+    .select('stage')
+    .eq('id', parsed.data.session_id)
+    .single();
+
   const { data: photos, error } = await supabase
     .from('photos')
     .select(
@@ -53,7 +60,8 @@ Deno.serve(async (req) => {
     .limit(parsed.data.limit);
 
   if (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    console.error('Failed to fetch photos:', error);
+    return new Response(JSON.stringify({ error: 'Failed to fetch photos' }), {
       status: 500,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
@@ -61,15 +69,35 @@ Deno.serve(async (req) => {
 
   const photosWithUrls = await Promise.all(
     (photos ?? []).map(async (photo) => {
-      const { data: signed } = await supabase.storage
+      const { data: signed, error: signedError } = await supabase.storage
         .from('working-copies')
         .createSignedUrl(photo.storage_path, 3600);
+      if (signedError) throw signedError;
       return { ...photo, signed_url: signed?.signedUrl ?? null };
     })
-  );
-
-  return new Response(JSON.stringify({ photos: photosWithUrls }), {
-    status: 200,
-    headers: { ...CORS, 'Content-Type': 'application/json' },
+  ).catch((err) => {
+    console.error('Failed to generate signed URLs:', err);
+    return null;
   });
+
+  if (!photosWithUrls) {
+    return new Response(JSON.stringify({ error: 'Failed to generate photo URLs' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  return new Response(
+    JSON.stringify({
+      photos: photosWithUrls,
+      session: {
+        stage: session?.stage ?? 'stage1',
+        is_complete: session?.stage === 'complete',
+      },
+    }),
+    {
+      status: 200,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+    }
+  );
 });
