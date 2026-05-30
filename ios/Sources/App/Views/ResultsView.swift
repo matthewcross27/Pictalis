@@ -96,8 +96,8 @@ struct ResultsView: View {
                 case .success(let image):
                     image
                         .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 180)
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 180)
                         .clipped()
                 case .failure:
                     Color.grainPaper
