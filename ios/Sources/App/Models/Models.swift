@@ -192,3 +192,80 @@ struct CullActionResponse: Decodable {
 struct APIErrorResponse: Decodable {
     let error: String
 }
+
+// MARK: - CullDecision
+
+enum CullDecision: String, Codable, Sendable {
+    case keep
+    case drop
+}
+
+// MARK: - DecisionStore types
+
+struct StoredDecision: Codable, Sendable {
+    let photoId: UUID
+    let decision: CullDecision
+    let timestamp: Date
+    var synced: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case photoId    = "photo_id"
+        case decision
+        case timestamp
+        case synced
+    }
+}
+
+struct SessionDecisionFile: Codable {
+    let sessionId: UUID
+    var decisions: [StoredDecision]
+
+    enum CodingKeys: String, CodingKey {
+        case sessionId = "session_id"
+        case decisions
+    }
+}
+
+// MARK: - prefetch-cull
+
+struct PrefetchCullCard: Decodable {
+    let photoId:     UUID
+    let photoUrl:    String
+    let clusterId:   String?
+    let clusterSize: Int
+
+    enum CodingKeys: String, CodingKey {
+        case photoId     = "photo_id"
+        case photoUrl    = "photo_url"
+        case clusterId   = "cluster_id"
+        case clusterSize = "cluster_size"
+    }
+}
+
+struct PrefetchCullResponse: Decodable {
+    let cards:   [PrefetchCullCard]
+    let hasMore: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case cards
+        case hasMore = "has_more"
+    }
+}
+
+// MARK: - batch-submit-cull
+
+struct BatchDecisionResult: Decodable {
+    let photoId:  UUID
+    let success:  Bool
+    let error:    String?
+
+    enum CodingKeys: String, CodingKey {
+        case photoId = "photo_id"
+        case success
+        case error
+    }
+}
+
+struct BatchSubmitResponse: Decodable {
+    let results: [BatchDecisionResult]
+}
