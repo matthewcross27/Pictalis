@@ -63,6 +63,11 @@ struct CullView: View {
             }
         }
         .task { await initialize() }
+        .onChange(of: prefetchService?.queue.isEmpty) { _, isEmpty in
+            if isEmpty == false, currentCard == nil {
+                currentCard = prefetchService?.advance()
+            }
+        }
     }
 
     // MARK: - Initialization
@@ -142,16 +147,6 @@ struct CullView: View {
                         }
                 )
 
-            if let size = card.clusterSize, size > 1 {
-                Text("1 of \(size) similar")
-                    .font(.captionSerif)
-                    .foregroundStyle(Color.filmWhite)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.photoOverlay)
-                    .cornerRadius(4)
-                    .padding(12)
-            }
         }
         .padding(.horizontal, 12)
     }
@@ -193,6 +188,7 @@ struct CullView: View {
     private func commitDecision(_ decision: CullDecision, card: CullPrefetchService.PrefetchedCard) {
         // Hot path: zero blocking — record in-memory, pop next card from queue
         decisionStore.record(photoId: card.photoId, decision: decision)
+        syncService?.syncIfNeeded()
 
         let flyDirection: CGFloat = decision == .keep ? 1 : -1
         withAnimation(.easeOut(duration: 0.2)) {
@@ -206,6 +202,7 @@ struct CullView: View {
     }
 
     private func finish() async {
+        await syncService?.drain()
         do {
             try await api.finishCull(sessionId: sessionId)
             onComplete()

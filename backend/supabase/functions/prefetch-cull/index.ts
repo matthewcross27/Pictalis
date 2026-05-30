@@ -68,8 +68,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch undecided, unsuppressed photos — apply exclude filter before grouping
-    let query = supabase
+    // Fetch all undecided, unsuppressed photos — exclusion is applied after clustering
+    // so that excluding a representative suppresses the entire cluster, not just one photo.
+    const { data: photos, error: photosError } = await supabase
       .from('photos')
       .select('id, storage_path, cluster_id, quality_flags')
       .eq('session_id', session_id)
@@ -77,12 +78,6 @@ Deno.serve(async (req) => {
       .is('cull_decision', null)
       .order('cluster_id')
       .order('id');
-
-    if (exclude_ids.length > 0) {
-      query = query.not('id', 'in', `(${exclude_ids.map(id => `"${id}"`).join(',')})`);
-    }
-
-    const { data: photos, error: photosError } = await query;
 
     if (photosError) {
       return new Response(JSON.stringify({ error: photosError.message }), {
@@ -116,7 +111,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    const eligibleClusters = [...clusters.values()];
+    // Exclude clusters whose representative was already decided client-side.
+    // Filtering after grouping ensures the whole cluster is suppressed, not just one member.
+    const excludeSet = new Set(exclude_ids);
+    const eligibleClusters = [...clusters.values()].filter(
+      ({ representative }) => !excludeSet.has(representative.id)
+    );
     const batch = eligibleClusters.slice(0, count);
     const hasMore = !session.upload_complete || eligibleClusters.length > count;
 

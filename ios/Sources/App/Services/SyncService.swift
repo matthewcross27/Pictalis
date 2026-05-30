@@ -22,6 +22,12 @@ final class SyncService {
         startObservers()
     }
 
+    // Fire-and-forget drain; safe to call after every decision — isDraining guard prevents pile-up.
+    func syncIfNeeded() {
+        guard !isDraining else { return }
+        Task { await drain() }
+    }
+
     // MARK: - Private
 
     private func startObservers() {
@@ -51,7 +57,7 @@ final class SyncService {
     // Sends all pending decisions in one request; marks successes as synced.
     // Retries with exponential backoff (1s, 2s, 4s) before giving up.
     // Failed entries remain pending and will be retried on the next trigger.
-    private func drain() async {
+    func drain() async {
         guard !isDraining, let store else { return }
         let pending = store.pendingDecisions
         guard !pending.isEmpty else { return }
