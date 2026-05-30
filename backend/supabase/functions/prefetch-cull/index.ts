@@ -11,7 +11,7 @@ const CORS = {
 const BodySchema = z.object({
   session_id:      z.string().uuid(),
   count:           z.number().int().min(1).max(50),
-  exclude_ids:     z.array(z.string().uuid()).default([]),
+  exclude_ids:     z.array(z.string().uuid()).max(500).default([]),
   thumbnail_width: z.number().int().min(100).max(3000),
 });
 
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
       .order('id');
 
     if (exclude_ids.length > 0) {
-      query = query.not('id', 'in', `(${exclude_ids.join(',')})`);
+      query = query.not('id', 'in', `(${exclude_ids.map(id => `"${id}"`).join(',')})`);
     }
 
     const { data: photos, error: photosError } = await query;
@@ -123,17 +123,26 @@ Deno.serve(async (req) => {
     // Generate all signed thumbnail URLs in parallel
     const cards = await Promise.all(
       batch.map(async ({ representative: rep, count: clusterSize }) => {
-        const { data: signed } = await supabase.storage
-          .from('working-copies')
-          .createSignedUrl(rep.storage_path, 3600, {
-            transform: { width: thumbnail_width, quality: 75 },
-          });
-        return {
-          photo_id:     rep.id,
-          photo_url:    signed?.signedUrl ?? null,
-          cluster_id:   rep.cluster_id,
-          cluster_size: clusterSize,
-        };
+        try {
+          const { data: signed } = await supabase.storage
+            .from('working-copies')
+            .createSignedUrl(rep.storage_path, 3600, {
+              transform: { width: thumbnail_width, quality: 75 },
+            });
+          return {
+            photo_id:     rep.id,
+            photo_url:    signed?.signedUrl ?? null,
+            cluster_id:   rep.cluster_id,
+            cluster_size: clusterSize,
+          };
+        } catch {
+          return {
+            photo_id:     rep.id,
+            photo_url:    null,
+            cluster_id:   rep.cluster_id,
+            cluster_size: clusterSize,
+          };
+        }
       })
     );
 
