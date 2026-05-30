@@ -14,6 +14,7 @@ struct CullView: View {
     @State private var dragOffset:      CGFloat = 0
     @State private var isFinishing      = false
     @State private var finishFailed     = false
+    @State private var isInitialized    = false
 
     private var screenWidth: CGFloat  { UIScreen.main.bounds.width }
     private var dragProgress: CGFloat { dragOffset / (screenWidth * 0.4) }
@@ -64,7 +65,8 @@ struct CullView: View {
         }
         .task { await initialize() }
         .onChange(of: prefetchService?.queue.isEmpty) { _, isEmpty in
-            if isEmpty == false, currentCard == nil {
+            // Guard against firing during initialization — initialize() calls advance() itself.
+            if isEmpty == false, currentCard == nil, isInitialized {
                 currentCard = prefetchService?.advance()
             }
         }
@@ -83,7 +85,8 @@ struct CullView: View {
         await ps.start(excluding: decidedIds)
         await syncReady
 
-        currentCard = ps.advance()
+        currentCard   = ps.advance()
+        isInitialized = true
     }
 
     // MARK: - Top bar
