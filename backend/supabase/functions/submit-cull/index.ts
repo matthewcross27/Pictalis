@@ -10,8 +10,8 @@ const CORS = {
 
 const BodySchema = z.object({
   session_id: z.string().uuid(),
-  photo_id: z.string().uuid(),
-  decision: z.enum(['keep', 'drop']),
+  photo_id:   z.string().uuid(),
+  decision:   z.enum(['keep', 'drop']),
 });
 
 Deno.serve(async (req) => {
@@ -54,24 +54,6 @@ Deno.serve(async (req) => {
 
     const { session_id, photo_id, decision } = parsed.data;
 
-    // Look up cluster_id from the given photo_id + session_id
-    const { data: photo, error: photoError } = await supabase
-      .from('photos')
-      .select('cluster_id')
-      .eq('id', photo_id)
-      .eq('session_id', session_id)
-      .single();
-
-    if (photoError || !photo) {
-      return new Response(JSON.stringify({ error: 'Photo not found' }), {
-        status: 404,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const { cluster_id } = photo;
-
-    // Apply decision to the WHOLE cluster
     const update = decision === 'keep'
       ? { cull_decision: 'keep' }
       : { cull_decision: 'drop', is_suppressed: true };
@@ -79,7 +61,7 @@ Deno.serve(async (req) => {
     const { error: updateError } = await supabase
       .from('photos')
       .update(update)
-      .eq('cluster_id', cluster_id)
+      .eq('id', photo_id)
       .eq('session_id', session_id)
       .is('cull_decision', null);
 
@@ -90,7 +72,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Count photos where is_suppressed = false AND cull_decision IS NULL
     const { count, error: countError } = await supabase
       .from('photos')
       .select('id', { count: 'exact', head: true })

@@ -10,13 +10,6 @@ const CORS = {
 
 const QuerySchema = z.object({ session_id: z.string().uuid() });
 
-type PhotoRow = {
-  id: string;
-  storage_path: string;
-  cluster_id: string | null;
-  quality_flags: Record<string, unknown> | null;
-};
-
 Deno.serve(async (req) => {
   try {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
@@ -46,11 +39,10 @@ Deno.serve(async (req) => {
 
     const { data: photos, error: photosError } = await supabase
       .from('photos')
-      .select('id, storage_path, cluster_id, quality_flags')
+      .select('id, storage_path')
       .eq('session_id', session_id)
       .eq('is_suppressed', false)
       .is('cull_decision', null)
-      .order('cluster_id')
       .order('id');
 
     if (photosError) {
@@ -66,32 +58,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    type ClusterGroup = { representative: PhotoRow; count: number; blurScore: number };
-    const clusters = new Map<string, ClusterGroup>();
-
-    for (const p of photos as PhotoRow[]) {
-      const blurScore = typeof p.quality_flags?.blur_score === 'number' ? p.quality_flags.blur_score : 0;
-      const clusterKey = p.cluster_id ?? p.id;
-      const existing = clusters.get(clusterKey);
-      if (!existing) {
-        clusters.set(clusterKey, { representative: p, count: 1, blurScore });
-      } else {
-        existing.count++;
-        if (blurScore > existing.blurScore) {
-          existing.representative = p;
-          existing.blurScore = blurScore;
-        }
-      }
-    }
-
-    const groups        = [...clusters.values()];
-    const cardsRemaining = groups.length;
-    const next          = groups[0];
-    const rep           = next.representative;
+    const photo          = photos[0];
+    const cardsRemaining = photos.length;
 
     const { data: signed, error: urlError } = await supabase.storage
       .from('working-copies')
-      .createSignedUrl(rep.storage_path, 3600);
+      .createSignedUrl(photo.storage_path, 3600);
 
     if (urlError || !signed?.signedUrl) {
       return new Response(JSON.stringify({ error: 'Failed to generate photo URL' }), {
@@ -101,11 +73,9 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        done: false,
-        photo_id: rep.id,
-        photo_url: signed.signedUrl,
-        cluster_id: rep.cluster_id,
-        cluster_size: next.count,
+        done:            false,
+        photo_id:        photo.id,
+        photo_url:       signed.signedUrl,
         cards_remaining: cardsRemaining,
       }),
       { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } },

@@ -15,6 +15,7 @@ struct CullView: View {
     @State private var isFinishing      = false
     @State private var finishFailed     = false
     @State private var isInitialized    = false
+    @State private var expandedCard:     CullPrefetchService.PrefetchedCard?
 
     private var screenWidth: CGFloat  { UIScreen.main.bounds.width }
     private var dragProgress: CGFloat { dragOffset / (screenWidth * 0.4) }
@@ -64,6 +65,15 @@ struct CullView: View {
             }
         }
         .task { await initialize() }
+        .fullScreenCover(item: $expandedCard) { card in
+            ZStack {
+                Color.black.ignoresSafeArea()
+                Image(uiImage: card.image)
+                    .resizable()
+                    .scaledToFit()
+            }
+            .onTapGesture { expandedCard = nil }
+        }
         .onChange(of: prefetchService?.queue.isEmpty) { _, isEmpty in
             // Guard against firing during initialization — initialize() calls advance() itself.
             if isEmpty == false, currentCard == nil, isInitialized {
@@ -134,6 +144,18 @@ struct CullView: View {
                         }
                     }
                 )
+                .overlay(alignment: .topTrailing) {
+                    Button { expandedCard = card } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(8)
+                            .background(Color.photoOverlay)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(8)
+                }
                 .offset(x: dragOffset)
                 .gesture(
                     DragGesture()
@@ -149,7 +171,6 @@ struct CullView: View {
                             }
                         }
                 )
-
         }
         .padding(.horizontal, 12)
     }

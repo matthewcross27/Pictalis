@@ -10,10 +10,10 @@ enum CullQueueState: Equatable {
 @Observable @MainActor
 final class CullPrefetchService {
 
-    struct PrefetchedCard: Sendable {
-        let photoId:     UUID
-        let clusterSize: Int?
-        let image:       UIImage
+    struct PrefetchedCard: Sendable, Identifiable {
+        let photoId: UUID
+        let image:   UIImage
+        var id: UUID { photoId }
     }
 
     private static let normalQueueSize = 20
@@ -165,7 +165,7 @@ final class CullPrefetchService {
               let (data, _) = try? await URLSession.shared.data(from: url),
               let image = UIImage(data: data)
         else { return nil }
-        return PrefetchedCard(photoId: card.photoId, clusterSize: card.clusterSize, image: image)
+        return PrefetchedCard(photoId: card.photoId, image: image)
     }
 
     @MainActor

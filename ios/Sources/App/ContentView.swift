@@ -49,7 +49,7 @@ struct ContentView: View {
                     sessionId: sessionId,
                     uploadService: upload,
                     onSkipToResults: {
-                        appState = .results(sessionId: sessionId)
+                        appState = .complete(sessionId: sessionId, totalComparisons: 0)
                     },
                     onComplete: { totalComparisons in
                         appState = .complete(sessionId: sessionId, totalComparisons: totalComparisons)

@@ -20,6 +20,8 @@ struct ComparisonView: View {
     @State private var isRemoving = false
     @State private var dragOffsetA: CGFloat = 0
     @State private var dragOffsetB: CGFloat = 0
+    @State private var hasDraggedA = false
+    @State private var hasDraggedB = false
 
     var body: some View {
         ZStack {
@@ -48,8 +50,8 @@ struct ComparisonView: View {
                 } else if let pair {
                     Spacer()
                     VStack(spacing: 8) {
-                        photoCard(photo: pair.photoA, dragOffset: $dragOffsetA)
-                        photoCard(photo: pair.photoB, dragOffset: $dragOffsetB)
+                        photoCard(photo: pair.photoA, dragOffset: $dragOffsetA, hasDragged: $hasDraggedA)
+                        photoCard(photo: pair.photoB, dragOffset: $dragOffsetB, hasDragged: $hasDraggedB)
                     }
                     .padding(.horizontal, 8)
                     .opacity((isSubmitting || isRemoving) ? 0.7 : 1.0)
@@ -65,6 +67,8 @@ struct ComparisonView: View {
         .onChange(of: pair?.comparisonId) { _, newId in
             dragOffsetA = 0
             dragOffsetB = 0
+            hasDraggedA = false
+            hasDraggedB = false
             if newId != nil { startPrefetch() }
         }
         .onDisappear {
@@ -143,7 +147,7 @@ struct ComparisonView: View {
     }
 
     @ViewBuilder
-    private func photoCard(photo: PairPhoto, dragOffset: Binding<CGFloat>) -> some View {
+    private func photoCard(photo: PairPhoto, dragOffset: Binding<CGFloat>, hasDragged: Binding<Bool>) -> some View {
         ZStack {
             Color.red.opacity(0.85)
                 .overlay(alignment: .trailing) {
@@ -155,6 +159,7 @@ struct ComparisonView: View {
 
             ZStack {
                 Button {
+                    guard !hasDragged.wrappedValue else { return }
                     Task { @MainActor in await choose(winner: photo) }
                 } label: {
                     Color.grainPaper
@@ -203,10 +208,12 @@ struct ComparisonView: View {
         .frame(maxWidth: .infinity)
         .aspectRatio(4 / 3, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+        .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
         .simultaneousGesture(
             DragGesture(minimumDistance: 20, coordinateSpace: .local)
                 .onChanged { value in
                     guard value.translation.width < 0 else { return }
+                    hasDragged.wrappedValue = true
                     dragOffset.wrappedValue = value.translation.width
                 }
                 .onEnded { value in
@@ -216,6 +223,10 @@ struct ComparisonView: View {
                     }
                     if triggered {
                         Task { @MainActor in await remove(photo: photo) }
+                    }
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(100))
+                        hasDragged.wrappedValue = false
                     }
                 }
         )

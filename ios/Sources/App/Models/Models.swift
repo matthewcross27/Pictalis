@@ -114,28 +114,24 @@ struct SessionInfo: Decodable {
 }
 
 struct RankedPhoto: Decodable, Identifiable {
-    let id: UUID
-    let storagePath: String
-    let thumbnailPath: String?
-    let eloRating: Double
-    let uncertainty: Double?
+    let id:              UUID
+    let storagePath:     String
+    let thumbnailPath:   String?
+    let eloRating:       Double
+    let uncertainty:     Double?
     let comparisonCount: Int
-    let isSuppressed: Bool
-    let clusterId: String?
-    let signedUrl: String
+    let isSuppressed:    Bool
+    let signedUrl:       String
 
     enum CodingKeys: String, CodingKey {
         case id
-        case storagePath = "storage_path"
-        case thumbnailPath = "thumbnail_path"
-        case eloRating = "elo_rating"
+        case storagePath     = "storage_path"
+        case thumbnailPath   = "thumbnail_path"
+        case eloRating       = "elo_rating"
         case uncertainty
         case comparisonCount = "comparison_count"
-        case isSuppressed = "is_suppressed"
-        case clusterId = "cluster_id"
-        case signedUrl = "signed_url"
-        // quality_flags omitted: JSONB object type not displayed in UI;
-        // JSONDecoder silently skips JSON keys not present in the struct.
+        case isSuppressed    = "is_suppressed"
+        case signedUrl       = "signed_url"
     }
 }
 
@@ -164,19 +160,15 @@ struct StartCullResponse: Decodable {
 // MARK: - next-cull
 
 struct CullCard: Decodable {
-    let done: Bool
-    let photoId: UUID?
-    let photoUrl: String?
-    let clusterId: String?
-    let clusterSize: Int?
+    let done:           Bool
+    let photoId:        UUID?
+    let photoUrl:       String?
     let cardsRemaining: Int?
 
     enum CodingKeys: String, CodingKey {
         case done
         case photoId        = "photo_id"
         case photoUrl       = "photo_url"
-        case clusterId      = "cluster_id"
-        case clusterSize    = "cluster_size"
         case cardsRemaining = "cards_remaining"
     }
 }
@@ -229,16 +221,12 @@ struct SessionDecisionFile: Codable {
 // MARK: - prefetch-cull
 
 struct PrefetchCullCard: Decodable {
-    let photoId:     UUID
-    let photoUrl:    String
-    let clusterId:   String?
-    let clusterSize: Int
+    let photoId:  UUID
+    let photoUrl: String
 
     enum CodingKeys: String, CodingKey {
-        case photoId     = "photo_id"
-        case photoUrl    = "photo_url"
-        case clusterId   = "cluster_id"
-        case clusterSize = "cluster_size"
+        case photoId  = "photo_id"
+        case photoUrl = "photo_url"
     }
 }
 

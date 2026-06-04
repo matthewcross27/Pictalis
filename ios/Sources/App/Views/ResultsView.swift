@@ -87,54 +87,47 @@ struct ResultsView: View {
 
     @ViewBuilder
     private func photoCell(photo: RankedPhoto) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            AsyncImage(url: URL(string: photo.signedUrl)) { phase in
-                switch phase {
-                case .empty:
-                    Color.grainPaper
-                        .frame(maxWidth: .infinity, maxHeight: 180)
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 180)
-                        .clipped()
-                case .failure:
-                    Color.grainPaper
-                        .frame(maxWidth: .infinity, minHeight: 180)
-                        .overlay {
-                            Image(systemName: "photo")
-                                .foregroundStyle(Color.secondaryText)
+        Color.grainPaper
+            .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 180)
+            .overlay {
+                AsyncImage(url: URL(string: photo.signedUrl)) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .failure:
+                        Image(systemName: "photo")
+                            .foregroundStyle(Color.secondaryText)
+                    default:
+                        EmptyView()
+                    }
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Button {
+                    Task { @MainActor in
+                        if await exportPhoto(photo: photo) {
+                            exportAlertMessage = "Photo saved to your library."
                         }
-                @unknown default:
-                    EmptyView()
-                }
-            }
-
-            Button {
-                Task { @MainActor in
-                    if await exportPhoto(photo: photo) {
-                        exportAlertMessage = "Photo saved to your library."
                     }
-                }
-            } label: {
-                Group {
-                    if exportingId == photo.id {
-                        ProgressView().tint(.white)
-                    } else {
-                        Image(systemName: "square.and.arrow.down")
-                            .foregroundStyle(.white)
+                } label: {
+                    Group {
+                        if exportingId == photo.id {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: "square.and.arrow.down")
+                                .foregroundStyle(.white)
+                        }
                     }
+                    .font(.system(size: 12, weight: .medium))
+                    .padding(8)
+                    .background(Color.photoOverlay)
+                    .clipShape(Capsule())
                 }
-                .font(.system(size: 12, weight: .medium))
                 .padding(8)
-                .background(Color.photoOverlay)
-                .clipShape(Capsule())
+                .disabled(exportingId != nil)
             }
-            .padding(8)
-            .disabled(exportingId != nil)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
     }
 
     private func fetchResults() async {
