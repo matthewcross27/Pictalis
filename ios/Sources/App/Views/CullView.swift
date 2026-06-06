@@ -42,7 +42,7 @@ struct CullView: View {
                     }
 
                 case .exhausted:
-                    Color.clear.onAppear { onComplete() }
+                    Color.clear
 
                 case .error(let message):
                     Spacer()
@@ -80,6 +80,9 @@ struct CullView: View {
                 currentCard = prefetchService?.advance()
             }
         }
+        .onChange(of: prefetchService?.state) { _, newState in
+            if newState == .exhausted { onComplete() }
+        }
     }
 
     // MARK: - Initialization
@@ -108,6 +111,11 @@ struct CullView: View {
                 Text("\(remaining) remaining")
                     .font(.captionSerif)
                     .foregroundStyle(Color.secondaryText)
+            }
+            if uploadService.hasFailures {
+                Text("\(uploadService.failed) failed to upload")
+                    .font(.captionSerif)
+                    .foregroundStyle(Color.red)
             }
             Spacer()
             Button(isFinishing ? "Finishing…" : "Done — start comparing") {

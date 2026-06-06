@@ -1,5 +1,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
+import { computeTopK } from '../_shared/ranking-logic.ts';
 import { initSentry, Sentry } from '../_shared/sentry.ts';
 initSentry();
 
@@ -11,10 +12,6 @@ const CORS = {
 const CreateSessionBody = z.object({
   photo_count: z.number().int().min(2).max(300),
 });
-
-function computeTopK(photoCount: number): number {
-  return Math.min(40, Math.max(5, Math.round(2.5 * Math.sqrt(photoCount))));
-}
 
 Deno.serve(async (req) => {
   try {

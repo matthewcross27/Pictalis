@@ -94,7 +94,10 @@ final class CullPrefetchService {
             .union(queue.map(\.photoId))
             .union(inFlightIds)
 
-        let thumbnailWidth = Int(UIScreen.main.bounds.width * UIScreen.main.scale)
+        let screen = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.screen ?? UIScreen.main
+        let thumbnailWidth = Int(screen.bounds.width * screen.scale)
         var batchIds: [UUID] = []
         var attempt = 0
 
@@ -135,9 +138,9 @@ final class CullPrefetchService {
             inFlightIds.subtract(batchIds)
             queue.append(contentsOf: prefetched)
 
-            // Enforce cap; evict oldest (furthest from next display)
+            // Enforce cap; evict newest additions (furthest from next display)
             if queue.count > currentMaxQueueSize {
-                queue.removeFirst(queue.count - currentMaxQueueSize)
+                queue.removeLast(queue.count - currentMaxQueueSize)
             }
             // Gradual recovery toward normalQueueSize after a clean cycle
             currentMaxQueueSize = min(currentMaxQueueSize + 5, Self.normalQueueSize)

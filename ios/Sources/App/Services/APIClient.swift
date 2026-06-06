@@ -31,7 +31,7 @@ final class APIClient: ObservableObject {
     private func validate(_ response: URLResponse, data: Data) throws {
         guard let http = response as? HTTPURLResponse,
               !(200..<300).contains(http.statusCode) else { return }
-        throw APIError.httpError(statusCode: (response as! HTTPURLResponse).statusCode, body: data)
+        throw APIError.httpError(statusCode: http.statusCode, body: data)
     }
 
     // MARK: - create-session
@@ -59,7 +59,7 @@ final class APIClient: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id": sessionId.uuidString.lowercased().lowercased(),
+            "session_id": sessionId.uuidString.lowercased(),
             "storage_path": storagePath,
         ])
         let (data, response) = try await URLSession.shared.data(for: req)

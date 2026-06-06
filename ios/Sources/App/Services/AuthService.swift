@@ -10,12 +10,10 @@ final class AuthService: ObservableObject {
 
     private let client: SupabaseClient
 
-    // Expose the SupabaseClient so UploadService can reach Storage.
-    let supabase: SupabaseClient
+    var storageClient: SupabaseClient { client }
 
     init(client: SupabaseClient) {
         self.client = client
-        self.supabase = client
     }
 
     func signInIfNeeded() async {

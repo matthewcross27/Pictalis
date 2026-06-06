@@ -296,33 +296,39 @@ struct ComparisonView: View {
         }
     }
 
-    private func fetchNextPair(retryCount: Int = 0) async {
+    private func fetchNextPair() async {
         isLoading = true
         errorMessage = nil
-        do {
-            let response = try await api.nextPair(sessionId: sessionId)
-            currentStage = response.stage
-            pair = response
-            isLoading = false
-        } catch APIError.httpError(statusCode: 422, _) {
-            if let status = try? await api.sessionStatus(sessionId: sessionId),
-               status.isComplete {
-                prefetchTask?.cancel()
-                prefetchedPair = nil
-                isLoading = false
-                onComplete(status.totalComparisons)
-                return
-            }
-            guard retryCount < 30 else {
-                errorMessage = "Not enough photos available. Please go back and try again."
+
+        var delay: Duration = .milliseconds(500)
+        for attempt in 0..<10 {
+            do {
+                let response = try await api.nextPair(sessionId: sessionId)
+                currentStage = response.stage
+                pair = response
                 isLoading = false
                 return
+            } catch APIError.httpError(statusCode: 422, _) {
+                if let status = try? await api.sessionStatus(sessionId: sessionId),
+                   status.isComplete {
+                    prefetchTask?.cancel()
+                    prefetchedPair = nil
+                    isLoading = false
+                    onComplete(status.totalComparisons)
+                    return
+                }
+                if attempt == 0 {
+                    errorMessage = "Waiting for photos to finish uploading…"
+                }
+                try? await Task.sleep(for: delay)
+                delay = min(delay * 2, .seconds(8))
+            } catch {
+                errorMessage = "Failed to load next pair: \(error.localizedDescription)"
+                isLoading = false
+                return
             }
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            await fetchNextPair(retryCount: retryCount + 1)
-        } catch {
-            errorMessage = "Failed to load next pair: \(error.localizedDescription)"
-            isLoading = false
         }
+        errorMessage = "Not enough photos available. Please go back and try again."
+        isLoading = false
     }
 }
