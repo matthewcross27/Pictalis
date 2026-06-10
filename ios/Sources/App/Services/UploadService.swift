@@ -23,7 +23,9 @@ final class UploadService: ObservableObject {
     // Start uploading. Returns immediately; progress published via @Published.
     func start(items: [PhotosPickerItem], sessionId: UUID, userId: UUID) {
         total = items.count
-        Task { await runAll(items: items, sessionId: sessionId, userId: userId) }
+        // The first comparison is gated on the first two uploads registering,
+        // so this work is directly user-visible.
+        Task(priority: .userInitiated) { await runAll(items: items, sessionId: sessionId, userId: userId) }
     }
 
     // MARK: - Private
