@@ -67,6 +67,10 @@ final class UploadService: ObservableObject {
                 .upload(storagePath, data: compressed, options: FileOptions(contentType: "image/jpeg"))
             _ = try await api.registerPhoto(sessionId: sessionId, storagePath: storagePath)
             return true
+        } catch let APIError.httpError(statusCode, body) {
+            let bodyString = String(data: body, encoding: .utf8) ?? "<non-UTF8>"
+            print("Upload failed: HTTP \(statusCode) — \(bodyString)")
+            return false
         } catch {
             print("Upload failed: \(error)")
             return false

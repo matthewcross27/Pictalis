@@ -6,9 +6,13 @@ struct ResultsView: View {
 
     let sessionId: UUID
     var onBack: (() -> Void)? = nil
+    /// Photos already fetched by a previous screen — rendered immediately
+    /// while the full list loads.
+    var initialPhotos: [RankedPhoto] = []
 
     @State private var photos: [RankedPhoto] = []
     @State private var isLoading = true
+    @State private var expandedPhoto: RankedPhoto?
     @State private var errorMessage: String?
     @State private var exportingId: UUID?
     @State private var exportAlertMessage: String?
@@ -72,7 +76,16 @@ struct ResultsView: View {
                 }
             }
         }
-        .task { await fetchResults() }
+        .task {
+            if photos.isEmpty, !initialPhotos.isEmpty {
+                photos = initialPhotos
+                isLoading = false
+            }
+            await fetchResults()
+        }
+        .fullScreenCover(item: $expandedPhoto) { photo in
+            PhotoExpandedView(photo: photo) { expandedPhoto = nil }
+        }
         .alert("Saved to Photos", isPresented: Binding(
             get: { exportAlertMessage != nil },
             set: { if !$0 { exportAlertMessage = nil } }
@@ -90,7 +103,7 @@ struct ResultsView: View {
         Color.grainPaper
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 180)
             .overlay {
-                AsyncImage(url: URL(string: photo.signedUrl)) { phase in
+                CachedPhotoImage(url: photo.signedUrl, cacheKey: photo.id) { phase in
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFill()
@@ -128,17 +141,22 @@ struct ResultsView: View {
             }
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+            .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
+            .onTapGesture { expandedPhoto = photo }
     }
 
     private func fetchResults() async {
-        isLoading = true
+        isLoading = photos.isEmpty
         do {
             let response = try await api.results(sessionId: sessionId)
             photos = response.photos
             sessionStage = response.session?.stage
             isSessionComplete = response.session?.isComplete ?? false
         } catch {
-            errorMessage = "Failed to load results: \(error.localizedDescription)"
+            // Keep showing initial photos if the full fetch fails.
+            if photos.isEmpty {
+                errorMessage = "Failed to load results: \(error.localizedDescription)"
+            }
         }
         isLoading = false
     }

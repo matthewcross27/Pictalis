@@ -94,10 +94,6 @@ final class CullPrefetchService {
             .union(queue.map(\.photoId))
             .union(inFlightIds)
 
-        let screen = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.screen ?? UIScreen.main
-        let thumbnailWidth = Int(screen.bounds.width * screen.scale)
         var batchIds: [UUID] = []
         var attempt = 0
 
@@ -107,8 +103,7 @@ final class CullPrefetchService {
                 response = try await api.prefetchCull(
                     sessionId: sessionId,
                     count: batchSize,
-                    excludeIds: Array(excludeIds),
-                    thumbnailWidth: thumbnailWidth
+                    excludeIds: Array(excludeIds)
                 )
                 if response.cards.isEmpty && response.hasMore {
                     attempt += 1

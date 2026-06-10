@@ -123,6 +123,16 @@ struct ComparisonView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(Color.grainPaper)
+
+                if uploadService.hasFailures {
+                    Text("\(uploadService.failed) upload\(uploadService.failed == 1 ? "" : "s") failed")
+                        .font(.captionSerif)
+                        .foregroundStyle(Color.amber)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 6)
+                        .background(Color.grainPaper)
+                }
             }
         }
     }
@@ -309,6 +319,13 @@ struct ComparisonView: View {
                 isLoading = false
                 return
             } catch APIError.httpError(statusCode: 422, _) {
+                if uploadService.isComplete && uploadService.completed < 2 {
+                    errorMessage = uploadService.failed > 0
+                        ? "\(uploadService.failed) photo upload\(uploadService.failed == 1 ? "" : "s") failed. Please go back and try again."
+                        : "Not enough photos uploaded. Please go back and try again."
+                    isLoading = false
+                    return
+                }
                 if let status = try? await api.sessionStatus(sessionId: sessionId),
                    status.isComplete {
                     prefetchTask?.cancel()

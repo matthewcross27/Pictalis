@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     const topK = computeTopK(parsed.data.photo_count);
     const { data: session, error } = await supabase
       .from('sessions')
-      .insert({ photo_count: parsed.data.photo_count, user_id: user.id, top_k: topK })
+      .insert({ photo_count: parsed.data.photo_count, user_id: user.id, top_k: topK, stage: 'ranking' })
       .select('id, created_at, expires_at, status, photo_count, top_k')
       .single();
 
