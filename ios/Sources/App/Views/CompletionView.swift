@@ -6,10 +6,11 @@ struct CompletionView: View {
 
     let sessionId: UUID
     let totalComparisons: Int
-    var onSeeFullRankings: () -> Void
+    var onSeeFullRankings: ([RankedPhoto]) -> Void
     var onStartOver: () -> Void
 
     @State private var photos: [RankedPhoto] = []
+    @State private var expandedPhoto: RankedPhoto?
     @State private var isLoading = true
     @State private var isExporting = false
     @State private var exportAlertMessage: String?
@@ -47,25 +48,25 @@ struct CompletionView: View {
                     } else if !photos.isEmpty {
                         LazyVGrid(columns: columns, spacing: 4) {
                             ForEach(photos.prefix(10)) { photo in
-                                AsyncImage(url: URL(string: photo.signedUrl)) { phase in
-                                    switch phase {
-                                    case .empty:
-                                        Color.grainPaper.aspectRatio(1, contentMode: .fill)
-                                    case .success(let image):
-                                        image.resizable().aspectRatio(1, contentMode: .fill)
-                                    case .failure:
-                                        Color.grainPaper
-                                            .aspectRatio(1, contentMode: .fill)
-                                            .overlay {
+                                Color.grainPaper
+                                    .aspectRatio(1, contentMode: .fit)
+                                    .overlay {
+                                        CachedPhotoImage(url: photo.signedUrl, cacheKey: photo.id) { phase in
+                                            switch phase {
+                                            case .success(let image):
+                                                image.resizable().scaledToFill()
+                                            case .failure:
                                                 Image(systemName: "photo")
                                                     .foregroundStyle(Color.secondaryText)
+                                            default:
+                                                EmptyView()
                                             }
-                                    @unknown default:
-                                        EmptyView()
+                                        }
                                     }
-                                }
-                                .clipped()
-                                .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+                                    .clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+                                    .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
+                                    .onTapGesture { expandedPhoto = photo }
                             }
                         }
                         .padding(.horizontal, 8)
@@ -86,7 +87,7 @@ struct CompletionView: View {
                         .disabled(photos.isEmpty || isExporting)
                         .padding(.horizontal, 24)
 
-                        Button("See Full Rankings") { onSeeFullRankings() }
+                        Button("See Full Rankings") { onSeeFullRankings(photos) }
                             .buttonStyle(GhostButtonStyle())
 
                         Button("Start Over") { onStartOver() }
@@ -99,6 +100,9 @@ struct CompletionView: View {
             }
         }
         .task { await fetchTopPhotos() }
+        .fullScreenCover(item: $expandedPhoto) { photo in
+            PhotoExpandedView(photo: photo) { expandedPhoto = nil }
+        }
         .alert("Saved to Photos", isPresented: Binding(
             get: { exportAlertMessage != nil },
             set: { if !$0 { exportAlertMessage = nil } }

@@ -112,7 +112,7 @@ struct SessionSetupView: View {
         Task { @MainActor in
             do {
                 let session = try await api.createSession(photoCount: count)
-                let uploadService = UploadService(supabase: auth.supabase, api: api)
+                let uploadService = UploadService(supabase: auth.storageClient, api: api)
                 uploadService.start(items: items, sessionId: session.id, userId: userId)
                 onStart(session.id, uploadService)
             } catch {

@@ -9,10 +9,9 @@ const CORS = {
 };
 
 const BodySchema = z.object({
-  session_id:      z.string().uuid(),
-  count:           z.number().int().min(1).max(50),
-  exclude_ids:     z.array(z.string().uuid()).max(500).default([]),
-  thumbnail_width: z.number().int().min(100).max(3000),
+  session_id:  z.string().uuid(),
+  count:       z.number().int().min(1).max(50),
+  exclude_ids: z.array(z.string().uuid()).max(500).default([]),
 });
 
 Deno.serve(async (req) => {
@@ -46,7 +45,7 @@ Deno.serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { session_id, count, exclude_ids, thumbnail_width } = parsed.data;
+    const { session_id, count, exclude_ids } = parsed.data;
 
     const { data: session, error: sessionError } = await supabase
       .from('sessions')
@@ -89,11 +88,13 @@ Deno.serve(async (req) => {
     const cards = await Promise.all(
       batch.map(async (photo) => {
         try {
+          // Plain signed URL — same pipeline as next-pair/results. Working copies
+          // are already compressed and capped at 1920px on-device, so no
+          // server-side transform is needed (or wanted: the transform service
+          // produced cropped renditions).
           const { data: signed } = await supabase.storage
             .from('working-copies')
-            .createSignedUrl(photo.storage_path, 3600, {
-              transform: { width: thumbnail_width, quality: 75 },
-            });
+            .createSignedUrl(photo.storage_path, 3600);
           return { photo_id: photo.id, photo_url: signed?.signedUrl ?? null };
         } catch {
           return { photo_id: photo.id, photo_url: null };

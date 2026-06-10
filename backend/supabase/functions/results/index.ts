@@ -63,7 +63,6 @@ Deno.serve(async (req) => {
       .limit(parsed.data.limit);
 
     if (error) {
-      console.error('Failed to fetch photos:', error);
       return new Response(JSON.stringify({ error: 'Failed to fetch photos' }), {
         status: 500,
         headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -78,10 +77,7 @@ Deno.serve(async (req) => {
         if (signedError) throw signedError;
         return { ...photo, signed_url: signed?.signedUrl ?? null };
       })
-    ).catch((err) => {
-      console.error('Failed to generate signed URLs:', err);
-      return null;
-    });
+    ).catch(() => null);
 
     if (!photosWithUrls) {
       return new Response(JSON.stringify({ error: 'Failed to generate photo URLs' }), {
@@ -94,7 +90,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         photos: photosWithUrls,
         session: {
-          stage: session?.stage ?? 'stage1',
+          stage: session?.stage ?? 'ranking',
           is_complete: session?.stage === 'complete',
         },
       }),

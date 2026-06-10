@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         comparison_id: comparison.id,
-        stage: 'ranking',
+        stage: session.stage,
         progress: computeProgress(photos as Photo[], topK),
         photo_a: { ...photoA, signed_url: signedA.data.signedUrl },
         photo_b: { ...photoB, signed_url: signedB.data.signedUrl },

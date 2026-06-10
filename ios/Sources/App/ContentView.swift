@@ -6,7 +6,7 @@ enum AppState {
     case culling(sessionId: UUID, upload: UploadService)
     case comparing(sessionId: UUID, upload: UploadService)
     case complete(sessionId: UUID, totalComparisons: Int)
-    case results(sessionId: UUID, previousComparisons: Int? = nil)
+    case results(sessionId: UUID, previousComparisons: Int? = nil, initialPhotos: [RankedPhoto] = [])
 }
 
 struct ContentView: View {
@@ -60,20 +60,21 @@ struct ContentView: View {
                 CompletionView(
                     sessionId: sessionId,
                     totalComparisons: totalComparisons,
-                    onSeeFullRankings: {
-                        appState = .results(sessionId: sessionId, previousComparisons: totalComparisons)
+                    onSeeFullRankings: { photos in
+                        appState = .results(sessionId: sessionId, previousComparisons: totalComparisons, initialPhotos: photos)
                     },
                     onStartOver: {
                         appState = .setup
                     }
                 )
 
-            case .results(let sessionId, let previousComparisons):
+            case .results(let sessionId, let previousComparisons, let initialPhotos):
                 ResultsView(
                     sessionId: sessionId,
                     onBack: previousComparisons.map { comps in
                         { appState = .complete(sessionId: sessionId, totalComparisons: comps) }
-                    }
+                    },
+                    initialPhotos: initialPhotos
                 )
             }
         }

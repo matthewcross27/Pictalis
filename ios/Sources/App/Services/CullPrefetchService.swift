@@ -94,7 +94,6 @@ final class CullPrefetchService {
             .union(queue.map(\.photoId))
             .union(inFlightIds)
 
-        let thumbnailWidth = Int(UIScreen.main.bounds.width * UIScreen.main.scale)
         var batchIds: [UUID] = []
         var attempt = 0
 
@@ -104,8 +103,7 @@ final class CullPrefetchService {
                 response = try await api.prefetchCull(
                     sessionId: sessionId,
                     count: batchSize,
-                    excludeIds: Array(excludeIds),
-                    thumbnailWidth: thumbnailWidth
+                    excludeIds: Array(excludeIds)
                 )
                 if response.cards.isEmpty && response.hasMore {
                     attempt += 1
@@ -135,9 +133,9 @@ final class CullPrefetchService {
             inFlightIds.subtract(batchIds)
             queue.append(contentsOf: prefetched)
 
-            // Enforce cap; evict oldest (furthest from next display)
+            // Enforce cap; evict newest additions (furthest from next display)
             if queue.count > currentMaxQueueSize {
-                queue.removeFirst(queue.count - currentMaxQueueSize)
+                queue.removeLast(queue.count - currentMaxQueueSize)
             }
             // Gradual recovery toward normalQueueSize after a clean cycle
             currentMaxQueueSize = min(currentMaxQueueSize + 5, Self.normalQueueSize)

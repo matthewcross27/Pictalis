@@ -42,7 +42,7 @@ struct CullView: View {
                     }
 
                 case .exhausted:
-                    Color.clear.onAppear { onComplete() }
+                    Color.clear
 
                 case .error(let message):
                     Spacer()
@@ -80,6 +80,9 @@ struct CullView: View {
                 currentCard = prefetchService?.advance()
             }
         }
+        .onChange(of: prefetchService?.state) { _, newState in
+            if newState == .exhausted { onComplete() }
+        }
     }
 
     // MARK: - Initialization
@@ -109,6 +112,11 @@ struct CullView: View {
                     .font(.captionSerif)
                     .foregroundStyle(Color.secondaryText)
             }
+            if uploadService.hasFailures {
+                Text("\(uploadService.failed) failed to upload")
+                    .font(.captionSerif)
+                    .foregroundStyle(Color.red)
+            }
             Spacer()
             Button(isFinishing ? "Finishing…" : "Done — start comparing") {
                 guard !isFinishing else { return }
@@ -128,49 +136,57 @@ struct CullView: View {
 
     @ViewBuilder
     private func cardStack(card: CullPrefetchService.PrefetchedCard) -> some View {
-        ZStack(alignment: .topTrailing) {
-            Image(uiImage: card.image)
-                .resizable()
-                .scaledToFit()
-                .cornerRadius(.photoRadius)
-                .overlay(
-                    Group {
-                        if dragOffset > 0 {
-                            Color.green.opacity(min(dragProgress, 1.0) * 0.35)
-                                .cornerRadius(.photoRadius)
-                        } else if dragOffset < 0 {
-                            Color.red.opacity(min(-dragProgress, 1.0) * 0.35)
-                                .cornerRadius(.photoRadius)
-                        }
+        GeometryReader { geo in
+            ZStack {
+                // Full-size backdrop so portrait photos don't read as a narrow strip,
+                // while scaledToFit keeps the whole image visible (no crop, no
+                // hit-test overflow blocking the top bar).
+                RoundedRectangle(cornerRadius: .photoRadius)
+                    .fill(Color.grainPaper)
+                Image(uiImage: card.image)
+                    .resizable()
+                    .scaledToFit()
+                    .cornerRadius(.photoRadius)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .overlay(
+                Group {
+                    if dragOffset > 0 {
+                        Color.green.opacity(min(dragProgress, 1.0) * 0.35)
+                            .cornerRadius(.photoRadius)
+                    } else if dragOffset < 0 {
+                        Color.red.opacity(min(-dragProgress, 1.0) * 0.35)
+                            .cornerRadius(.photoRadius)
                     }
-                )
-                .overlay(alignment: .topTrailing) {
-                    Button { expandedCard = card } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(8)
-                            .background(Color.photoOverlay)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(8)
                 }
-                .offset(x: dragOffset)
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in dragOffset = value.translation.width }
-                        .onEnded { value in
-                            let threshold = screenWidth * 0.4
-                            if value.translation.width > threshold {
-                                commitDecision(.keep, card: card)
-                            } else if value.translation.width < -threshold {
-                                commitDecision(.drop, card: card)
-                            } else {
-                                withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
-                            }
+            )
+            .overlay(alignment: .topTrailing) {
+                Button { expandedCard = card } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(8)
+                        .background(Color.photoOverlay)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(8)
+            }
+            .offset(x: dragOffset)
+            .gesture(
+                DragGesture()
+                    .onChanged { value in dragOffset = value.translation.width }
+                    .onEnded { value in
+                        let threshold = screenWidth * 0.4
+                        if value.translation.width > threshold {
+                            commitDecision(.keep, card: card)
+                        } else if value.translation.width < -threshold {
+                            commitDecision(.drop, card: card)
+                        } else {
+                            withAnimation(.spring(response: 0.3)) { dragOffset = 0 }
                         }
-                )
+                    }
+            )
         }
         .padding(.horizontal, 12)
     }

@@ -63,11 +63,9 @@ enum ImageCompressor {
         guard longestPixel > maxDimension else { return image }
         let ratio = maxDimension / longestPixel
         let newSize = CGSize(width: floor(pixelWidth * ratio), height: floor(pixelHeight * ratio))
-        // UIGraphicsBeginImageContextWithOptions with scale=1 creates a context where
-        // 1 point == 1 pixel, so the output UIImage.size equals its pixel dimensions.
-        UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-        defer { UIGraphicsEndImageContext() }
-        image.draw(in: CGRect(origin: .zero, size: newSize))
-        return UIGraphicsGetImageFromCurrentImageContext() ?? image
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
     }
 }
