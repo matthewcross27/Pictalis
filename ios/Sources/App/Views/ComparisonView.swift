@@ -10,6 +10,7 @@ struct ComparisonView: View {
 
     @State private var pair: NextPairResponse?
     @State private var isLoading = true
+    @State private var waitingForUploads = false
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var comparisonCount = 0
@@ -34,18 +35,25 @@ struct ComparisonView: View {
                     Spacer()
                     VStack(spacing: 12) {
                         ProgressView().tint(Color.amber)
-                        Text("Loading photos…")
+                        Text(waitingForUploads ? "Waiting for photos to finish uploading…" : "Loading photos…")
                             .font(.captionSerif)
                             .foregroundStyle(Color.secondaryText)
                     }
                     Spacer()
                 } else if let errorMessage {
                     Spacer()
-                    Text(errorMessage)
-                        .font(.bodySerif)
-                        .foregroundStyle(Color.amber)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
+                    VStack(spacing: 16) {
+                        Text(errorMessage)
+                            .font(.bodySerif)
+                            .foregroundStyle(Color.amber)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                        Button("Try Again") {
+                            Task { @MainActor in await fetchNextPair() }
+                        }
+                        .font(.labelSerif)
+                        .foregroundStyle(Color.ink)
+                    }
                     Spacer()
                 } else if let pair {
                     Spacer()
@@ -310,8 +318,27 @@ struct ComparisonView: View {
         isLoading = true
         errorMessage = nil
 
+        // A pair only needs 2 registered photos, and `completed` increments
+        // after register-photo succeeds server-side — so wait on that local
+        // state instead of burning network round trips on guaranteed 422s.
+        while uploadService.completed < 2 {
+            if uploadService.isComplete {
+                errorMessage = uploadService.failed > 0
+                    ? "\(uploadService.failed) photo upload\(uploadService.failed == 1 ? "" : "s") failed. Please go back and try again."
+                    : "Not enough photos uploaded. Please go back and try again."
+                waitingForUploads = false
+                isLoading = false
+                return
+            }
+            waitingForUploads = true
+            if Task.isCancelled { return }
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        waitingForUploads = false
+
         var delay: Duration = .milliseconds(500)
-        for attempt in 0..<10 {
+        for _ in 0..<6 {
+            if Task.isCancelled { return }
             do {
                 let response = try await api.nextPair(sessionId: sessionId)
                 currentStage = response.stage
@@ -319,13 +346,8 @@ struct ComparisonView: View {
                 isLoading = false
                 return
             } catch APIError.httpError(statusCode: 422, _) {
-                if uploadService.isComplete && uploadService.completed < 2 {
-                    errorMessage = uploadService.failed > 0
-                        ? "\(uploadService.failed) photo upload\(uploadService.failed == 1 ? "" : "s") failed. Please go back and try again."
-                        : "Not enough photos uploaded. Please go back and try again."
-                    isLoading = false
-                    return
-                }
+                // 422 with photos registered means the session finished (or is
+                // about to be marked finished) — confirm and exit to results.
                 if let status = try? await api.sessionStatus(sessionId: sessionId),
                    status.isComplete {
                     prefetchTask?.cancel()
@@ -334,18 +356,15 @@ struct ComparisonView: View {
                     onComplete(status.totalComparisons)
                     return
                 }
-                if attempt == 0 {
-                    errorMessage = "Waiting for photos to finish uploading…"
-                }
                 try? await Task.sleep(for: delay)
-                delay = min(delay * 2, .seconds(8))
+                delay = min(delay * 2, .seconds(4))
             } catch {
                 errorMessage = "Failed to load next pair: \(error.localizedDescription)"
                 isLoading = false
                 return
             }
         }
-        errorMessage = "Not enough photos available. Please go back and try again."
+        errorMessage = "Couldn't load the next pair."
         isLoading = false
     }
 }
