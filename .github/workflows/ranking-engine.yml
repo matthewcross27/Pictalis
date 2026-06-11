@@ -1,0 +1,41 @@
+name: Ranking Engine
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ranking-engine/**"
+      - ".github/workflows/ranking-engine.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "ranking-engine/**"
+      - ".github/workflows/ranking-engine.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Typecheck & Test (TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ranking-engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ranking-engine/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test

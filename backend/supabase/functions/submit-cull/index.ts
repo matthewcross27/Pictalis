@@ -10,8 +10,8 @@ const CORS = {
 
 const BodySchema = z.object({
   session_id: z.string().uuid(),
-  photo_id:   z.string().uuid(),
-  decision:   z.enum(['keep', 'drop']),
+  photo_id: z.string().uuid(),
+  decision: z.enum(['keep', 'drop']),
 });
 
 Deno.serve(async (req) => {
@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
 
     const { session_id, photo_id, decision } = parsed.data;
@@ -98,8 +98,9 @@ Deno.serve(async (req) => {
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

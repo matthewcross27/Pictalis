@@ -17,15 +17,17 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 401,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
-    const url    = new URL(req.url);
+    const url = new URL(req.url);
     const parsed = QuerySchema.safeParse({ session_id: url.searchParams.get('session_id') });
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
-        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -47,18 +49,20 @@ Deno.serve(async (req) => {
 
     if (photosError) {
       return new Response(JSON.stringify({ error: photosError.message }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     if (!photos || photos.length === 0) {
       await supabase.from('sessions').update({ stage: 'ranking' }).eq('id', session_id);
       return new Response(JSON.stringify({ done: true }), {
-        status: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 200,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
-    const photo          = photos[0];
+    const photo = photos[0];
     const cardsRemaining = photos.length;
 
     const { data: signed, error: urlError } = await supabase.storage
@@ -67,15 +71,16 @@ Deno.serve(async (req) => {
 
     if (urlError || !signed?.signedUrl) {
       return new Response(JSON.stringify({ error: 'Failed to generate photo URL' }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     return new Response(
       JSON.stringify({
-        done:            false,
-        photo_id:        photo.id,
-        photo_url:       signed.signedUrl,
+        done: false,
+        photo_id: photo.id,
+        photo_url: signed.signedUrl,
         cards_remaining: cardsRemaining,
       }),
       { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } },
@@ -83,8 +88,9 @@ Deno.serve(async (req) => {
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

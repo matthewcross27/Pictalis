@@ -63,7 +63,11 @@ enum ImageCompressor {
         guard longestPixel > maxDimension else { return image }
         let ratio = maxDimension / longestPixel
         let newSize = CGSize(width: floor(pixelWidth * ratio), height: floor(pixelHeight * ratio))
-        let renderer = UIGraphicsImageRenderer(size: newSize)
+        // Render at scale 1 so newSize is in pixels; the default format inherits
+        // the device screen scale (2x/3x), which would multiply the bitmap size.
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: newSize))
         }

@@ -5,6 +5,7 @@
     "jsr:@std/internal@^1.0.12": "1.0.13",
     "jsr:@supabase/functions-js@^0.0.0-automated": "0.0.0-jsr-test.1",
     "jsr:@supabase/supabase-js@2": "2.105.4",
+    "npm:@sentry/deno@8": "8.55.2",
     "npm:@supabase/auth-js@2.105.4": "2.105.4",
     "npm:@supabase/postgrest-js@2.105.4": "2.105.4",
     "npm:@supabase/realtime-js@2.105.4": "2.105.4",
@@ -282,6 +283,15 @@
       "dependencies": [
         "@jimp/types",
         "tinycolor2"
+      ]
+    },
+    "@sentry/core@8.55.2": {
+      "integrity": "sha512-YlEBwybUcOQ/KjMHDmof1vwweVnBtBxYlQp7DE3fOdtW4pqqdHWTnTntQs4VgYfxzjJYgtkd9LHlGtg8qy+JVQ=="
+    },
+    "@sentry/deno@8.55.2": {
+      "integrity": "sha512-IR0gmxsPq1pLFvF5Airqh53N52YHILuTisE8zr5sFCktun7Z0SlJqnpXwaj2hW111Pg61f3ttizzPi7LSy5igg==",
+      "dependencies": [
+        "@sentry/core"
       ]
     },
     "@supabase/auth-js@2.105.4": {

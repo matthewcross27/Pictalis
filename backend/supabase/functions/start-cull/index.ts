@@ -17,21 +17,26 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 401,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     let body: unknown;
-    try { body = await req.json(); } catch {
+    try {
+      body = await req.json();
+    } catch {
       return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     const parsed = BodySchema.safeParse(body);
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
-        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -51,24 +56,28 @@ Deno.serve(async (req) => {
 
     if (error) {
       return new Response(JSON.stringify({ error: error.message }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     if (count === 0) {
       return new Response(JSON.stringify({ error: 'Session not found or already complete' }), {
-        status: 409, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 409,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     return new Response(JSON.stringify({ stage: 'cull' }), {
-      status: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 200,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

@@ -17,28 +17,33 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 401,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     let body: unknown;
-    try { body = await req.json(); } catch {
+    try {
+      body = await req.json();
+    } catch {
       return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     const parsed = BodySchema.safeParse(body);
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
-        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
 
     const { data, error } = await supabase
@@ -50,18 +55,21 @@ Deno.serve(async (req) => {
 
     if (error || !data) {
       return new Response(JSON.stringify({ error: 'Session not found' }), {
-        status: 404, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 404,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     return new Response(JSON.stringify({ ok: true }), {
-      status: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 200,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

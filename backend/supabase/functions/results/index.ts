@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
 
     // Fetch session stage so iOS can show "Complete" / "In Progress" badge.
@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     const { data: photos, error } = await supabase
       .from('photos')
       .select(
-        'id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, is_suppressed, cluster_id, quality_flags'
+        'id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, is_suppressed, cluster_id, quality_flags',
       )
       .eq('session_id', parsed.data.session_id)
       .eq('is_suppressed', false)
@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
           .createSignedUrl(photo.storage_path, 3600);
         if (signedError) throw signedError;
         return { ...photo, signed_url: signed?.signedUrl ?? null };
-      })
+      }),
     ).catch(() => null);
 
     if (!photosWithUrls) {
@@ -97,13 +97,14 @@ Deno.serve(async (req) => {
       {
         status: 200,
         headers: { ...CORS, 'Content-Type': 'application/json' },
-      }
+      },
     );
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

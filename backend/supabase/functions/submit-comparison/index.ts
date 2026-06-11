@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
 
     let body: unknown;
@@ -71,12 +71,13 @@ Deno.serve(async (req) => {
     if (winner_id !== comparison.photo_a_id && winner_id !== comparison.photo_b_id) {
       return new Response(
         JSON.stringify({ error: 'winner_id must be one of the two compared photos' }),
-        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } },
       );
     }
 
-    const loser_id =
-      winner_id === comparison.photo_a_id ? comparison.photo_b_id : comparison.photo_a_id;
+    const loser_id = winner_id === comparison.photo_a_id
+      ? comparison.photo_b_id
+      : comparison.photo_a_id;
 
     const { data: photoPair, error: photoError } = await supabase
       .from('photos')
@@ -114,23 +115,33 @@ Deno.serve(async (req) => {
     if (submitError) {
       const isAlreadyDone = submitError.code === 'UE001';
       return new Response(
-        JSON.stringify({ error: isAlreadyDone ? 'Comparison already submitted' : 'Failed to record comparison result' }),
+        JSON.stringify({
+          error: isAlreadyDone
+            ? 'Comparison already submitted'
+            : 'Failed to record comparison result',
+        }),
         {
           status: isAlreadyDone ? 409 : 500,
           headers: { ...CORS, 'Content-Type': 'application/json' },
-        }
+        },
       );
     }
 
     return new Response(
-      JSON.stringify({ winner_id, loser_id, winner_new_rating: winnerNew, loser_new_rating: loserNew }),
-      { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        winner_id,
+        loser_id,
+        winner_new_rating: winnerNew,
+        loser_new_rating: loserNew,
+      }),
+      { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } },
     );
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

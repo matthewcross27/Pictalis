@@ -1,18 +1,30 @@
 import { assertEquals, assertNotEquals } from 'jsr:@std/assert@1';
 import {
-  pairKey,
   buildPairCounts,
+  computeProgress,
+  pairKey,
   selectPhotoA,
   selectPhotoB,
   totalComparisons,
-  computeProgress,
-  WEIGHTS_POST,
-  WEIGHTS_COVER,
 } from './pair-selection.ts';
 import { type Photo } from './ranking-logic.ts';
 
-function makePhoto(id: string, elo: number, uncertainty: number, comparisons: number, clusterId: string | null = null): Photo {
-  return { id, storage_path: '', thumbnail_path: null, elo_rating: elo, uncertainty, comparison_count: comparisons, cluster_id: clusterId };
+function makePhoto(
+  id: string,
+  elo: number,
+  uncertainty: number,
+  comparisons: number,
+  clusterId: string | null = null,
+): Photo {
+  return {
+    id,
+    storage_path: '',
+    thumbnail_path: null,
+    elo_rating: elo,
+    uncertainty,
+    comparison_count: comparisons,
+    cluster_id: clusterId,
+  };
 }
 
 // --- pairKey ---
@@ -50,7 +62,7 @@ Deno.test('buildPairCounts — empty input → empty map', () => {
 Deno.test('selectPhotoA — coverage floor: under-compared photo always wins', () => {
   const photos = [
     makePhoto('under', 1200, 300, 0),
-    makePhoto('top',   1600, 50,  10),
+    makePhoto('top', 1600, 50, 10),
   ];
   const selected = selectPhotoA(photos, 2, 3);
   assertEquals(selected.id, 'under');
@@ -69,7 +81,7 @@ Deno.test('selectPhotoA — coverage floor: lowest comparison count wins among u
 
 Deno.test('selectPhotoA — when all covered, returns a photo from the set', () => {
   const photos = [
-    makePhoto('a', 1600, 50,  5),
+    makePhoto('a', 1600, 50, 5),
     makePhoto('b', 1500, 300, 5),
     makePhoto('c', 1400, 150, 5),
   ];
@@ -95,7 +107,7 @@ Deno.test('selectPhotoB — cluster penalty: prefers cross-cluster over same-clu
   // photoA in cluster X; b in cluster X (penalty), c in cluster Y (bonus)
   // Use WEIGHTS_POST where cluster weight is 0.05 and photos otherwise identical
   const photoA = makePhoto('a', 1500, 200, 3, 'X');
-  const sameCluster  = makePhoto('b', 1500, 200, 3, 'X');
+  const sameCluster = makePhoto('b', 1500, 200, 3, 'X');
   const crossCluster = makePhoto('c', 1500, 200, 3, 'Y');
   const photos = [photoA, sameCluster, crossCluster];
   const selected = selectPhotoB(photos, photoA, new Map(), false);
@@ -103,9 +115,9 @@ Deno.test('selectPhotoB — cluster penalty: prefers cross-cluster over same-clu
 });
 
 Deno.test('selectPhotoB — repeat penalty: avoids pairs seen many times', () => {
-  const photoA   = makePhoto('a', 1500, 200, 3);
+  const photoA = makePhoto('a', 1500, 200, 3);
   const repeated = makePhoto('b', 1500, 200, 3);
-  const fresh    = makePhoto('c', 1500, 200, 3);
+  const fresh = makePhoto('c', 1500, 200, 3);
   const pairCounts = new Map([[pairKey('a', 'b'), 5]]);
   const selected = selectPhotoB([photoA, repeated, fresh], photoA, pairCounts, false);
   assertEquals(selected.id, 'c');
@@ -114,8 +126,8 @@ Deno.test('selectPhotoB — repeat penalty: avoids pairs seen many times', () =>
 Deno.test('selectPhotoB — coverage mode uses WEIGHTS_COVER (freshness-dominant)', () => {
   // fresh photo has lowest comparison count → should win in coverage mode
   // both b and c have elo close to a, but c is fresher
-  const photoA  = makePhoto('a', 1500, 200, 5);
-  const stale   = makePhoto('b', 1490, 200, 10);
+  const photoA = makePhoto('a', 1500, 200, 5);
+  const stale = makePhoto('b', 1490, 200, 10);
   const fresher = makePhoto('c', 1510, 200, 0);
   const selected = selectPhotoB([photoA, stale, fresher], photoA, new Map(), true);
   assertEquals(selected.id, 'c');
@@ -124,11 +136,17 @@ Deno.test('selectPhotoB — coverage mode uses WEIGHTS_COVER (freshness-dominant
 Deno.test('selectPhotoB — hard-excludes pending pairs even when they score best', () => {
   // pending and eligible are identical in every scoring dimension;
   // only the pending hard-exclusion should distinguish them.
-  const photoA   = makePhoto('a', 1500, 200, 3);
-  const pending  = makePhoto('b', 1500, 200, 3);
+  const photoA = makePhoto('a', 1500, 200, 3);
+  const pending = makePhoto('b', 1500, 200, 3);
   const eligible = makePhoto('c', 1500, 200, 3);
   const pendingPairs = new Set([pairKey('a', 'b')]);
-  const selected = selectPhotoB([photoA, pending, eligible], photoA, new Map(), false, pendingPairs);
+  const selected = selectPhotoB(
+    [photoA, pending, eligible],
+    photoA,
+    new Map(),
+    false,
+    pendingPairs,
+  );
   assertEquals(selected.id, 'c');
 });
 
@@ -136,7 +154,7 @@ Deno.test('selectPhotoB — falls back to full candidate pool when all candidate
   // Only one other photo; it happens to be pending.
   // Must still return it (there's no other choice) rather than throwing.
   const photoA = makePhoto('a', 1500, 200, 3);
-  const only   = makePhoto('b', 1500, 200, 3);
+  const only = makePhoto('b', 1500, 200, 3);
   const pendingPairs = new Set([pairKey('a', 'b')]);
   const selected = selectPhotoB([photoA, only], photoA, new Map(), false, pendingPairs);
   assertEquals(selected.id, 'b');
@@ -178,7 +196,7 @@ Deno.test('computeProgress — clamped to 1 even if uncertainty is negative (def
 
 // ─── isDedupComplete ────────────────────────────────────────────────────────
 
-import { selectDedupPair, isDedupComplete } from './pair-selection.ts';
+import { isDedupComplete, selectDedupPair } from './pair-selection.ts';
 
 Deno.test('isDedupComplete — no clusters → immediately complete', () => {
   const photos = [

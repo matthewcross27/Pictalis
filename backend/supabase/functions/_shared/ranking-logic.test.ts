@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@1';
-import { computeTopK, computeMinComparisons, isBoundaryStable } from './ranking-logic.ts';
+import { computeMinComparisons, computeTopK, isBoundaryStable } from './ranking-logic.ts';
 
 // --- computeTopK ---
 
@@ -41,7 +41,15 @@ Deno.test('computeMinComparisons — n=200, topK=35 → correct ceil', () => {
 // --- isBoundaryStable ---
 
 function makePhoto(id: string, elo: number, uncertainty: number, comparisons = 0) {
-  return { id, storage_path: '', thumbnail_path: null, elo_rating: elo, uncertainty, comparison_count: comparisons, cluster_id: null };
+  return {
+    id,
+    storage_path: '',
+    thumbnail_path: null,
+    elo_rating: elo,
+    uncertainty,
+    comparison_count: comparisons,
+    cluster_id: null,
+  };
 }
 
 Deno.test('isBoundaryStable — empty array returns true (vacuous truth guard)', () => {
@@ -82,8 +90,8 @@ Deno.test('isBoundaryStable — only checks up to 3 contenders beyond boundary',
     makePhoto('a', 1600, 50),
     makePhoto('b', 1590, 200),
     makePhoto('c', 1000, 50),
-    makePhoto('d', 900,  50),
-    makePhoto('e', 800,  50),
+    makePhoto('d', 900, 50),
+    makePhoto('e', 800, 50),
   ];
   assertEquals(isBoundaryStable(photos, 1), false);
 });

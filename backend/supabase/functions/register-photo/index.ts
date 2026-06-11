@@ -12,7 +12,7 @@ const UUID_RE = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const STORAGE_PATH_RE = new RegExp(`^${UUID_RE}/${UUID_RE}/[^/]+$`, 'i');
 
 const RegisterPhotoBody = z.object({
-  session_id:   z.string().uuid(),
+  session_id: z.string().uuid(),
   storage_path: z.string().regex(STORAGE_PATH_RE, 'Must match {uid}/{session_id}/{filename}'),
 });
 
@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -68,13 +68,13 @@ Deno.serve(async (req) => {
     if (pathUid !== user.id) {
       return new Response(
         JSON.stringify({ error: 'storage_path UID segment must match the authenticated user' }),
-        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } },
       );
     }
     if (pathSessionId !== session_id) {
       return new Response(
         JSON.stringify({ error: 'storage_path session_id segment must match session_id field' }),
-        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } }
+        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } },
       );
     }
 
@@ -106,7 +106,9 @@ Deno.serve(async (req) => {
     const { data: photo, error: insertError } = await supabase
       .from('photos')
       .insert({ session_id, storage_path })
-      .select('id, session_id, storage_path, elo_rating, comparison_count, created_at, is_suppressed')
+      .select(
+        'id, session_id, storage_path, elo_rating, comparison_count, created_at, is_suppressed',
+      )
       .single();
 
     if (insertError || !photo) {
@@ -124,8 +126,9 @@ Deno.serve(async (req) => {
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

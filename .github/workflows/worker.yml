@@ -1,0 +1,44 @@
+name: Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+      - ".github/workflows/worker.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "worker/**"
+      - ".github/workflows/worker.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, Typecheck & Test (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: worker/uv.lock
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Lint (ruff)
+        run: uv run ruff check src tests
+      - name: Format check (black)
+        run: uv run black --check src tests
+      - name: Typecheck (mypy, strict)
+        run: uv run mypy src
+      - name: Test (pytest)
+        run: uv run pytest -v

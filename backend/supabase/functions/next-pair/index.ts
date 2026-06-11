@@ -1,7 +1,20 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
-import { type Photo, type CompletedComparison, computeTopK, computeMinComparisons, isBoundaryStable } from '../_shared/ranking-logic.ts';
-import { pairKey, buildPairCounts, selectPhotoA, selectPhotoB, totalComparisons, computeProgress } from '../_shared/pair-selection.ts';
+import {
+  type CompletedComparison,
+  computeMinComparisons,
+  computeTopK,
+  isBoundaryStable,
+  type Photo,
+} from '../_shared/ranking-logic.ts';
+import {
+  buildPairCounts,
+  computeProgress,
+  pairKey,
+  selectPhotoA,
+  selectPhotoB,
+  totalComparisons,
+} from '../_shared/pair-selection.ts';
 import { initSentry, Sentry } from '../_shared/sentry.ts';
 initSentry();
 
@@ -19,15 +32,17 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 401,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
-    const url    = new URL(req.url);
+    const url = new URL(req.url);
     const parsed = QuerySchema.safeParse({ session_id: url.searchParams.get('session_id') });
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
-        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -48,38 +63,44 @@ Deno.serve(async (req) => {
 
     if (sessionError || !session) {
       return new Response(JSON.stringify({ error: 'Session not found' }), {
-        status: 404, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 404,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     // Already marked complete (e.g. by session-status)
     if (session.stage === 'complete') {
       return new Response(JSON.stringify({ error: 'Session already complete' }), {
-        status: 422, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 422,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     // 2. Fetch non-suppressed, non-dropped photos
     const { data: photos, error: photosError } = await supabase
       .from('photos')
-      .select('id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, cluster_id')
+      .select(
+        'id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, cluster_id',
+      )
       .eq('session_id', session_id)
       .eq('is_suppressed', false)
       .or('cull_decision.is.null,cull_decision.eq.keep');
 
     if (photosError) {
       return new Response(JSON.stringify({ error: photosError.message }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     if (!photos || photos.length < 2) {
       return new Response(JSON.stringify({ error: 'Not enough photos to compare' }), {
-        status: 422, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 422,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
-    const topK           = session.top_k ?? computeTopK(session.photo_count);
+    const topK = session.top_k ?? computeTopK(session.photo_count);
     const minComparisons = computeMinComparisons(session.photo_count, topK);
 
     // 3. Fetch all comparisons (pending + completed) for pair-count deduplication.
@@ -91,8 +112,8 @@ Deno.serve(async (req) => {
 
     type RawComparison = CompletedComparison & { completed_at: string | null };
     const allComparisons = (rawComparisons ?? []) as RawComparison[];
-    const pairCounts     = buildPairCounts(allComparisons);
-    const pendingPairs   = new Set(
+    const pairCounts = buildPairCounts(allComparisons);
+    const pendingPairs = new Set(
       allComparisons
         .filter((c) => !c.completed_at)
         .map((c) => pairKey(c.photo_a_id, c.photo_b_id)),
@@ -101,20 +122,21 @@ Deno.serve(async (req) => {
     // 4. Check completion (safety net — session-status also writes this)
     // Guard against vacuous truth: [].every(...) === true in JS (photos.length < 2 already guarded above)
     const allHaveCoverage = photos.every((p) => p.comparison_count >= minComparisons);
-    const stable          = isBoundaryStable(photos as Photo[], topK);
-    const exhausted       = totalComparisons(photos as Photo[]) >= session.photo_count * 4;
+    const stable = isBoundaryStable(photos as Photo[], topK);
+    const exhausted = totalComparisons(photos as Photo[]) >= session.photo_count * 4;
 
     if ((allHaveCoverage && stable) || exhausted) {
       await supabase.from('sessions').update({ stage: 'complete' }).eq('id', session_id);
       return new Response(JSON.stringify({ error: 'Session complete' }), {
-        status: 422, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 422,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     // 5. Select Photo A and Photo B
     const inCoverage = !allHaveCoverage;
-    const photoA     = selectPhotoA(photos as Photo[], topK, minComparisons);
-    const photoB     = selectPhotoB(photos as Photo[], photoA, pairCounts, inCoverage, pendingPairs);
+    const photoA = selectPhotoA(photos as Photo[], topK, minComparisons);
+    const photoB = selectPhotoB(photos as Photo[], photoA, pairCounts, inCoverage, pendingPairs);
 
     // 6. Generate signed URLs (1-hour expiry)
     const [signedA, signedB] = await Promise.all([
@@ -124,7 +146,8 @@ Deno.serve(async (req) => {
 
     if (!signedA.data?.signedUrl || !signedB.data?.signedUrl) {
       return new Response(JSON.stringify({ error: 'Failed to generate photo URLs' }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -137,7 +160,8 @@ Deno.serve(async (req) => {
 
     if (compError || !comparison) {
       return new Response(JSON.stringify({ error: 'Failed to create comparison' }), {
-        status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -154,8 +178,9 @@ Deno.serve(async (req) => {
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

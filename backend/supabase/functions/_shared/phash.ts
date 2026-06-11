@@ -23,7 +23,7 @@ export async function computeDHash(buf: Uint8Array): Promise<string> {
   let bits = BigInt(0);
   for (let row = 0; row < 8; row++) {
     for (let col = 0; col < 8; col++) {
-      const idx = (row * 9 + col) * 4;        // RGBA offset at (col, row)
+      const idx = (row * 9 + col) * 4; // RGBA offset at (col, row)
       const nextIdx = (row * 9 + col + 1) * 4; // RGBA offset at (col+1, row)
       if (data[idx] > data[nextIdx]) {
         bits |= BigInt(1) << BigInt(row * 8 + col);

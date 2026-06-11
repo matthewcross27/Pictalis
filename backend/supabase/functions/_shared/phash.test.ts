@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@1';
-import { hammingDistance, computeDHash, computeBlurScore } from './phash.ts';
+import { computeBlurScore, computeDHash, hammingDistance } from './phash.ts';
 import { Jimp } from 'npm:jimp@1';
 
 Deno.test('hammingDistance — identical hashes → 0', () => {
