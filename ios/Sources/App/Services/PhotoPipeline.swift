@@ -329,7 +329,11 @@ final class PhotoPipeline: ObservableObject {
         }
         guard !unresolved else { return }
         didMarkComplete = true
-        isComplete = true
-        Task { try? await self.transport.markUploadComplete(sessionId: self.sessionId) }
+        // Mark the session complete only once the server has been told, so
+        // observers waiting on `isComplete` see a settled state.
+        Task {
+            try? await self.transport.markUploadComplete(sessionId: self.sessionId)
+            self.isComplete = true
+        }
     }
 }

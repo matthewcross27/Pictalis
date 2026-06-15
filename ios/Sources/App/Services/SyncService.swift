@@ -9,10 +9,35 @@ final class SyncService {
     private var store:     DecisionStore?
     private var isDraining = false
     private var monitor:   NWPathMonitor?
+    private let registrationState: (UUID) -> PhotoRegistrationState
 
-    init(sessionId: UUID, api: APIClient) {
+    init(
+        sessionId: UUID,
+        api: APIClient,
+        registrationState: @escaping (UUID) -> PhotoRegistrationState = { _ in .registered }
+    ) {
         self.sessionId = sessionId
-        self.api       = api
+        self.api = api
+        self.registrationState = registrationState
+    }
+
+    // Decisions for registered photos go to the server; decisions for photos
+    // the server will never know (cancelled uploads) are settled locally;
+    // the rest stay pending until their photo registers.
+    nonisolated static func partition(
+        pending: [StoredDecision],
+        registrationState: (UUID) -> PhotoRegistrationState
+    ) -> (send: [StoredDecision], markLocalOnly: [UUID]) {
+        var send: [StoredDecision] = []
+        var markLocalOnly: [UUID] = []
+        for decision in pending {
+            switch registrationState(decision.photoId) {
+            case .registered:  send.append(decision)
+            case .unavailable: markLocalOnly.append(decision.photoId)
+            case .pending:     break
+            }
+        }
+        return (send, markLocalOnly)
     }
 
     // Awaits an initial drain attempt, then sets up foreground + network triggers.
@@ -59,8 +84,12 @@ final class SyncService {
     // Failed entries remain pending and will be retried on the next trigger.
     func drain() async {
         guard !isDraining, let store else { return }
-        let pending = store.pendingDecisions
-        guard !pending.isEmpty else { return }
+        let (send, markLocalOnly) = Self.partition(
+            pending: store.pendingDecisions,
+            registrationState: registrationState
+        )
+        if !markLocalOnly.isEmpty { store.markSynced(photoIds: markLocalOnly) }
+        guard !send.isEmpty else { return }
 
         isDraining = true
         defer { isDraining = false }
@@ -70,7 +99,7 @@ final class SyncService {
 
         while true {
             do {
-                let response = try await api.batchSubmitCull(sessionId: sessionId, decisions: pending)
+                let response = try await api.batchSubmitCull(sessionId: sessionId, decisions: send)
                 let succeeded = response.results.filter(\.success).map(\.photoId)
                 if !succeeded.isEmpty { store.markSynced(photoIds: succeeded) }
                 return
