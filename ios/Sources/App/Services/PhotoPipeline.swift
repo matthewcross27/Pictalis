@@ -133,7 +133,13 @@ final class PhotoPipeline: ObservableObject {
 
     // MARK: - Stubs completed in later tasks
 
-    func setDecision(photoId: UUID, decision: CullDecision) {}
+    func setDecision(photoId: UUID, decision: CullDecision) {
+        guard items[photoId] != nil else { return }
+        if decision == .keep {
+            items[photoId]?.isKept = true
+        }
+    }
+
     func retryParked() {}
 
     func registrationState(for id: UUID) -> PhotoRegistrationState {
@@ -206,9 +212,76 @@ final class PhotoPipeline: ObservableObject {
         waiters[id] = nil
     }
 
-    // MARK: - Upload (completed in Task 4)
+    // MARK: - Upload
 
-    private func enqueueUpload(_ id: UUID) {}
+    private func enqueueUpload(_ id: UUID) {
+        uploadQueue.append(id)
+        pumpUploads()
+    }
+
+    private func pumpUploads() {
+        while activeUploads < uploadConcurrency, let id = dequeueNextUpload() {
+            activeUploads += 1
+            items[id]?.state = .uploading
+            Task { await self.uploadAndRegister(id) }
+        }
+    }
+
+    // Kept photos jump the queue; otherwise FIFO (selection order).
+    private func dequeueNextUpload() -> UUID? {
+        while !uploadQueue.isEmpty {
+            let index = uploadQueue.firstIndex { items[$0]?.isKept == true } ?? 0
+            let id = uploadQueue.remove(at: index)
+            if items[id]?.state == .materialized { return id }
+            // dropped while queued — skip it
+        }
+        return nil
+    }
+
+    private func uploadAndRegister(_ id: UUID) async {
+        defer {
+            activeUploads -= 1
+            pumpUploads()
+            checkCompletion()
+        }
+        guard let fileURL = items[id]?.fileURL, let data = try? Data(contentsOf: fileURL) else {
+            items[id]?.state = .failed
+            updateFailedIds()
+            return
+        }
+        let storagePath = "\(userId.uuidString.lowercased())/\(sessionId.uuidString.lowercased())/\(id.uuidString.lowercased()).jpg"
+        do {
+            if items[id]?.didUpload != true {
+                try await withRetries { try await self.transport.upload(storagePath: storagePath, data: data) }
+                items[id]?.didUpload = true
+            }
+            try await withRetries {
+                try await self.transport.register(sessionId: self.sessionId, photoId: id, storagePath: storagePath)
+            }
+            items[id]?.state = .registered
+            registeredCount += 1
+            updateFailedIds()
+            onRegistered?(id)
+        } catch {
+            items[id]?.state = .parked
+            updateFailedIds()
+        }
+    }
+
+    private func withRetries(_ operation: () async throws -> Void) async throws {
+        var attempt = 0
+        while true {
+            do {
+                try await operation()
+                return
+            } catch {
+                guard attempt < retryDelays.count else { throw error }
+                let jitter = Duration.milliseconds(Int.random(in: 0...300))
+                try? await Task.sleep(for: retryDelays[attempt] + jitter)
+                attempt += 1
+            }
+        }
+    }
 
     // MARK: - Bookkeeping
 
