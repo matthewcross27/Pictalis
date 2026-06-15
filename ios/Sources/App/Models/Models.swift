@@ -218,28 +218,6 @@ struct SessionDecisionFile: Codable {
     }
 }
 
-// MARK: - prefetch-cull
-
-struct PrefetchCullCard: Decodable {
-    let photoId:  UUID
-    let photoUrl: String
-
-    enum CodingKeys: String, CodingKey {
-        case photoId  = "photo_id"
-        case photoUrl = "photo_url"
-    }
-}
-
-struct PrefetchCullResponse: Decodable {
-    let cards:   [PrefetchCullCard]
-    let hasMore: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case cards
-        case hasMore = "has_more"
-    }
-}
-
 // MARK: - batch-submit-cull
 
 struct BatchDecisionResult: Decodable {

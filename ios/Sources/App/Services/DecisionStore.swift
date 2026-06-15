@@ -14,7 +14,7 @@ final class DecisionStore {
     var pendingDecisions: [StoredDecision] { decisions.filter { !$0.synced } }
 
     // Loads decisions from disk and starts the persistence write loop.
-    // Must complete before CullPrefetchService.start() is called.
+    // Must complete before LocalCardProvider.start() is called.
     func load(sessionId: UUID) async -> [UUID] {
         decisions = await persistence.load(sessionId: sessionId)
         // Capture stream and persistence by value to avoid retaining self in the Task.

@@ -4,7 +4,6 @@ struct CullChoiceView: View {
     @EnvironmentObject private var api: APIClient
 
     let sessionId: UUID
-    @ObservedObject var uploadService: UploadService
     var onFilterThenRank: () -> Void
     var onRankOnly: () -> Void
 
@@ -16,8 +15,6 @@ struct CullChoiceView: View {
             Color.filmWhite.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                uploadBanner
-
                 Spacer()
 
                 VStack(spacing: 8) {
@@ -89,35 +86,6 @@ struct CullChoiceView: View {
             )
         }
         .disabled(isStarting)
-    }
-
-    private var uploadBanner: some View {
-        Group {
-            if !uploadService.isComplete {
-                VStack(spacing: 0) {
-                    HStack(spacing: 12) {
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(Color.divider)
-                                    .frame(height: 2)
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(Color.amber)
-                                    .frame(width: geo.size.width * (uploadService.total > 0 ? CGFloat(uploadService.completed) / CGFloat(uploadService.total) : 0), height: 2)
-                            }
-                        }
-                        .frame(height: 2)
-                        Text("\(uploadService.total > 0 ? Int(CGFloat(uploadService.completed) / CGFloat(uploadService.total) * 100) : 0)%")
-                            .font(.captionSerif)
-                            .foregroundStyle(Color.secondaryText)
-                            .monospacedDigit()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    Divider().overlay(Color.divider)
-                }
-            }
-        }
     }
 
     private func beginCull() async {

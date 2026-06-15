@@ -4,7 +4,7 @@ struct ComparisonView: View {
     @EnvironmentObject private var api: APIClient
 
     let sessionId: UUID
-    @ObservedObject var uploadService: UploadService
+    @ObservedObject var pipeline: PhotoPipeline
     var onSkipToResults: () -> Void
     var onComplete: (Int) -> Void
 
@@ -29,7 +29,16 @@ struct ComparisonView: View {
             Color.filmWhite.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                uploadBanner
+                if !pipeline.failedIds.isEmpty {
+                    Button {
+                        pipeline.retryParked()
+                    } label: {
+                        Text("\(pipeline.failedIds.count) photo\(pipeline.failedIds.count == 1 ? "" : "s") couldn't be included — tap to retry")
+                            .font(.captionSerif)
+                            .foregroundStyle(Color.secondaryText)
+                    }
+                    .padding(.vertical, 6)
+                }
 
                 if isLoading {
                     Spacer()
@@ -100,50 +109,6 @@ struct ComparisonView: View {
     }
 
     // MARK: - Subviews
-
-    @ViewBuilder
-    private var uploadBanner: some View {
-        if !uploadService.isComplete {
-            VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    // Amber progress bar
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(Color.divider)
-                                .frame(height: 2)
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(Color.amber)
-                                .frame(
-                                    width: geo.size.width * CGFloat(uploadService.completed) / CGFloat(max(uploadService.total, 1)),
-                                    height: 2
-                                )
-                                .animation(.easeOut, value: uploadService.completed)
-                        }
-                    }
-                    .frame(height: 2)
-
-                    Text("\(uploadService.completed)/\(uploadService.total)")
-                        .font(.captionSerif)
-                        .foregroundStyle(Color.secondaryText)
-                        .monospacedDigit()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color.grainPaper)
-
-                if uploadService.hasFailures {
-                    Text("\(uploadService.failed) upload\(uploadService.failed == 1 ? "" : "s") failed")
-                        .font(.captionSerif)
-                        .foregroundStyle(Color.amber)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 6)
-                        .background(Color.grainPaper)
-                }
-            }
-        }
-    }
 
     private var bottomBar: some View {
         HStack {
@@ -318,14 +283,12 @@ struct ComparisonView: View {
         isLoading = true
         errorMessage = nil
 
-        // A pair only needs 2 registered photos, and `completed` increments
-        // after register-photo succeeds server-side — so wait on that local
-        // state instead of burning network round trips on guaranteed 422s.
-        while uploadService.completed < 2 {
-            if uploadService.isComplete {
-                errorMessage = uploadService.failed > 0
-                    ? "\(uploadService.failed) photo upload\(uploadService.failed == 1 ? "" : "s") failed. Please go back and try again."
-                    : "Not enough photos uploaded. Please go back and try again."
+        // A pair only needs 2 registered photos; registeredCount increments
+        // as register-photo succeeds — wait on local state instead of
+        // burning network round trips on guaranteed 422s.
+        while pipeline.registeredCount < 2 {
+            if pipeline.isComplete {
+                errorMessage = "Not enough photos could be uploaded. Please go back and try again."
                 waitingForUploads = false
                 isLoading = false
                 return

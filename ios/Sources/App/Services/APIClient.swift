@@ -214,29 +214,6 @@ final class APIClient: ObservableObject {
         try validate(response, data: data)
     }
 
-    // MARK: - prefetch-cull
-    // POST { session_id, count, exclude_ids } → { cards, has_more }
-
-    func prefetchCull(
-        sessionId: UUID,
-        count: Int,
-        excludeIds: [UUID]
-    ) async throws -> PrefetchCullResponse {
-        let url = functionsBase.appending(path: "prefetch-cull")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id":  sessionId.uuidString.lowercased(),
-            "count":       count,
-            "exclude_ids": excludeIds.map { $0.uuidString.lowercased() },
-        ])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
-        return try decoder.decode(PrefetchCullResponse.self, from: data)
-    }
-
     // MARK: - batch-submit-cull
     // POST { session_id, decisions } → { results }
 
