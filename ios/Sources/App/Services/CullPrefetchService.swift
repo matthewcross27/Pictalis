@@ -1,12 +1,5 @@
 import UIKit
 
-enum CullQueueState: Equatable {
-    case loading
-    case ready
-    case exhausted
-    case error(String)
-}
-
 @Observable @MainActor
 final class CullPrefetchService {
 

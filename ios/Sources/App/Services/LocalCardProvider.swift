@@ -1,0 +1,115 @@
+import UIKit
+
+enum CullQueueState: Equatable {
+    case loading
+    case ready
+    case exhausted
+    case error(String)
+}
+
+// Serves cull cards from PhotoPipeline's on-disk compressed copies.
+// Zero network: replaces the server-driven CullPrefetchService.
+@Observable @MainActor
+final class LocalCardProvider {
+
+    struct Card: Sendable, Identifiable {
+        let photoId: UUID
+        let image:   UIImage
+        var id: UUID { photoId }
+    }
+
+    private static let normalQueueSize = 10
+    private static let minQueueSize    = 3
+
+    private(set) var queue: [Card] = []
+    private(set) var state: CullQueueState = .loading
+
+    private let pipeline: PhotoPipeline
+    private var remaining: [UUID] = []   // undecided ids, selection order, not yet queued
+    private var isFilling = false
+    private var currentMaxQueueSize = LocalCardProvider.normalQueueSize
+    nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
+
+    init(pipeline: PhotoPipeline) {
+        self.pipeline = pipeline
+        memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.handleMemoryWarning() }
+        }
+    }
+
+    deinit {
+        if let observer = memoryWarningObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    // Decode just the first card before returning (sub-second first paint),
+    // then keep filling the decode-ahead window in the background.
+    func start(excluding decidedIds: [UUID]) async {
+        let decided = Set(decidedIds)
+        remaining = pipeline.order.filter { !decided.contains($0) }
+        await fill(target: 1)
+        if queue.isEmpty && remaining.isEmpty {
+            state = .exhausted
+        } else if !queue.isEmpty {
+            state = .ready
+        }
+        Task { await self.fill() }
+    }
+
+    func advance() -> Card? {
+        guard !queue.isEmpty else {
+            if remaining.isEmpty { state = .exhausted }
+            return nil
+        }
+        let card = queue.removeFirst()
+        if queue.isEmpty && remaining.isEmpty {
+            state = .exhausted
+        } else {
+            Task { await self.fill() }
+        }
+        return card
+    }
+
+    // Kept for CullView's error-state button; local loads rarely need it.
+    func retry() {
+        Task {
+            await self.fill()
+            if !self.queue.isEmpty { self.state = .ready }
+        }
+    }
+
+    // MARK: - Private
+
+    private func fill(target: Int? = nil) async {
+        guard !isFilling else { return }
+        isFilling = true
+        defer { isFilling = false }
+
+        while queue.count < (target ?? currentMaxQueueSize), !remaining.isEmpty {
+            let id = remaining.removeFirst()
+            do {
+                let image = try await pipeline.displayImage(for: id)
+                queue.append(Card(photoId: id, image: image))
+                if state == .loading { state = .ready }
+            } catch {
+                continue // cancelled or unreadable — skip silently
+            }
+        }
+        if queue.isEmpty && remaining.isEmpty { state = .exhausted }
+    }
+
+    private func handleMemoryWarning() {
+        currentMaxQueueSize = Self.minQueueSize
+        if queue.count > currentMaxQueueSize {
+            // Evict from the tail (furthest from display); ids go back to the
+            // head of `remaining` so they re-decode later in order.
+            let evicted = queue.suffix(queue.count - currentMaxQueueSize).map(\.photoId)
+            queue.removeLast(queue.count - currentMaxQueueSize)
+            remaining.insert(contentsOf: evicted, at: 0)
+        }
+    }
+}
