@@ -1,20 +1,12 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { z } from 'npm:zod@3';
 import { initSentry, Sentry } from '../_shared/sentry.ts';
+import { isUniqueViolation, RegisterPhotoBody } from '../_shared/photo-registration.ts';
 initSentry();
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-const UUID_RE = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-const STORAGE_PATH_RE = new RegExp(`^${UUID_RE}/${UUID_RE}/[^/]+$`, 'i');
-
-const RegisterPhotoBody = z.object({
-  session_id: z.string().uuid(),
-  storage_path: z.string().regex(STORAGE_PATH_RE, 'Must match {uid}/{session_id}/{filename}'),
-});
 
 Deno.serve(async (req) => {
   try {
@@ -62,7 +54,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { session_id, storage_path } = parsed.data;
+    const { session_id, storage_path, photo_id } = parsed.data;
     const [pathUid, pathSessionId] = storage_path.split('/');
 
     if (pathUid !== user.id) {
@@ -103,13 +95,38 @@ Deno.serve(async (req) => {
       });
     }
 
+    const PHOTO_COLUMNS =
+      'id, session_id, storage_path, elo_rating, comparison_count, created_at, is_suppressed';
+
+    const insertRow: Record<string, string> = { session_id, storage_path };
+    if (photo_id) insertRow.id = photo_id;
+
     const { data: photo, error: insertError } = await supabase
       .from('photos')
-      .insert({ session_id, storage_path })
-      .select(
-        'id, session_id, storage_path, elo_rating, comparison_count, created_at, is_suppressed',
-      )
+      .insert(insertRow)
+      .select(PHOTO_COLUMNS)
       .single();
+
+    if (insertError && photo_id && isUniqueViolation(insertError)) {
+      // Client retry of a register that already succeeded — return the existing row.
+      const { data: existing } = await supabase
+        .from('photos')
+        .select(PHOTO_COLUMNS)
+        .eq('id', photo_id)
+        .single();
+      if (
+        existing && existing.session_id === session_id && existing.storage_path === storage_path
+      ) {
+        return new Response(JSON.stringify({ photo: existing }), {
+          status: 200,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ error: 'photo_id conflict' }), {
+        status: 409,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      });
+    }
 
     if (insertError || !photo) {
       console.error('Failed to insert photo record:', insertError);
