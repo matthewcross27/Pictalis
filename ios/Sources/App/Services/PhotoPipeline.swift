@@ -131,16 +131,43 @@ final class PhotoPipeline: ObservableObject {
         }.value
     }
 
-    // MARK: - Stubs completed in later tasks
+    // MARK: - Decisions & retry
 
+    // Drop ⇒ cancel the upload if the server doesn't know the photo yet.
+    // Keep ⇒ promote it to the front of the upload queue.
     func setDecision(photoId: UUID, decision: CullDecision) {
         guard items[photoId] != nil else { return }
-        if decision == .keep {
+        switch decision {
+        case .keep:
             items[photoId]?.isKept = true
+        case .drop:
+            switch items[photoId]?.state {
+            case .pending, .materialized, .parked:
+                items[photoId]?.state = .cancelled
+                if let url = items[photoId]?.fileURL {
+                    try? FileManager.default.removeItem(at: url)
+                    items[photoId]?.fileURL = nil
+                }
+                resumeWaiters(for: photoId, with: .failure(PipelineError.photoUnavailable))
+                updateFailedIds()
+                checkCompletion()
+            default:
+                // uploading or registered: let it finish; the synced drop
+                // decision suppresses it server-side.
+                break
+            }
         }
     }
 
-    func retryParked() {}
+    // Give parked photos a fresh retry budget. Called on connectivity
+    // restore and from the user-facing retry affordance.
+    func retryParked() {
+        for id in order where items[id]?.state == .parked {
+            items[id]?.state = .materialized
+            enqueueUpload(id)
+        }
+        updateFailedIds()
+    }
 
     func registrationState(for id: UUID) -> PhotoRegistrationState {
         switch items[id]?.state {

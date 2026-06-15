@@ -191,4 +191,68 @@ final class PhotoPipelineTests: XCTestCase {
         XCTAssertEqual(pipeline.failedIds, [photos[1].id])
         XCTAssertEqual(transport.markCompleteCount, 1)
     }
+
+    func testDropCancelsQueuedUpload() async throws {
+        let transport = MockTransport()
+        transport.uploadDelay = .milliseconds(50)
+        let pipeline = makePipeline(transport: transport)
+        let photos = (0..<3).map { _ in PendingPhoto(loader: MockLoader()) }
+        pipeline.start(photos: photos)
+
+        // Wait until photo 2 is materialized (so it has a tmp file), then drop
+        // it while photo 0 is still mid-upload behind the 50ms delay.
+        let fileURL = try await pipeline.materializedFileURL(for: photos[2].id)
+        pipeline.setDecision(photoId: photos[2].id, decision: .drop)
+
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertFalse(transport.registeredIds.contains(photos[2].id))
+        XCTAssertEqual(pipeline.registeredCount, 2)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+        XCTAssertEqual(pipeline.registrationState(for: photos[2].id), .unavailable)
+        XCTAssertEqual(transport.markCompleteCount, 1)
+    }
+
+    func testDropAfterRegisteredIsNoop() async throws {
+        let transport = MockTransport()
+        let pipeline = makePipeline(transport: transport)
+        let photo = PendingPhoto(loader: MockLoader())
+        pipeline.start(photos: [photo])
+
+        try await waitUntil { pipeline.isComplete }
+        pipeline.setDecision(photoId: photo.id, decision: .drop)
+        XCTAssertEqual(pipeline.registrationState(for: photo.id), .registered)
+    }
+
+    func testConnectivityEventRetriesParked() async throws {
+        let transport = MockTransport()
+        let (stream, continuation) = AsyncStream<Void>.makeStream()
+        let photos = (0..<2).map { _ in PendingPhoto(loader: MockLoader()) }
+        transport.uploadFailures[photos[1].id] = 1
+        let pipeline = makePipeline(transport: transport, connectivity: stream)
+        pipeline.start(photos: photos)
+
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(pipeline.failedIds, [photos[1].id])
+
+        continuation.yield() // connectivity restored; failure budget is spent
+        try await waitUntil { pipeline.registeredCount == 2 }
+        XCTAssertTrue(pipeline.failedIds.isEmpty)
+    }
+
+    func testRetryParkedRequeuesFailedPhotos() async throws {
+        let transport = MockTransport()
+        let photos = (0..<2).map { _ in PendingPhoto(loader: MockLoader()) }
+        transport.registerFailures[photos[0].id] = 1
+        let pipeline = makePipeline(transport: transport)
+        pipeline.start(photos: photos)
+
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(pipeline.failedIds, [photos[0].id])
+
+        pipeline.retryParked()
+        try await waitUntil { pipeline.registeredCount == 2 }
+        XCTAssertTrue(pipeline.failedIds.isEmpty)
+        // The storage upload already succeeded — the retry must not re-upload.
+        XCTAssertEqual(transport.uploadedPaths.count, 2)
+    }
 }
