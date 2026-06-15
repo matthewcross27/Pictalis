@@ -62,12 +62,13 @@ final class UploadService: ObservableObject {
                 }
                 return try ImageCompressor.compressImage(image)
             }.value
-            let filename = "\(UUID().uuidString.lowercased()).jpg"
+            let photoId = UUID()
+            let filename = "\(photoId.uuidString.lowercased()).jpg"
             let storagePath = "\(userId.uuidString.lowercased())/\(sessionId.uuidString.lowercased())/\(filename)"
             try await supabase.storage
                 .from("working-copies")
                 .upload(storagePath, data: compressed, options: FileOptions(contentType: "image/jpeg"))
-            _ = try await api.registerPhoto(sessionId: sessionId, storagePath: storagePath)
+            _ = try await api.registerPhoto(sessionId: sessionId, photoId: photoId, storagePath: storagePath)
             return true
         } catch let APIError.httpError(statusCode, body) {
             let bodyString = String(data: body, encoding: .utf8) ?? "<non-UTF8>"

@@ -50,9 +50,9 @@ final class APIClient: ObservableObject {
     }
 
     // MARK: - register-photo
-    // POST { session_id, storage_path } → { photo: { id, ... } }
+    // POST { session_id, photo_id, storage_path } → { photo: { id, ... } }
 
-    func registerPhoto(sessionId: UUID, storagePath: String) async throws -> RegisteredPhoto {
+    func registerPhoto(sessionId: UUID, photoId: UUID, storagePath: String) async throws -> RegisteredPhoto {
         let url = functionsBase.appending(path: "register-photo")
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -60,6 +60,7 @@ final class APIClient: ObservableObject {
         req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
             "session_id": sessionId.uuidString.lowercased(),
+            "photo_id": photoId.uuidString.lowercased(),
             "storage_path": storagePath,
         ])
         let (data, response) = try await URLSession.shared.data(for: req)
