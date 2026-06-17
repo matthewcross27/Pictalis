@@ -245,7 +245,9 @@ struct CullView: View {
     }
 
     private func finish() async {
-        await syncService?.drain()
+        // flush (not drain): every registered-photo drop MUST reach the server
+        // before ranking starts, even if a background drain is mid-flight.
+        await syncService?.flush()
         do {
             try await api.finishCull(sessionId: sessionId)
             onComplete()

@@ -133,7 +133,10 @@ final class PhotoPipeline: ObservableObject {
 
     // MARK: - Decisions & retry
 
-    // Drop ⇒ cancel the upload if the server doesn't know the photo yet.
+    // Drop ⇒ keep the photo out of the server pool unless it already registered.
+    // A photo still uploading is cancelled too: uploadAndRegister checks for
+    // .cancelled before registering, so it never enters the comparison pool.
+    // Only an already-registered photo stays put; its drop is synced server-side.
     // Keep ⇒ promote it to the front of the upload queue.
     func setDecision(photoId: UUID, decision: CullDecision) {
         guard items[photoId] != nil else { return }
@@ -142,7 +145,7 @@ final class PhotoPipeline: ObservableObject {
             items[photoId]?.isKept = true
         case .drop:
             switch items[photoId]?.state {
-            case .pending, .materialized, .parked:
+            case .pending, .materialized, .parked, .uploading:
                 items[photoId]?.state = .cancelled
                 if let url = items[photoId]?.fileURL {
                     try? FileManager.default.removeItem(at: url)
@@ -152,8 +155,8 @@ final class PhotoPipeline: ObservableObject {
                 updateFailedIds()
                 checkCompletion()
             default:
-                // uploading or registered: let it finish; the synced drop
-                // decision suppresses it server-side.
+                // registered: the row already exists; the synced drop decision
+                // suppresses it server-side.
                 break
             }
         }
@@ -281,6 +284,12 @@ final class PhotoPipeline: ObservableObject {
             if items[id]?.didUpload != true {
                 try await withRetries { try await self.transport.upload(storagePath: storagePath, data: data) }
                 items[id]?.didUpload = true
+            }
+            // Dropped while uploading: don't register it — a dropped photo must
+            // never enter the comparison pool. The decision settles locally.
+            guard items[id]?.state != .cancelled else {
+                updateFailedIds()
+                return
             }
             try await withRetries {
                 try await self.transport.register(sessionId: self.sessionId, photoId: id, storagePath: storagePath)

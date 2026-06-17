@@ -2,9 +2,17 @@ import Foundation
 import Network
 import UIKit
 
+// Seam for testing: the one server call SyncService makes. APIClient conforms.
+@MainActor
+protocol CullDecisionSubmitting {
+    func batchSubmitCull(sessionId: UUID, decisions: [StoredDecision]) async throws -> BatchSubmitResponse
+}
+
+extension APIClient: CullDecisionSubmitting {}
+
 @MainActor
 final class SyncService {
-    private let api:       APIClient
+    private let api:       any CullDecisionSubmitting
     private let sessionId: UUID
     private var store:     DecisionStore?
     private var isDraining = false
@@ -13,7 +21,7 @@ final class SyncService {
 
     init(
         sessionId: UUID,
-        api: APIClient,
+        api: any CullDecisionSubmitting,
         registrationState: @escaping (UUID) -> PhotoRegistrationState = { _ in .registered }
     ) {
         self.sessionId = sessionId
@@ -53,6 +61,26 @@ final class SyncService {
         Task { await drain() }
     }
 
+    // Backstop before entering ranking: GUARANTEES every sendable (registered-photo)
+    // decision reaches the server, unlike syncIfNeeded/drain which coalesce and may
+    // no-op while a background drain is in flight. Without this, a drop made just
+    // before "Done" — or any drop still pending when an in-flight drain is running —
+    // would never be sent, and the dropped photo would surface in comparisons.
+    func flush() async {
+        // performDrain sends the whole sendable batch and retries transient
+        // failures, so a single pass normally clears it. Loop a bounded number
+        // of times to absorb decisions recorded mid-flight and partial successes.
+        for _ in 0..<5 {
+            await performDrain()
+            let remaining = Self.partition(
+                pending: store?.pendingDecisions ?? [],
+                registrationState: registrationState
+            ).send
+            if remaining.isEmpty { return }
+            try? await Task.sleep(for: .milliseconds(300))
+        }
+    }
+
     // MARK: - Private
 
     private func startObservers() {
@@ -79,20 +107,28 @@ final class SyncService {
         }
     }
 
-    // Sends all pending decisions in one request; marks successes as synced.
-    // Retries with exponential backoff (1s, 2s, 4s) before giving up.
-    // Failed entries remain pending and will be retried on the next trigger.
+    // Coalesced drain: skips if one is already running. The isDraining guard
+    // keeps background triggers from piling up concurrent network batches.
     func drain() async {
-        guard !isDraining, let store else { return }
+        guard !isDraining else { return }
+        isDraining = true
+        defer { isDraining = false }
+        await performDrain()
+    }
+
+    // Sends all currently-sendable decisions in one request; marks successes as
+    // synced. Cancelled-photo decisions are settled locally. Retries with
+    // exponential backoff (1s, 2s, 4s) before giving up; failed entries remain
+    // pending for the next trigger. Does NOT consult isDraining — callers own
+    // coalescing — so flush() can drive it to completion.
+    private func performDrain() async {
+        guard let store else { return }
         let (send, markLocalOnly) = Self.partition(
             pending: store.pendingDecisions,
             registrationState: registrationState
         )
         if !markLocalOnly.isEmpty { store.markSynced(photoIds: markLocalOnly) }
         guard !send.isEmpty else { return }
-
-        isDraining = true
-        defer { isDraining = false }
 
         let backoff: [Duration] = [.seconds(1), .seconds(2), .seconds(4)]
         var attempt = 0

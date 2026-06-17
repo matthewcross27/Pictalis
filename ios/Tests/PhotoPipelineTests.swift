@@ -34,12 +34,23 @@ final class MockTransport: PhotoUploadTransport {
     var registerFailures: [UUID: Int] = [:]
     var uploadDelay: Duration = .zero
 
+    // Gated uploads: a gated photo's upload blocks (after announcing it started)
+    // until the test releases it — lets a test deterministically act while the
+    // photo is mid-upload (.uploading state).
+    var gatedIds: Set<UUID> = []
+    private(set) var startedIds: Set<UUID> = []
+    var releasedIds: Set<UUID> = []
+
     private func photoId(fromPath path: String) -> UUID? {
         guard let filename = path.split(separator: "/").last else { return nil }
         return UUID(uuidString: String(filename.dropLast(4)))
     }
 
     func upload(storagePath: String, data: Data) async throws {
+        if let id = photoId(fromPath: storagePath), gatedIds.contains(id) {
+            startedIds.insert(id)
+            while !releasedIds.contains(id) { try? await Task.sleep(for: .milliseconds(5)) }
+        }
         if uploadDelay > .zero { try? await Task.sleep(for: uploadDelay) }
         if let id = photoId(fromPath: storagePath), let n = uploadFailures[id], n > 0 {
             uploadFailures[id] = n - 1
@@ -210,6 +221,26 @@ final class PhotoPipelineTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
         XCTAssertEqual(pipeline.registrationState(for: photos[2].id), .unavailable)
         XCTAssertEqual(transport.markCompleteCount, 1)
+    }
+
+    func testDropWhileUploadingDoesNotRegister() async throws {
+        let transport = MockTransport()
+        let photo = PendingPhoto(loader: MockLoader())
+        transport.gatedIds = [photo.id]
+        let pipeline = makePipeline(transport: transport)
+        pipeline.start(photos: [photo])
+
+        // Block until the upload is in-flight, so the drop lands while the
+        // photo is .uploading (the leak window: it would otherwise register).
+        try await waitUntil { transport.startedIds.contains(photo.id) }
+        pipeline.setDecision(photoId: photo.id, decision: .drop)
+        transport.releasedIds.insert(photo.id) // let the in-flight upload finish
+
+        try await waitUntil { pipeline.isComplete }
+        // A dropped photo must never enter the server pool, even mid-upload.
+        XCTAssertFalse(transport.registeredIds.contains(photo.id))
+        XCTAssertEqual(pipeline.registeredCount, 0)
+        XCTAssertEqual(pipeline.registrationState(for: photo.id), .unavailable)
     }
 
     func testDropAfterRegisteredIsNoop() async throws {
