@@ -288,7 +288,10 @@ struct ComparisonView: View {
         // burning network round trips on guaranteed 422s.
         while pipeline.registeredCount < 2 {
             if pipeline.isComplete {
-                errorMessage = "Not enough photos could be uploaded. Please go back and try again."
+                let failed = pipeline.failedIds.count
+                errorMessage = failed > 0
+                    ? "\(failed) photo upload\(failed == 1 ? "" : "s") failed. Please go back and try again."
+                    : "Not enough photos could be uploaded. Please go back and try again."
                 waitingForUploads = false
                 isLoading = false
                 return
