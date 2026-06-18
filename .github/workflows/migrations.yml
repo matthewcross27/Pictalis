@@ -1,0 +1,37 @@
+name: Database Migrations
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/supabase/migrations/**"
+      - "backend/supabase/config.toml"
+      - ".github/workflows/migrations.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/supabase/migrations/**"
+      - "backend/supabase/config.toml"
+      - ".github/workflows/migrations.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Apply migrations to fresh database
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start local database and apply all migrations
+        run: supabase db start

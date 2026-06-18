@@ -5,7 +5,7 @@ struct SessionSetupView: View {
     @EnvironmentObject private var auth: AuthService
     @EnvironmentObject private var api: APIClient
 
-    var onStart: (UUID, UploadService) -> Void
+    var onStart: (UUID, PhotoPipeline) -> Void
 
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var isStarting = false
@@ -104,17 +104,20 @@ struct SessionSetupView: View {
 
     private func startSession() {
         guard let userId = auth.userId else { return }
-        let count = selectionCount
         let items = selectedItems
         isStarting = true
         errorMessage = nil
 
         Task { @MainActor in
             do {
-                let session = try await api.createSession(photoCount: count)
-                let uploadService = UploadService(supabase: auth.storageClient, api: api)
-                uploadService.start(items: items, sessionId: session.id, userId: userId)
-                onStart(session.id, uploadService)
+                let session = try await api.createSession(photoCount: items.count)
+                let pipeline = PhotoPipeline(
+                    transport: SupabaseUploadTransport(supabase: auth.storageClient, api: api),
+                    sessionId: session.id,
+                    userId: userId
+                )
+                pipeline.start(photos: items.map { PendingPhoto(loader: PickerItemLoader(item: $0)) })
+                onStart(session.id, pipeline)
             } catch {
                 errorMessage = "Could not start: \(error.localizedDescription)"
                 isStarting = false

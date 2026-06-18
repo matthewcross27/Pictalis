@@ -2,9 +2,9 @@ import SwiftUI
 
 enum AppState {
     case setup
-    case choosingCullMode(sessionId: UUID, upload: UploadService)
-    case culling(sessionId: UUID, upload: UploadService)
-    case comparing(sessionId: UUID, upload: UploadService)
+    case choosingCullMode(sessionId: UUID, pipeline: PhotoPipeline)
+    case culling(sessionId: UUID, pipeline: PhotoPipeline)
+    case comparing(sessionId: UUID, pipeline: PhotoPipeline)
     case complete(sessionId: UUID, totalComparisons: Int)
     case results(sessionId: UUID, previousComparisons: Int? = nil, initialPhotos: [RankedPhoto] = [])
 }
@@ -19,35 +19,34 @@ struct ContentView: View {
         Group {
             switch appState {
             case .setup:
-                SessionSetupView { sessionId, uploadService in
-                    appState = .choosingCullMode(sessionId: sessionId, upload: uploadService)
+                SessionSetupView { sessionId, pipeline in
+                    appState = .choosingCullMode(sessionId: sessionId, pipeline: pipeline)
                 }
 
-            case .choosingCullMode(let sessionId, let upload):
+            case .choosingCullMode(let sessionId, let pipeline):
                 CullChoiceView(
                     sessionId: sessionId,
-                    uploadService: upload,
                     onFilterThenRank: {
-                        appState = .culling(sessionId: sessionId, upload: upload)
+                        appState = .culling(sessionId: sessionId, pipeline: pipeline)
                     },
                     onRankOnly: {
-                        appState = .comparing(sessionId: sessionId, upload: upload)
+                        appState = .comparing(sessionId: sessionId, pipeline: pipeline)
                     }
                 )
 
-            case .culling(let sessionId, let upload):
+            case .culling(let sessionId, let pipeline):
                 CullView(
                     sessionId: sessionId,
-                    uploadService: upload,
+                    pipeline: pipeline,
                     onComplete: {
-                        appState = .comparing(sessionId: sessionId, upload: upload)
+                        appState = .comparing(sessionId: sessionId, pipeline: pipeline)
                     }
                 )
 
-            case .comparing(let sessionId, let upload):
+            case .comparing(let sessionId, let pipeline):
                 ComparisonView(
                     sessionId: sessionId,
-                    uploadService: upload,
+                    pipeline: pipeline,
                     onSkipToResults: {
                         appState = .complete(sessionId: sessionId, totalComparisons: 0)
                     },

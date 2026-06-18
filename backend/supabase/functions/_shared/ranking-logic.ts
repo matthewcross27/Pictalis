@@ -18,12 +18,16 @@ export function computeMinComparisons(n: number, topK: number): number {
   return Math.max(1, Math.ceil(Math.log2(n / topK) + 1));
 }
 
-export function isBoundaryStable(photos: Pick<Photo, 'elo_rating' | 'uncertainty' | 'comparison_count'>[], topK: number): boolean {
+export function isBoundaryStable(
+  photos: Pick<Photo, 'elo_rating' | 'uncertainty' | 'comparison_count'>[],
+  topK: number,
+): boolean {
   if (photos.length <= topK) return true;
-  const byElo      = [...photos].sort((a, b) => b.elo_rating - a.elo_rating);
-  const boundary   = byElo[topK - 1]!;
+  const byElo = [...photos].sort((a, b) => b.elo_rating - a.elo_rating);
+  const boundary = byElo[topK - 1]!;
   const contenders = byElo.slice(topK, Math.min(topK + 3, byElo.length));
   return !contenders.some(
-    (c) => Math.abs(c.elo_rating - boundary.elo_rating) < (c.uncertainty + boundary.uncertainty) * 0.5,
+    (c) =>
+      Math.abs(c.elo_rating - boundary.elo_rating) < (c.uncertainty + boundary.uncertainty) * 0.5,
   );
 }

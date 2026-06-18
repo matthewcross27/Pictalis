@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -62,7 +62,12 @@ Deno.serve(async (req) => {
     const topK = computeTopK(parsed.data.photo_count);
     const { data: session, error } = await supabase
       .from('sessions')
-      .insert({ photo_count: parsed.data.photo_count, user_id: user.id, top_k: topK, stage: 'ranking' })
+      .insert({
+        photo_count: parsed.data.photo_count,
+        user_id: user.id,
+        top_k: topK,
+        stage: 'ranking',
+      })
       .select('id, created_at, expires_at, status, photo_count, top_k')
       .single();
 
@@ -80,8 +85,9 @@ Deno.serve(async (req) => {
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

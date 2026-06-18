@@ -1,8 +1,8 @@
-import { type Photo, type CompletedComparison } from './ranking-logic.ts';
+import { type CompletedComparison, type Photo } from './ranking-logic.ts';
 
 export const BOUNDARY_ALPHA = 1;
-export const WEIGHTS_POST   = { elo: 0.40, overlap: 0.20, fresh: 0.20, repeat: 0.15, cluster: 0.05 };
-export const WEIGHTS_COVER  = { elo: 0.30, overlap: 0.15, fresh: 0.50, repeat: 0.05, cluster: 0.00 };
+export const WEIGHTS_POST = { elo: 0.40, overlap: 0.20, fresh: 0.20, repeat: 0.15, cluster: 0.05 };
+export const WEIGHTS_COVER = { elo: 0.30, overlap: 0.15, fresh: 0.50, repeat: 0.05, cluster: 0.00 };
 
 export function pairKey(a: string, b: string): string {
   return [a, b].sort().join(':');
@@ -38,8 +38,10 @@ export function selectPhotoA(photos: Photo[], topK: number, minComparisons: numb
   for (const p of photos) {
     const rank = rankOf.get(p.id)!;
     const score = p.uncertainty * Math.exp(-BOUNDARY_ALPHA * Math.abs(rank - topK) / topK);
-    if (score > best) { best = score; pool = [p]; }
-    else if (score === best) pool.push(p);
+    if (score > best) {
+      best = score;
+      pool = [p];
+    } else if (score === best) pool.push(p);
   }
   return pickRandom(pool);
 }
@@ -58,23 +60,31 @@ export function selectPhotoB(
 
   const w = inCoverage ? WEIGHTS_COVER : WEIGHTS_POST;
 
-  const maxEloDiff = pool.reduce((m, c) => Math.max(m, Math.abs(c.elo_rating - photoA.elo_rating)), 1);
-  const maxCount   = pool.reduce((m, c) => Math.max(m, c.comparison_count), 1);
+  const maxEloDiff = pool.reduce(
+    (m, c) => Math.max(m, Math.abs(c.elo_rating - photoA.elo_rating)),
+    1,
+  );
+  const maxCount = pool.reduce((m, c) => Math.max(m, c.comparison_count), 1);
 
   let best = -Infinity;
   let bestB = pool[0]!;
   for (const b of pool) {
-    const eloSim  = 1 - Math.abs(b.elo_rating - photoA.elo_rating) / maxEloDiff;
+    const eloSim = 1 - Math.abs(b.elo_rating - photoA.elo_rating) / maxEloDiff;
     const overlap = (b.uncertainty + photoA.uncertainty) / 700;
-    const fresh   = 1 - b.comparison_count / maxCount;
-    const count   = pairCounts.get(pairKey(photoA.id, b.id)) ?? 0;
-    const repeat  = Math.exp(-count);
-    const cluster = !b.cluster_id || !photoA.cluster_id || b.cluster_id !== photoA.cluster_id ? 1 : 0;
+    const fresh = 1 - b.comparison_count / maxCount;
+    const count = pairCounts.get(pairKey(photoA.id, b.id)) ?? 0;
+    const repeat = Math.exp(-count);
+    const cluster = !b.cluster_id || !photoA.cluster_id || b.cluster_id !== photoA.cluster_id
+      ? 1
+      : 0;
 
-    const score = w.elo * eloSim + w.overlap * overlap + w.fresh * fresh
-                + w.repeat * repeat + w.cluster * cluster;
+    const score = w.elo * eloSim + w.overlap * overlap + w.fresh * fresh +
+      w.repeat * repeat + w.cluster * cluster;
 
-    if (score > best) { best = score; bestB = b; }
+    if (score > best) {
+      best = score;
+      bestB = b;
+    }
   }
   return bestB;
 }
@@ -84,7 +94,7 @@ export function totalComparisons(photos: Photo[]): number {
 }
 
 export function computeProgress(photos: Photo[], topK: number): number {
-  const byElo    = [...photos].sort((a, b) => b.elo_rating - a.elo_rating);
+  const byElo = [...photos].sort((a, b) => b.elo_rating - a.elo_rating);
   const boundary = byElo[Math.min(topK - 1, byElo.length - 1)]!;
   return Math.min(1, 1 - boundary.uncertainty / 350);
 }
@@ -133,7 +143,10 @@ export function selectDedupPair(photos: Photo[], comparisons: IntraComparison[])
     const photoA = photos.find((p) => p.id === c.photo_a_id);
     const photoB = photos.find((p) => p.id === c.photo_b_id);
     if (!photoA?.cluster_id || photoA.cluster_id !== photoB?.cluster_id) continue;
-    completedIntraCount.set(photoA.cluster_id, (completedIntraCount.get(photoA.cluster_id) ?? 0) + 1);
+    completedIntraCount.set(
+      photoA.cluster_id,
+      (completedIntraCount.get(photoA.cluster_id) ?? 0) + 1,
+    );
   }
 
   // Find the unresolved cluster with the fewest completed comparisons.
@@ -141,17 +154,20 @@ export function selectDedupPair(photos: Photo[], comparisons: IntraComparison[])
   let targetCount = Infinity;
   for (const [clusterId, members] of clusterGroups) {
     if (members.length < 2) continue;
-    const done   = completedIntraCount.get(clusterId) ?? 0;
+    const done = completedIntraCount.get(clusterId) ?? 0;
     const needed = members.length - 1;
     if (done >= needed) continue;
-    if (done < targetCount) { targetCount = done; targetCluster = members; }
+    if (done < targetCount) {
+      targetCount = done;
+      targetCluster = members;
+    }
   }
 
   if (!targetCluster) throw new Error('selectDedupPair called when dedup is already complete');
 
   // Build seen-pair set for this cluster.
   const clusterIds = new Set(targetCluster.map((p) => p.id));
-  const seenPairs  = new Set<string>();
+  const seenPairs = new Set<string>();
   for (const c of comparisons) {
     if (clusterIds.has(c.photo_a_id) && clusterIds.has(c.photo_b_id)) {
       seenPairs.add(pairKey(c.photo_a_id, c.photo_b_id));

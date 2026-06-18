@@ -10,7 +10,7 @@ const CORS = {
 
 const Body = z.object({
   session_id: z.string().uuid(),
-  photo_id:   z.string().uuid(),
+  photo_id: z.string().uuid(),
 });
 
 Deno.serve(async (req) => {
@@ -20,7 +20,8 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 401,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -31,17 +32,20 @@ Deno.serve(async (req) => {
     );
 
     let body: unknown;
-    try { body = await req.json(); }
-    catch {
+    try {
+      body = await req.json();
+    } catch {
       return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     const parsed = Body.safeParse(body);
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
-        status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -59,7 +63,8 @@ Deno.serve(async (req) => {
 
     if (error || !data) {
       return new Response(JSON.stringify({ error: 'Photo not found or already removed' }), {
-        status: 404, headers: { ...CORS, 'Content-Type': 'application/json' },
+        status: 404,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -78,8 +83,9 @@ Deno.serve(async (req) => {
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

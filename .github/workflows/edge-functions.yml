@@ -1,0 +1,45 @@
+name: Edge Functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/supabase/functions/**"
+      - ".github/workflows/edge-functions.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/supabase/functions/**"
+      - ".github/workflows/edge-functions.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, Typecheck & Test (Deno)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/supabase/functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Format check
+        run: deno fmt --check .
+      - name: Lint
+        run: deno lint .
+      - name: Type-check function entry points
+        run: |
+          for f in */index.ts; do
+            echo "deno check $f"
+            deno check "$f"
+          done
+      - name: Test shared logic
+        run: deno test --allow-env _shared/

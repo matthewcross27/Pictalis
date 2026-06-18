@@ -50,9 +50,9 @@ final class APIClient: ObservableObject {
     }
 
     // MARK: - register-photo
-    // POST { session_id, storage_path } → { photo: { id, ... } }
+    // POST { session_id, photo_id, storage_path } → { photo: { id, ... } }
 
-    func registerPhoto(sessionId: UUID, storagePath: String) async throws -> RegisteredPhoto {
+    func registerPhoto(sessionId: UUID, photoId: UUID, storagePath: String) async throws -> RegisteredPhoto {
         let url = functionsBase.appending(path: "register-photo")
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -60,6 +60,7 @@ final class APIClient: ObservableObject {
         req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
             "session_id": sessionId.uuidString.lowercased(),
+            "photo_id": photoId.uuidString.lowercased(),
             "storage_path": storagePath,
         ])
         let (data, response) = try await URLSession.shared.data(for: req)
@@ -211,29 +212,6 @@ final class APIClient: ObservableObject {
         ])
         let (data, response) = try await URLSession.shared.data(for: req)
         try validate(response, data: data)
-    }
-
-    // MARK: - prefetch-cull
-    // POST { session_id, count, exclude_ids } → { cards, has_more }
-
-    func prefetchCull(
-        sessionId: UUID,
-        count: Int,
-        excludeIds: [UUID]
-    ) async throws -> PrefetchCullResponse {
-        let url = functionsBase.appending(path: "prefetch-cull")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id":  sessionId.uuidString.lowercased(),
-            "count":       count,
-            "exclude_ids": excludeIds.map { $0.uuidString.lowercased() },
-        ])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
-        return try decoder.decode(PrefetchCullResponse.self, from: data)
     }
 
     // MARK: - batch-submit-cull

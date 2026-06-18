@@ -4,18 +4,18 @@ struct CullView: View {
     @EnvironmentObject private var api: APIClient
 
     let sessionId: UUID
-    @ObservedObject var uploadService: UploadService
+    @ObservedObject var pipeline: PhotoPipeline
     var onComplete: () -> Void
 
     @State private var decisionStore  = DecisionStore()
-    @State private var prefetchService: CullPrefetchService?
+    @State private var cardProvider:    LocalCardProvider?
     @State private var syncService:     SyncService?
-    @State private var currentCard:     CullPrefetchService.PrefetchedCard?
+    @State private var currentCard:     LocalCardProvider.Card?
     @State private var dragOffset:      CGFloat = 0
     @State private var isFinishing      = false
     @State private var finishFailed     = false
     @State private var isInitialized    = false
-    @State private var expandedCard:     CullPrefetchService.PrefetchedCard?
+    @State private var expandedCard:     LocalCardProvider.Card?
 
     private var screenWidth: CGFloat  { UIScreen.main.bounds.width }
     private var dragProgress: CGFloat { dragOffset / (screenWidth * 0.4) }
@@ -27,7 +27,7 @@ struct CullView: View {
             VStack(spacing: 0) {
                 topBar
 
-                switch prefetchService?.state ?? .loading {
+                switch cardProvider?.state ?? .loading {
                 case .loading:
                     Spacer()
                     ProgressView().tint(Color.amber)
@@ -52,7 +52,7 @@ struct CullView: View {
                             .foregroundStyle(Color.amber)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
-                        Button("Retry") { prefetchService?.retry() }
+                        Button("Retry") { cardProvider?.retry() }
                             .font(.labelSerif)
                             .foregroundStyle(Color.filmWhite)
                             .padding(.horizontal, 24)
@@ -74,13 +74,13 @@ struct CullView: View {
             }
             .onTapGesture { expandedCard = nil }
         }
-        .onChange(of: prefetchService?.queue.isEmpty) { _, isEmpty in
+        .onChange(of: cardProvider?.queue.isEmpty) { _, isEmpty in
             // Guard against firing during initialization — initialize() calls advance() itself.
             if isEmpty == false, currentCard == nil, isInitialized {
-                currentCard = prefetchService?.advance()
+                currentCard = cardProvider?.advance()
             }
         }
-        .onChange(of: prefetchService?.state) { _, newState in
+        .onChange(of: cardProvider?.state) { _, newState in
             if newState == .exhausted { onComplete() }
         }
     }
@@ -88,17 +88,24 @@ struct CullView: View {
     // MARK: - Initialization
 
     private func initialize() async {
-        let ps = CullPrefetchService(sessionId: sessionId, api: api, decisionStore: decisionStore)
-        let ss = SyncService(sessionId: sessionId, api: api)
-        prefetchService = ps
-        syncService     = ss
+        let provider = LocalCardProvider(pipeline: pipeline)
+        let p = pipeline
+        let ss = SyncService(
+            sessionId: sessionId,
+            api: api,
+            registrationState: { p.registrationState(for: $0) }
+        )
+        cardProvider = provider
+        syncService  = ss
+        // Late registrations unblock their pending keep/drop decisions.
+        pipeline.onRegistered = { _ in ss.syncIfNeeded() }
 
         async let syncReady: Void = ss.start(store: decisionStore)
         let decidedIds = await decisionStore.load(sessionId: sessionId)
-        await ps.start(excluding: decidedIds)
+        await provider.start(excluding: decidedIds)
         await syncReady
 
-        currentCard   = ps.advance()
+        currentCard   = provider.advance()
         isInitialized = true
     }
 
@@ -106,16 +113,11 @@ struct CullView: View {
 
     private var topBar: some View {
         HStack {
-            if uploadService.total > 0 {
-                let remaining = max(0, uploadService.total - decisionStore.decisions.count)
+            if pipeline.totalCount > 0 {
+                let remaining = max(0, pipeline.totalCount - decisionStore.decisions.count)
                 Text("\(remaining) remaining")
                     .font(.captionSerif)
                     .foregroundStyle(Color.secondaryText)
-            }
-            if uploadService.hasFailures {
-                Text("\(uploadService.failed) failed to upload")
-                    .font(.captionSerif)
-                    .foregroundStyle(Color.red)
             }
             Spacer()
             Button(isFinishing ? "Finishing…" : "Done — start comparing") {
@@ -135,7 +137,7 @@ struct CullView: View {
     // MARK: - Card stack
 
     @ViewBuilder
-    private func cardStack(card: CullPrefetchService.PrefetchedCard) -> some View {
+    private func cardStack(card: LocalCardProvider.Card) -> some View {
         GeometryReader { geo in
             ZStack {
                 // Full-size backdrop so portrait photos don't read as a narrow strip,
@@ -194,7 +196,7 @@ struct CullView: View {
     // MARK: - Bottom buttons
 
     @ViewBuilder
-    private func bottomButtons(card: CullPrefetchService.PrefetchedCard) -> some View {
+    private func bottomButtons(card: LocalCardProvider.Card) -> some View {
         HStack(spacing: 20) {
             Button(action: { commitDecision(.drop, card: card) }) {
                 Label("Drop", systemImage: "xmark")
@@ -225,9 +227,10 @@ struct CullView: View {
 
     // MARK: - Actions
 
-    private func commitDecision(_ decision: CullDecision, card: CullPrefetchService.PrefetchedCard) {
+    private func commitDecision(_ decision: CullDecision, card: LocalCardProvider.Card) {
         // Hot path: zero blocking — record in-memory, pop next card from queue
         decisionStore.record(photoId: card.photoId, decision: decision)
+        pipeline.setDecision(photoId: card.photoId, decision: decision)
         syncService?.syncIfNeeded()
 
         let flyDirection: CGFloat = decision == .keep ? 1 : -1
@@ -237,12 +240,14 @@ struct CullView: View {
         Task {
             try? await Task.sleep(for: .milliseconds(200))
             dragOffset  = 0
-            currentCard = prefetchService?.advance()
+            currentCard = cardProvider?.advance()
         }
     }
 
     private func finish() async {
-        await syncService?.drain()
+        // flush (not drain): every registered-photo drop MUST reach the server
+        // before ranking starts, even if a background drain is mid-flight.
+        await syncService?.flush()
         do {
             try await api.finishCull(sessionId: sessionId)
             onComplete()
