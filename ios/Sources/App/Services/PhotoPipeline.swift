@@ -23,7 +23,9 @@ final class PhotoPipeline: ObservableObject {
         case materialized  // compressed JPEG on disk, queued for upload
         case uploading     // an upload worker owns it
         case registered    // server row exists
-        case cancelled     // dropped in cull before upload — never uploads
+        case cancelled     // dropped before any server row could exist — settle locally
+        case cancelledInFlight // dropped while an upload/register worker owns it; the worker
+                               // finalizes it to .cancelled (no row) or .registered (row exists)
         case parked        // retries exhausted; waits for connectivity or user retry
         case failed        // local asset could not be read — terminal
     }
@@ -109,7 +111,7 @@ final class PhotoPipeline: ObservableObject {
     func materializedFileURL(for id: UUID) async throws -> URL {
         guard let item = items[id] else { throw PipelineError.photoUnavailable }
         switch item.state {
-        case .cancelled, .failed:
+        case .cancelled, .cancelledInFlight, .failed:
             throw PipelineError.photoUnavailable
         case .pending:
             return try await withCheckedThrowingContinuation { continuation in
@@ -145,18 +147,28 @@ final class PhotoPipeline: ObservableObject {
             items[photoId]?.isKept = true
         case .drop:
             switch items[photoId]?.state {
-            case .pending, .materialized, .parked, .uploading:
+            case .pending, .materialized, .parked:
+                // No upload worker owns it yet, so no server row can exist:
+                // cancel it and let the decision settle locally.
                 items[photoId]?.state = .cancelled
-                if let url = items[photoId]?.fileURL {
-                    try? FileManager.default.removeItem(at: url)
-                    items[photoId]?.fileURL = nil
-                }
+                removeWorkingCopy(photoId)
                 resumeWaiters(for: photoId, with: .failure(PipelineError.photoUnavailable))
                 updateFailedIds()
                 checkCompletion()
+            case .uploading:
+                // A worker owns it and register() may already be committing a
+                // row. Hold the decision — registrationState reports .pending —
+                // until uploadAndRegister resolves it to .cancelled (no row →
+                // settle locally) or .registered (row exists → send the drop).
+                // Settling locally now would mark the drop synced without ever
+                // sending it, and the photo would leak into the ranking pool.
+                items[photoId]?.state = .cancelledInFlight
+                removeWorkingCopy(photoId)
+                resumeWaiters(for: photoId, with: .failure(PipelineError.photoUnavailable))
+                updateFailedIds()
             default:
                 // registered: the row already exists; the synced drop decision
-                // suppresses it server-side.
+                // suppresses it server-side. cancelled/failed: already terminal.
                 break
             }
         }
@@ -176,6 +188,8 @@ final class PhotoPipeline: ObservableObject {
         switch items[id]?.state {
         case .registered: return .registered
         case .cancelled, .failed, nil: return .unavailable
+        // .cancelledInFlight is deliberately .pending: a drop landing mid-upload
+        // must be neither sent nor settled until the worker resolves the row.
         default: return .pending
         }
     }
@@ -242,6 +256,13 @@ final class PhotoPipeline: ObservableObject {
         waiters[id] = nil
     }
 
+    private func removeWorkingCopy(_ id: UUID) {
+        if let url = items[id]?.fileURL {
+            try? FileManager.default.removeItem(at: url)
+            items[id]?.fileURL = nil
+        }
+    }
+
     // MARK: - Upload
 
     private func enqueueUpload(_ id: UUID) {
@@ -275,7 +296,10 @@ final class PhotoPipeline: ObservableObject {
             checkCompletion()
         }
         guard let fileURL = items[id]?.fileURL, let data = try? Data(contentsOf: fileURL) else {
-            items[id]?.state = .failed
+            // A drop may have removed the working copy before we read it. If so,
+            // settle it locally (.cancelled, no row) rather than flagging .failed.
+            let droppedInFlight = items[id]?.state == .cancelledInFlight
+            items[id]?.state = droppedInFlight ? .cancelled : .failed
             updateFailedIds()
             return
         }
@@ -285,9 +309,13 @@ final class PhotoPipeline: ObservableObject {
                 try await withRetries { try await self.transport.upload(storagePath: storagePath, data: data) }
                 items[id]?.didUpload = true
             }
-            // Dropped while uploading: don't register it — a dropped photo must
-            // never enter the comparison pool. The decision settles locally.
-            guard items[id]?.state != .cancelled else {
+            // Dropped before register could create a row: finalize as .cancelled
+            // so the decision settles locally; never register a dropped photo.
+            // (If the drop instead lands *during* register below, the row gets
+            // created, so we keep it .registered and the synced drop suppresses
+            // it server-side — see the registered transition after register.)
+            if items[id]?.state == .cancelledInFlight {
+                items[id]?.state = .cancelled
                 updateFailedIds()
                 return
             }
@@ -299,7 +327,10 @@ final class PhotoPipeline: ObservableObject {
             updateFailedIds()
             onRegistered?(id)
         } catch {
-            items[id]?.state = .parked
+            // A dropped photo whose upload/register failed has no row — settle
+            // it locally instead of parking it for pointless re-registration.
+            let droppedInFlight = items[id]?.state == .cancelledInFlight
+            items[id]?.state = droppedInFlight ? .cancelled : .parked
             updateFailedIds()
         }
     }
@@ -332,7 +363,7 @@ final class PhotoPipeline: ObservableObject {
         guard !didMarkComplete, !order.isEmpty else { return }
         let unresolved = order.contains {
             switch items[$0]?.state {
-            case .pending, .materialized, .uploading: return true
+            case .pending, .materialized, .uploading, .cancelledInFlight: return true
             default: return false
             }
         }
