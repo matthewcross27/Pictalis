@@ -3,9 +3,8 @@ import Network
 import UIKit
 
 enum PhotoRegistrationState {
-    case registered   // server knows this photo
-    case pending      // may still register (queued, uploading, retrying, parked)
-    case unavailable  // cancelled or failed — the server will never know it
+    case registered   // server row exists (guaranteed by pre-registration before cull)
+    case unavailable  // local asset failed to read — no server action needed
 }
 
 enum PipelineError: Error {
@@ -22,10 +21,8 @@ final class PhotoPipeline: ObservableObject {
         case pending       // waiting to materialize
         case materialized  // compressed JPEG on disk, queued for upload
         case uploading     // an upload worker owns it
-        case registered    // server row exists
-        case cancelled     // dropped before any server row could exist — settle locally
-        case cancelledInFlight // dropped while an upload/register worker owns it; the worker
-                               // finalizes it to .cancelled (no row) or .registered (row exists)
+        case uploaded      // bytes in storage, server row has upload_status='uploaded'
+        case cancelled     // dropped — upload skipped or aborted; server has is_suppressed=true
         case parked        // retries exhausted; waits for connectivity or user retry
         case failed        // local asset could not be read — terminal
     }
@@ -46,7 +43,7 @@ final class PhotoPipeline: ObservableObject {
 
     private(set) var order: [UUID] = []
     var totalCount: Int { order.count }
-    var onRegistered: ((UUID) -> Void)?
+
 
     private var items: [UUID: Item] = [:]
     private var uploadQueue: [UUID] = []
@@ -111,7 +108,7 @@ final class PhotoPipeline: ObservableObject {
     func materializedFileURL(for id: UUID) async throws -> URL {
         guard let item = items[id] else { throw PipelineError.photoUnavailable }
         switch item.state {
-        case .cancelled, .cancelledInFlight, .failed:
+        case .cancelled, .failed:
             throw PipelineError.photoUnavailable
         case .pending:
             return try await withCheckedThrowingContinuation { continuation in
@@ -135,11 +132,8 @@ final class PhotoPipeline: ObservableObject {
 
     // MARK: - Decisions & retry
 
-    // Drop ⇒ keep the photo out of the server pool unless it already registered.
-    // A photo still uploading is cancelled too: uploadAndRegister checks for
-    // .cancelled before registering, so it never enters the comparison pool.
-    // Only an already-registered photo stays put; its drop is synced server-side.
-    // Keep ⇒ promote it to the front of the upload queue.
+    // Drop ⇒ cancel the upload to save bandwidth; the drop is sent to the server
+    // via SyncService. Keep ⇒ promote it to the front of the upload queue.
     func setDecision(photoId: UUID, decision: CullDecision) {
         guard items[photoId] != nil else { return }
         switch decision {
@@ -147,28 +141,19 @@ final class PhotoPipeline: ObservableObject {
             items[photoId]?.isKept = true
         case .drop:
             switch items[photoId]?.state {
-            case .pending, .materialized, .parked:
-                // No upload worker owns it yet, so no server row can exist:
-                // cancel it and let the decision settle locally.
+            case .pending, .materialized, .parked, .uploading:
+                // The server row already exists (pre-registered). The drop decision
+                // is sent to the server via SyncService — no timing dependency here.
+                // Cancelling the upload saves bandwidth: a dropped photo's bytes
+                // don't need to land. upload_status stays 'pending'; is_suppressed=true
+                // (set by batch-submit-cull) keeps it out of the ranking pool.
                 items[photoId]?.state = .cancelled
                 removeWorkingCopy(photoId)
                 resumeWaiters(for: photoId, with: .failure(PipelineError.photoUnavailable))
                 updateFailedIds()
                 checkCompletion()
-            case .uploading:
-                // A worker owns it and register() may already be committing a
-                // row. Hold the decision — registrationState reports .pending —
-                // until uploadAndRegister resolves it to .cancelled (no row →
-                // settle locally) or .registered (row exists → send the drop).
-                // Settling locally now would mark the drop synced without ever
-                // sending it, and the photo would leak into the ranking pool.
-                items[photoId]?.state = .cancelledInFlight
-                removeWorkingCopy(photoId)
-                resumeWaiters(for: photoId, with: .failure(PipelineError.photoUnavailable))
-                updateFailedIds()
             default:
-                // registered: the row already exists; the synced drop decision
-                // suppresses it server-side. cancelled/failed: already terminal.
+                // .uploaded, .cancelled, .failed: already terminal
                 break
             }
         }
@@ -186,11 +171,8 @@ final class PhotoPipeline: ObservableObject {
 
     func registrationState(for id: UUID) -> PhotoRegistrationState {
         switch items[id]?.state {
-        case .registered: return .registered
-        case .cancelled, .failed, nil: return .unavailable
-        // .cancelledInFlight is deliberately .pending: a drop landing mid-upload
-        // must be neither sent nor settled until the worker resolves the row.
-        default: return .pending
+        case .failed, nil: return .unavailable
+        default: return .registered
         }
     }
 
@@ -274,7 +256,7 @@ final class PhotoPipeline: ObservableObject {
         while activeUploads < uploadConcurrency, let id = dequeueNextUpload() {
             activeUploads += 1
             items[id]?.state = .uploading
-            Task { await self.uploadAndRegister(id) }
+            Task { await self.uploadAndMarkUploaded(id) }
         }
     }
 
@@ -289,17 +271,16 @@ final class PhotoPipeline: ObservableObject {
         return nil
     }
 
-    private func uploadAndRegister(_ id: UUID) async {
+    private func uploadAndMarkUploaded(_ id: UUID) async {
         defer {
             activeUploads -= 1
             pumpUploads()
             checkCompletion()
         }
         guard let fileURL = items[id]?.fileURL, let data = try? Data(contentsOf: fileURL) else {
-            // A drop may have removed the working copy before we read it. If so,
-            // settle it locally (.cancelled, no row) rather than flagging .failed.
-            let droppedInFlight = items[id]?.state == .cancelledInFlight
-            items[id]?.state = droppedInFlight ? .cancelled : .failed
+            // File missing: a drop removed it or materialization failed.
+            // Only flag .failed if still actively uploading (not already cancelled).
+            if items[id]?.state == .uploading { items[id]?.state = .failed }
             updateFailedIds()
             return
         }
@@ -309,28 +290,18 @@ final class PhotoPipeline: ObservableObject {
                 try await withRetries { try await self.transport.upload(storagePath: storagePath, data: data) }
                 items[id]?.didUpload = true
             }
-            // Dropped before register could create a row: finalize as .cancelled
-            // so the decision settles locally; never register a dropped photo.
-            // (If the drop instead lands *during* register below, the row gets
-            // created, so we keep it .registered and the synced drop suppresses
-            // it server-side — see the registered transition after register.)
-            if items[id]?.state == .cancelledInFlight {
-                items[id]?.state = .cancelled
-                updateFailedIds()
-                return
-            }
+            // Photo may have been dropped while bytes were in flight. Skip
+            // markUploaded — the drop is already on the server (is_suppressed=true),
+            // and upload_status staying 'pending' is a second exclusion from ranking.
+            guard items[id]?.state == .uploading else { return }
             try await withRetries {
-                try await self.transport.register(sessionId: self.sessionId, photoId: id, storagePath: storagePath)
+                try await self.transport.markUploaded(sessionId: self.sessionId, photoId: id, storagePath: storagePath)
             }
-            items[id]?.state = .registered
+            items[id]?.state = .uploaded
             registeredCount += 1
             updateFailedIds()
-            onRegistered?(id)
         } catch {
-            // A dropped photo whose upload/register failed has no row — settle
-            // it locally instead of parking it for pointless re-registration.
-            let droppedInFlight = items[id]?.state == .cancelledInFlight
-            items[id]?.state = droppedInFlight ? .cancelled : .parked
+            if items[id]?.state == .uploading { items[id]?.state = .parked }
             updateFailedIds()
         }
     }
@@ -363,7 +334,7 @@ final class PhotoPipeline: ObservableObject {
         guard !didMarkComplete, !order.isEmpty else { return }
         let unresolved = order.contains {
             switch items[$0]?.state {
-            case .pending, .materialized, .uploading, .cancelledInFlight: return true
+            case .pending, .materialized, .uploading: return true
             default: return false
             }
         }
