@@ -249,4 +249,21 @@ final class APIClient: ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: req)
         try validate(response, data: data)
     }
+
+    // MARK: - batch-pre-register
+    // POST { session_id, photo_ids } → { ok }
+
+    func batchPreRegister(sessionId: UUID, photoIds: [UUID]) async throws {
+        let url = functionsBase.appending(path: "batch-pre-register")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
+        req.httpBody = try JSONSerialization.data(withJSONObject: [
+            "session_id": sessionId.uuidString.lowercased(),
+            "photo_ids": photoIds.map { $0.uuidString.lowercased() },
+        ])
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validate(response, data: data)
+    }
 }
