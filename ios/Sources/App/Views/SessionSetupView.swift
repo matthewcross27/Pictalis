@@ -111,12 +111,19 @@ struct SessionSetupView: View {
         Task { @MainActor in
             do {
                 let session = try await api.createSession(photoCount: items.count)
+                // Generate stable photo IDs before pre-registering so the same
+                // IDs are used for both the server rows and the pipeline items.
+                let pendingPhotos = items.map { PendingPhoto(loader: PickerItemLoader(item: $0)) }
+                try await api.batchPreRegister(
+                    sessionId: session.id,
+                    photoIds: pendingPhotos.map(\.id)
+                )
                 let pipeline = PhotoPipeline(
                     transport: SupabaseUploadTransport(supabase: auth.storageClient, api: api),
                     sessionId: session.id,
                     userId: userId
                 )
-                pipeline.start(photos: items.map { PendingPhoto(loader: PickerItemLoader(item: $0)) })
+                pipeline.start(photos: pendingPhotos)
                 onStart(session.id, pipeline)
             } catch {
                 errorMessage = "Could not start: \(error.localizedDescription)"
