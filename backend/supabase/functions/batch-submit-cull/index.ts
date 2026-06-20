@@ -74,6 +74,9 @@ Deno.serve(async (req) => {
             return { photo_id, success: false, error: updateError.message };
           }
 
+          // Zero rows updated: decision already set — idempotent success.
+          // With pre-registration, the photo row always exists before cull
+          // starts, so zero-rows-updated means cull_decision was already written.
           return { photo_id, success: true };
         } catch (err) {
           return { photo_id, success: false, error: String(err) };
