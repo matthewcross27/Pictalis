@@ -59,6 +59,7 @@ Deno.serve(async (req) => {
       )
       .eq('session_id', parsed.data.session_id)
       .eq('is_suppressed', false)
+      .eq('upload_status', 'uploaded')
       .order('elo_rating', { ascending: false })
       .limit(parsed.data.limit);
 

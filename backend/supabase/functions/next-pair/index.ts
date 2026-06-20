@@ -84,6 +84,7 @@ Deno.serve(async (req) => {
       )
       .eq('session_id', session_id)
       .eq('is_suppressed', false)
+      .eq('upload_status', 'uploaded')
       .or('cull_decision.is.null,cull_decision.eq.keep');
 
     if (photosError) {
