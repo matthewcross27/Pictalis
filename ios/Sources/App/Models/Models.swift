@@ -232,6 +232,12 @@ struct BatchDecisionResult: Decodable {
     }
 }
 
+// MARK: - batch-pre-register
+
+struct BatchPreRegisterResponse: Decodable {
+    let ok: Bool
+}
+
 struct BatchSubmitResponse: Decodable {
     let results: [BatchDecisionResult]
 }
