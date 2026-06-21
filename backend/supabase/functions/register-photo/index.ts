@@ -55,12 +55,6 @@ Deno.serve(async (req) => {
     }
 
     const { session_id, storage_path, photo_id } = parsed.data;
-    if (!photo_id) {
-      return new Response(JSON.stringify({ error: 'photo_id is required' }), {
-        status: 400,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
     const [pathUid, pathSessionId] = storage_path.split('/');
 
     if (pathUid !== user.id) {

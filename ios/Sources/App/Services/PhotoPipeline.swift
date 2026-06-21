@@ -44,7 +44,6 @@ final class PhotoPipeline: ObservableObject {
     private(set) var order: [UUID] = []
     var totalCount: Int { order.count }
 
-
     private var items: [UUID: Item] = [:]
     private var uploadQueue: [UUID] = []
     private var activeUploads = 0
