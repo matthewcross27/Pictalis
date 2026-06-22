@@ -1,6 +1,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { initSentry, Sentry } from '../_shared/sentry.ts';
-import { isUniqueViolation, RegisterPhotoBody } from '../_shared/photo-registration.ts';
+import { RegisterPhotoBody } from '../_shared/photo-registration.ts';
 initSentry();
 
 const CORS = {
@@ -16,10 +16,13 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing Authorization header' }),
+        {
+          status: 401,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     const supabase = createClient(
@@ -59,14 +62,24 @@ Deno.serve(async (req) => {
 
     if (pathUid !== user.id) {
       return new Response(
-        JSON.stringify({ error: 'storage_path UID segment must match the authenticated user' }),
-        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } },
+        JSON.stringify({
+          error: 'storage_path UID segment must match the authenticated user',
+        }),
+        {
+          status: 400,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
       );
     }
     if (pathSessionId !== session_id) {
       return new Response(
-        JSON.stringify({ error: 'storage_path session_id segment must match session_id field' }),
-        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } },
+        JSON.stringify({
+          error: 'storage_path session_id segment must match session_id field',
+        }),
+        {
+          status: 400,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
       );
     }
 
@@ -76,10 +89,13 @@ Deno.serve(async (req) => {
       .list(`${pathUid}/${pathSessionId}`, { search: filename });
 
     if (listError || !objects || !objects.some((o) => o.name === filename)) {
-      return new Response(JSON.stringify({ error: 'Storage object not found' }), {
-        status: 404,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Storage object not found' }),
+        {
+          status: 404,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     const { data: session, error: sessionError } = await supabase
@@ -98,46 +114,32 @@ Deno.serve(async (req) => {
     const PHOTO_COLUMNS =
       'id, session_id, storage_path, elo_rating, comparison_count, created_at, is_suppressed';
 
-    const insertRow: Record<string, string> = { session_id, storage_path };
-    if (photo_id) insertRow.id = photo_id;
-
-    const { data: photo, error: insertError } = await supabase
+    // Row was pre-registered at session start. UPDATE sets the bytes location
+    // and marks upload complete. Idempotent: a retry on an already-uploaded row
+    // returns the existing data unchanged.
+    const { data: photo, error: updateError } = await supabase
       .from('photos')
-      .insert(insertRow)
+      .update({ storage_path, upload_status: 'uploaded' })
+      .eq('id', photo_id)
+      .eq('session_id', session_id)
       .select(PHOTO_COLUMNS)
       .single();
 
-    if (insertError && photo_id && isUniqueViolation(insertError)) {
-      // Client retry of a register that already succeeded — return the existing row.
-      const { data: existing } = await supabase
-        .from('photos')
-        .select(PHOTO_COLUMNS)
-        .eq('id', photo_id)
-        .single();
-      if (
-        existing && existing.session_id === session_id && existing.storage_path === storage_path
-      ) {
-        return new Response(JSON.stringify({ photo: existing }), {
-          status: 200,
+    if (updateError || !photo) {
+      // Row missing: batch-pre-register wasn't called, or session/id mismatch.
+      return new Response(
+        JSON.stringify({
+          error: 'Photo not pre-registered or session mismatch',
+        }),
+        {
+          status: 404,
           headers: { ...CORS, 'Content-Type': 'application/json' },
-        });
-      }
-      return new Response(JSON.stringify({ error: 'photo_id conflict' }), {
-        status: 409,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (insertError || !photo) {
-      console.error('Failed to insert photo record:', insertError);
-      return new Response(JSON.stringify({ error: 'Failed to register photo' }), {
-        status: 500,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+        },
+      );
     }
 
     return new Response(JSON.stringify({ photo }), {
-      status: 201,
+      status: 200,
       headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err) {

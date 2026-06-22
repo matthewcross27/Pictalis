@@ -3,7 +3,7 @@ import Supabase
 
 protocol PhotoUploadTransport: Sendable {
     func upload(storagePath: String, data: Data) async throws
-    func register(sessionId: UUID, photoId: UUID, storagePath: String) async throws
+    func markUploaded(sessionId: UUID, photoId: UUID, storagePath: String) async throws
     func markUploadComplete(sessionId: UUID) async throws
 }
 
@@ -24,7 +24,7 @@ struct SupabaseUploadTransport: PhotoUploadTransport {
         }
     }
 
-    func register(sessionId: UUID, photoId: UUID, storagePath: String) async throws {
+    func markUploaded(sessionId: UUID, photoId: UUID, storagePath: String) async throws {
         _ = try await api.registerPhoto(sessionId: sessionId, photoId: photoId, storagePath: storagePath)
     }
 

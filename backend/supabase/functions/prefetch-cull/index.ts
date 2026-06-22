@@ -20,10 +20,13 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing Authorization header' }),
+        {
+          status: 401,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     let body: unknown;
@@ -112,10 +115,13 @@ Deno.serve(async (req) => {
 
     const validCards = cards.filter((c) => c.photo_url !== null);
 
-    return new Response(JSON.stringify({ cards: validCards, has_more: hasMore }), {
-      status: 200,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ cards: validCards, has_more: hasMore }),
+      {
+        status: 200,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+      },
+    );
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);

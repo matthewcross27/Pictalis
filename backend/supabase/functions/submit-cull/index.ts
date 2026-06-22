@@ -22,10 +22,13 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing Authorization header' }),
+        {
+          status: 401,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     let body: unknown;
@@ -88,7 +91,10 @@ Deno.serve(async (req) => {
 
     const done = count === 0;
     if (done) {
-      await supabase.from('sessions').update({ stage: 'ranking' }).eq('id', session_id);
+      await supabase.from('sessions').update({ stage: 'ranking' }).eq(
+        'id',
+        session_id,
+      );
     }
 
     return new Response(JSON.stringify({ done }), {

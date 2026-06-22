@@ -22,10 +22,13 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing Authorization header' }),
+        {
+          status: 401,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     let body: unknown;
@@ -74,6 +77,9 @@ Deno.serve(async (req) => {
             return { photo_id, success: false, error: updateError.message };
           }
 
+          // Zero rows updated: decision already set — idempotent success.
+          // With pre-registration, the photo row always exists before cull
+          // starts, so zero-rows-updated means cull_decision was already written.
           return { photo_id, success: true };
         } catch (err) {
           return { photo_id, success: false, error: String(err) };

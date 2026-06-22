@@ -31,14 +31,19 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing Authorization header' }),
+        {
+          status: 401,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     const url = new URL(req.url);
-    const parsed = QuerySchema.safeParse({ session_id: url.searchParams.get('session_id') });
+    const parsed = QuerySchema.safeParse({
+      session_id: url.searchParams.get('session_id'),
+    });
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
         status: 400,
@@ -70,10 +75,13 @@ Deno.serve(async (req) => {
 
     // Already marked complete (e.g. by session-status)
     if (session.stage === 'complete') {
-      return new Response(JSON.stringify({ error: 'Session already complete' }), {
-        status: 422,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Session already complete' }),
+        {
+          status: 422,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     // 2. Fetch non-suppressed, non-dropped photos
@@ -84,6 +92,7 @@ Deno.serve(async (req) => {
       )
       .eq('session_id', session_id)
       .eq('is_suppressed', false)
+      .eq('upload_status', 'uploaded')
       .or('cull_decision.is.null,cull_decision.eq.keep');
 
     if (photosError) {
@@ -94,10 +103,13 @@ Deno.serve(async (req) => {
     }
 
     if (!photos || photos.length < 2) {
-      return new Response(JSON.stringify({ error: 'Not enough photos to compare' }), {
-        status: 422,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Not enough photos to compare' }),
+        {
+          status: 422,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     const topK = session.top_k ?? computeTopK(session.photo_count);
@@ -126,7 +138,10 @@ Deno.serve(async (req) => {
     const exhausted = totalComparisons(photos as Photo[]) >= session.photo_count * 4;
 
     if ((allHaveCoverage && stable) || exhausted) {
-      await supabase.from('sessions').update({ stage: 'complete' }).eq('id', session_id);
+      await supabase.from('sessions').update({ stage: 'complete' }).eq(
+        'id',
+        session_id,
+      );
       return new Response(JSON.stringify({ error: 'Session complete' }), {
         status: 422,
         headers: { ...CORS, 'Content-Type': 'application/json' },
@@ -136,19 +151,34 @@ Deno.serve(async (req) => {
     // 5. Select Photo A and Photo B
     const inCoverage = !allHaveCoverage;
     const photoA = selectPhotoA(photos as Photo[], topK, minComparisons);
-    const photoB = selectPhotoB(photos as Photo[], photoA, pairCounts, inCoverage, pendingPairs);
+    const photoB = selectPhotoB(
+      photos as Photo[],
+      photoA,
+      pairCounts,
+      inCoverage,
+      pendingPairs,
+    );
 
     // 6. Generate signed URLs (1-hour expiry)
     const [signedA, signedB] = await Promise.all([
-      supabase.storage.from('working-copies').createSignedUrl(photoA.storage_path, 3600),
-      supabase.storage.from('working-copies').createSignedUrl(photoB.storage_path, 3600),
+      supabase.storage.from('working-copies').createSignedUrl(
+        photoA.storage_path,
+        3600,
+      ),
+      supabase.storage.from('working-copies').createSignedUrl(
+        photoB.storage_path,
+        3600,
+      ),
     ]);
 
     if (!signedA.data?.signedUrl || !signedB.data?.signedUrl) {
-      return new Response(JSON.stringify({ error: 'Failed to generate photo URLs' }), {
-        status: 500,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Failed to generate photo URLs' }),
+        {
+          status: 500,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     // 7. Insert pending comparison record
@@ -159,10 +189,13 @@ Deno.serve(async (req) => {
       .single();
 
     if (compError || !comparison) {
-      return new Response(JSON.stringify({ error: 'Failed to create comparison' }), {
-        status: 500,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Failed to create comparison' }),
+        {
+          status: 500,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     return new Response(

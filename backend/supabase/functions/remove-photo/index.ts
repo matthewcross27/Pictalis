@@ -19,10 +19,13 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing Authorization header' }),
+        {
+          status: 401,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     const supabase = createClient(
@@ -62,10 +65,13 @@ Deno.serve(async (req) => {
       .single();
 
     if (error || !data) {
-      return new Response(JSON.stringify({ error: 'Photo not found or already removed' }), {
-        status: 404,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Photo not found or already removed' }),
+        {
+          status: 404,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     // Delete open comparison rows involving this photo so the partner can be re-paired.

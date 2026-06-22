@@ -21,10 +21,13 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing Authorization header' }),
+        {
+          status: 401,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     const url = new URL(req.url);
@@ -59,6 +62,7 @@ Deno.serve(async (req) => {
       )
       .eq('session_id', parsed.data.session_id)
       .eq('is_suppressed', false)
+      .eq('upload_status', 'uploaded')
       .order('elo_rating', { ascending: false })
       .limit(parsed.data.limit);
 
@@ -80,10 +84,13 @@ Deno.serve(async (req) => {
     ).catch(() => null);
 
     if (!photosWithUrls) {
-      return new Response(JSON.stringify({ error: 'Failed to generate photo URLs' }), {
-        status: 500,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Failed to generate photo URLs' }),
+        {
+          status: 500,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     return new Response(

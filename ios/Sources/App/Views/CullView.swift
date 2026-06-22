@@ -97,8 +97,6 @@ struct CullView: View {
         )
         cardProvider = provider
         syncService  = ss
-        // Late registrations unblock their pending keep/drop decisions.
-        pipeline.onRegistered = { _ in ss.syncIfNeeded() }
 
         async let syncReady: Void = ss.start(store: decisionStore)
         let decidedIds = await decisionStore.load(sessionId: sessionId)

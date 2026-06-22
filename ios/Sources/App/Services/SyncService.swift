@@ -29,9 +29,6 @@ final class SyncService {
         self.registrationState = registrationState
     }
 
-    // Decisions for registered photos go to the server; decisions for photos
-    // the server will never know (cancelled uploads) are settled locally;
-    // the rest stay pending until their photo registers.
     nonisolated static func partition(
         pending: [StoredDecision],
         registrationState: (UUID) -> PhotoRegistrationState
@@ -42,7 +39,6 @@ final class SyncService {
             switch registrationState(decision.photoId) {
             case .registered:  send.append(decision)
             case .unavailable: markLocalOnly.append(decision.photoId)
-            case .pending:     break
             }
         }
         return (send, markLocalOnly)
@@ -61,24 +57,13 @@ final class SyncService {
         Task { await drain() }
     }
 
-    // Backstop before entering ranking: GUARANTEES every sendable (registered-photo)
-    // decision reaches the server, unlike syncIfNeeded/drain which coalesce and may
-    // no-op while a background drain is in flight. Without this, a drop made just
-    // before "Done" — or any drop still pending when an in-flight drain is running —
-    // would never be sent, and the dropped photo would surface in comparisons.
+    // Backstop before entering ranking: sends all pending decisions before the
+    // SyncService is torn down. With pre-registration every photo has a server row,
+    // so all decisions are immediately sendable — one drain call is sufficient.
     func flush() async {
-        // performDrain sends the whole sendable batch and retries transient
-        // failures, so a single pass normally clears it. Loop a bounded number
-        // of times to absorb decisions recorded mid-flight and partial successes.
-        for _ in 0..<5 {
-            await performDrain()
-            let remaining = Self.partition(
-                pending: store?.pendingDecisions ?? [],
-                registrationState: registrationState
-            ).send
-            if remaining.isEmpty { return }
-            try? await Task.sleep(for: .milliseconds(300))
-        }
+        // All photos have server rows from pre-registration, so every pending
+        // decision is immediately sendable. One drain call is sufficient.
+        await performDrain()
     }
 
     // MARK: - Private

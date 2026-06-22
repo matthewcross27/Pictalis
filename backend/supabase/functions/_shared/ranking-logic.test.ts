@@ -40,7 +40,12 @@ Deno.test('computeMinComparisons — n=200, topK=35 → correct ceil', () => {
 
 // --- isBoundaryStable ---
 
-function makePhoto(id: string, elo: number, uncertainty: number, comparisons = 0) {
+function makePhoto(
+  id: string,
+  elo: number,
+  uncertainty: number,
+  comparisons = 0,
+) {
   return {
     id,
     storage_path: '',

@@ -17,14 +17,19 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing Authorization header' }),
+        {
+          status: 401,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     const url = new URL(req.url);
-    const parsed = QuerySchema.safeParse({ session_id: url.searchParams.get('session_id') });
+    const parsed = QuerySchema.safeParse({
+      session_id: url.searchParams.get('session_id'),
+    });
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
         status: 400,
@@ -69,7 +74,9 @@ Deno.serve(async (req) => {
     const photoList = photos ?? [];
     const topK = session.top_k ?? computeTopK(session.photo_count);
     const minComparisons = computeMinComparisons(session.photo_count, topK);
-    const totalComps = Math.round(photoList.reduce((s, p) => s + p.comparison_count, 0) / 2);
+    const totalComps = Math.round(
+      photoList.reduce((s, p) => s + p.comparison_count, 0) / 2,
+    );
 
     // Detect and persist completion
     let currentStage = session.stage as string;
@@ -81,7 +88,10 @@ Deno.serve(async (req) => {
       const exhausted = totalComps >= session.photo_count * 4;
       if ((allHaveCoverage && stable) || exhausted) {
         currentStage = 'complete';
-        await supabase.from('sessions').update({ stage: 'complete' }).eq('id', session_id);
+        await supabase.from('sessions').update({ stage: 'complete' }).eq(
+          'id',
+          session_id,
+        );
       }
     }
 

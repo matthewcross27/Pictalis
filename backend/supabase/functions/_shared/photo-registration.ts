@@ -5,11 +5,9 @@ export const STORAGE_PATH_RE = new RegExp(`^${UUID_RE}/${UUID_RE}/[^/]+$`, 'i');
 
 export const RegisterPhotoBody = z.object({
   session_id: z.string().uuid(),
-  storage_path: z.string().regex(STORAGE_PATH_RE, 'Must match {uid}/{session_id}/{filename}'),
-  photo_id: z.string().uuid().optional(),
+  storage_path: z.string().regex(
+    STORAGE_PATH_RE,
+    'Must match {uid}/{session_id}/{filename}',
+  ),
+  photo_id: z.string().uuid(),
 });
-
-// Postgres unique_violation — a retry of a register that already succeeded.
-export function isUniqueViolation(error: { code?: string } | null): boolean {
-  return error?.code === '23505';
-}

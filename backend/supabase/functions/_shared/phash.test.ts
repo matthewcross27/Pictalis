@@ -56,7 +56,10 @@ Deno.test('computeDHash — solid colors → very similar hashes', async () => {
   // Slight color change should not change the structure hash much
   const redBuf = await solidJpeg(0xff0000ff);
   const darkRedBuf = await solidJpeg(0xee0000ff);
-  const dist = hammingDistance(await computeDHash(redBuf), await computeDHash(darkRedBuf));
+  const dist = hammingDistance(
+    await computeDHash(redBuf),
+    await computeDHash(darkRedBuf),
+  );
   assertEquals(dist <= 5, true, `Expected small distance, got ${dist}`);
 });
 

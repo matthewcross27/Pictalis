@@ -28,6 +28,7 @@ export function isBoundaryStable(
   const contenders = byElo.slice(topK, Math.min(topK + 3, byElo.length));
   return !contenders.some(
     (c) =>
-      Math.abs(c.elo_rating - boundary.elo_rating) < (c.uncertainty + boundary.uncertainty) * 0.5,
+      Math.abs(c.elo_rating - boundary.elo_rating) <
+        (c.uncertainty + boundary.uncertainty) * 0.5,
   );
 }

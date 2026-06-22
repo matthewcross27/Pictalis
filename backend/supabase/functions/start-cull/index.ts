@@ -16,10 +16,13 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing Authorization header' }),
+        {
+          status: 401,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     let body: unknown;
@@ -62,10 +65,13 @@ Deno.serve(async (req) => {
     }
 
     if (count === 0) {
-      return new Response(JSON.stringify({ error: 'Session not found or already complete' }), {
-        status: 409,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Session not found or already complete' }),
+        {
+          status: 409,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     return new Response(JSON.stringify({ stage: 'cull' }), {

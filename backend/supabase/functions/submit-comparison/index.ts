@@ -22,10 +22,13 @@ Deno.serve(async (req) => {
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing Authorization header' }),
+        {
+          status: 401,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     const supabase = createClient(
@@ -68,10 +71,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (winner_id !== comparison.photo_a_id && winner_id !== comparison.photo_b_id) {
+    if (
+      winner_id !== comparison.photo_a_id && winner_id !== comparison.photo_b_id
+    ) {
       return new Response(
-        JSON.stringify({ error: 'winner_id must be one of the two compared photos' }),
-        { status: 400, headers: { ...CORS, 'Content-Type': 'application/json' } },
+        JSON.stringify({
+          error: 'winner_id must be one of the two compared photos',
+        }),
+        {
+          status: 400,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
       );
     }
 
@@ -85,32 +95,44 @@ Deno.serve(async (req) => {
       .in('id', [winner_id, loser_id]);
 
     if (photoError || !photoPair || photoPair.length !== 2) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch photo ratings' }), {
-        status: 500,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch photo ratings' }),
+        {
+          status: 500,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     const winner = photoPair.find((p) => p.id === winner_id);
     const loser = photoPair.find((p) => p.id === loser_id);
     if (!winner || !loser) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch photo ratings' }), {
-        status: 500,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch photo ratings' }),
+        {
+          status: 500,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+        },
+      );
     }
-    const { winnerNew, loserNew } = updateElo(winner.elo_rating, loser.elo_rating);
+    const { winnerNew, loserNew } = updateElo(
+      winner.elo_rating,
+      loser.elo_rating,
+    );
 
     // Single atomic transaction: claim comparison + update both Elo ratings.
     // The RPC raises 'already_submitted' if completed_at was already set,
     // preventing the TOCTOU race from the previous multi-step write approach.
-    const { error: submitError } = await supabase.rpc('submit_comparison_atomic', {
-      p_comparison_id: comparison_id,
-      p_winner_id: winner_id,
-      p_loser_id: loser_id,
-      p_winner_new_rating: winnerNew,
-      p_loser_new_rating: loserNew,
-    });
+    const { error: submitError } = await supabase.rpc(
+      'submit_comparison_atomic',
+      {
+        p_comparison_id: comparison_id,
+        p_winner_id: winner_id,
+        p_loser_id: loser_id,
+        p_winner_new_rating: winnerNew,
+        p_loser_new_rating: loserNew,
+      },
+    );
 
     if (submitError) {
       const isAlreadyDone = submitError.code === 'UE001';

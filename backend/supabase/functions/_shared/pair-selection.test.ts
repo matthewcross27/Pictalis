@@ -119,7 +119,12 @@ Deno.test('selectPhotoB — repeat penalty: avoids pairs seen many times', () =>
   const repeated = makePhoto('b', 1500, 200, 3);
   const fresh = makePhoto('c', 1500, 200, 3);
   const pairCounts = new Map([[pairKey('a', 'b'), 5]]);
-  const selected = selectPhotoB([photoA, repeated, fresh], photoA, pairCounts, false);
+  const selected = selectPhotoB(
+    [photoA, repeated, fresh],
+    photoA,
+    pairCounts,
+    false,
+  );
   assertEquals(selected.id, 'c');
 });
 
@@ -129,7 +134,12 @@ Deno.test('selectPhotoB — coverage mode uses WEIGHTS_COVER (freshness-dominant
   const photoA = makePhoto('a', 1500, 200, 5);
   const stale = makePhoto('b', 1490, 200, 10);
   const fresher = makePhoto('c', 1510, 200, 0);
-  const selected = selectPhotoB([photoA, stale, fresher], photoA, new Map(), true);
+  const selected = selectPhotoB(
+    [photoA, stale, fresher],
+    photoA,
+    new Map(),
+    true,
+  );
   assertEquals(selected.id, 'c');
 });
 
@@ -156,7 +166,13 @@ Deno.test('selectPhotoB — falls back to full candidate pool when all candidate
   const photoA = makePhoto('a', 1500, 200, 3);
   const only = makePhoto('b', 1500, 200, 3);
   const pendingPairs = new Set([pairKey('a', 'b')]);
-  const selected = selectPhotoB([photoA, only], photoA, new Map(), false, pendingPairs);
+  const selected = selectPhotoB(
+    [photoA, only],
+    photoA,
+    new Map(),
+    false,
+    pendingPairs,
+  );
   assertEquals(selected.id, 'b');
 });
 
@@ -220,7 +236,11 @@ Deno.test('isDedupComplete — cluster of 2 needs 1 intra comparison', () => {
     makePhoto('b', 1480, 200, 0, 'X'),
   ];
   assertEquals(isDedupComplete(photos, []), false);
-  const comps = [{ photo_a_id: 'a', photo_b_id: 'b', completed_at: '2026-01-01' }];
+  const comps = [{
+    photo_a_id: 'a',
+    photo_b_id: 'b',
+    completed_at: '2026-01-01',
+  }];
   assertEquals(isDedupComplete(photos, comps), true);
 });
 
@@ -230,7 +250,11 @@ Deno.test('isDedupComplete — cluster of 3 needs 2 intra comparisons', () => {
     makePhoto('b', 1480, 200, 0, 'Y'),
     makePhoto('c', 1460, 200, 0, 'Y'),
   ];
-  const oneComp = [{ photo_a_id: 'a', photo_b_id: 'b', completed_at: '2026-01-01' }];
+  const oneComp = [{
+    photo_a_id: 'a',
+    photo_b_id: 'b',
+    completed_at: '2026-01-01',
+  }];
   assertEquals(isDedupComplete(photos, oneComp), false);
   const twoComps = [
     { photo_a_id: 'a', photo_b_id: 'b', completed_at: '2026-01-01' },
@@ -259,7 +283,11 @@ Deno.test('selectDedupPair — prefers unseen intra-cluster pairs', () => {
     makePhoto('c', 1460, 200, 0, 'X'),
   ];
   // a-b already compared; a-c and b-c are fresh
-  const done = [{ photo_a_id: 'a', photo_b_id: 'b', completed_at: '2026-01-01' }];
+  const done = [{
+    photo_a_id: 'a',
+    photo_b_id: 'b',
+    completed_at: '2026-01-01',
+  }];
   const [p1, p2] = selectDedupPair(photos, done);
   const ids = [p1.id, p2.id].sort();
   // should NOT be a:b again
