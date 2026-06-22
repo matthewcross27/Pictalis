@@ -19,7 +19,7 @@ export function computeMinComparisons(n: number, topK: number): number {
 }
 
 export function isBoundaryStable(
-  photos: Pick<Photo, "elo_rating" | "uncertainty" | "comparison_count">[],
+  photos: Pick<Photo, 'elo_rating' | 'uncertainty' | 'comparison_count'>[],
   topK: number,
 ): boolean {
   if (photos.length <= topK) return true;

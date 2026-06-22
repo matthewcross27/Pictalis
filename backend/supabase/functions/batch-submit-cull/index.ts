@@ -1,33 +1,32 @@
-import { createClient } from "jsr:@supabase/supabase-js@2";
-import { z } from "npm:zod@3";
-import { initSentry, Sentry } from "../_shared/sentry.ts";
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { z } from 'npm:zod@3';
+import { initSentry, Sentry } from '../_shared/sentry.ts';
 initSentry();
 
 const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 const BodySchema = z.object({
   session_id: z.string().uuid(),
   decisions: z.array(z.object({
     photo_id: z.string().uuid(),
-    decision: z.enum(["keep", "drop"]),
+    decision: z.enum(['keep', 'drop']),
   })).min(1).max(300),
 });
 
 Deno.serve(async (req) => {
   try {
-    if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+    if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
-    const authHeader = req.headers.get("Authorization");
+    const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: "Missing Authorization header" }),
+        JSON.stringify({ error: 'Missing Authorization header' }),
         {
           status: 401,
-          headers: { ...CORS, "Content-Type": "application/json" },
+          headers: { ...CORS, 'Content-Type': 'application/json' },
         },
       );
     }
@@ -36,9 +35,9 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
         status: 400,
-        headers: { ...CORS, "Content-Type": "application/json" },
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -46,13 +45,13 @@ Deno.serve(async (req) => {
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
         status: 400,
-        headers: { ...CORS, "Content-Type": "application/json" },
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } },
     );
 
@@ -63,16 +62,16 @@ Deno.serve(async (req) => {
     const results = await Promise.all(
       decisions.map(async ({ photo_id, decision }) => {
         try {
-          const update = decision === "keep"
-            ? { cull_decision: "keep" }
-            : { cull_decision: "drop", is_suppressed: true };
+          const update = decision === 'keep'
+            ? { cull_decision: 'keep' }
+            : { cull_decision: 'drop', is_suppressed: true };
 
           const { error: updateError } = await supabase
-            .from("photos")
+            .from('photos')
             .update(update)
-            .eq("id", photo_id)
-            .eq("session_id", session_id)
-            .is("cull_decision", null);
+            .eq('id', photo_id)
+            .eq('session_id', session_id)
+            .is('cull_decision', null);
 
           if (updateError) {
             return { photo_id, success: false, error: updateError.message };
@@ -90,14 +89,14 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ results }), {
       status: 200,
-      headers: { ...CORS, "Content-Type": "application/json" },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
-      headers: { ...CORS, "Content-Type": "application/json" },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

@@ -1,13 +1,12 @@
-import { createClient } from "jsr:@supabase/supabase-js@2";
-import { z } from "npm:zod@3";
-import { updateElo } from "../_shared/elo.ts";
-import { initSentry, Sentry } from "../_shared/sentry.ts";
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { z } from 'npm:zod@3';
+import { updateElo } from '../_shared/elo.ts';
+import { initSentry, Sentry } from '../_shared/sentry.ts';
 initSentry();
 
 const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 const SubmitBody = z.object({
@@ -17,24 +16,24 @@ const SubmitBody = z.object({
 
 Deno.serve(async (req) => {
   try {
-    if (req.method === "OPTIONS") {
-      return new Response("ok", { headers: CORS });
+    if (req.method === 'OPTIONS') {
+      return new Response('ok', { headers: CORS });
     }
 
-    const authHeader = req.headers.get("Authorization");
+    const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: "Missing Authorization header" }),
+        JSON.stringify({ error: 'Missing Authorization header' }),
         {
           status: 401,
-          headers: { ...CORS, "Content-Type": "application/json" },
+          headers: { ...CORS, 'Content-Type': 'application/json' },
         },
       );
     }
 
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } },
     );
 
@@ -42,9 +41,9 @@ Deno.serve(async (req) => {
     try {
       body = await req.json();
     } catch {
-      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
         status: 400,
-        headers: { ...CORS, "Content-Type": "application/json" },
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -52,7 +51,7 @@ Deno.serve(async (req) => {
     if (!parsed.success) {
       return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
         status: 400,
-        headers: { ...CORS, "Content-Type": "application/json" },
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -60,15 +59,15 @@ Deno.serve(async (req) => {
 
     // RLS ensures this comparison belongs to the caller's session
     const { data: comparison, error: compError } = await supabase
-      .from("comparisons")
-      .select("id, photo_a_id, photo_b_id")
-      .eq("id", comparison_id)
+      .from('comparisons')
+      .select('id, photo_a_id, photo_b_id')
+      .eq('id', comparison_id)
       .single();
 
     if (compError || !comparison) {
-      return new Response(JSON.stringify({ error: "Comparison not found" }), {
+      return new Response(JSON.stringify({ error: 'Comparison not found' }), {
         status: 404,
-        headers: { ...CORS, "Content-Type": "application/json" },
+        headers: { ...CORS, 'Content-Type': 'application/json' },
       });
     }
 
@@ -77,11 +76,11 @@ Deno.serve(async (req) => {
     ) {
       return new Response(
         JSON.stringify({
-          error: "winner_id must be one of the two compared photos",
+          error: 'winner_id must be one of the two compared photos',
         }),
         {
           status: 400,
-          headers: { ...CORS, "Content-Type": "application/json" },
+          headers: { ...CORS, 'Content-Type': 'application/json' },
         },
       );
     }
@@ -91,16 +90,16 @@ Deno.serve(async (req) => {
       : comparison.photo_a_id;
 
     const { data: photoPair, error: photoError } = await supabase
-      .from("photos")
-      .select("id, elo_rating, comparison_count")
-      .in("id", [winner_id, loser_id]);
+      .from('photos')
+      .select('id, elo_rating, comparison_count')
+      .in('id', [winner_id, loser_id]);
 
     if (photoError || !photoPair || photoPair.length !== 2) {
       return new Response(
-        JSON.stringify({ error: "Failed to fetch photo ratings" }),
+        JSON.stringify({ error: 'Failed to fetch photo ratings' }),
         {
           status: 500,
-          headers: { ...CORS, "Content-Type": "application/json" },
+          headers: { ...CORS, 'Content-Type': 'application/json' },
         },
       );
     }
@@ -109,10 +108,10 @@ Deno.serve(async (req) => {
     const loser = photoPair.find((p) => p.id === loser_id);
     if (!winner || !loser) {
       return new Response(
-        JSON.stringify({ error: "Failed to fetch photo ratings" }),
+        JSON.stringify({ error: 'Failed to fetch photo ratings' }),
         {
           status: 500,
-          headers: { ...CORS, "Content-Type": "application/json" },
+          headers: { ...CORS, 'Content-Type': 'application/json' },
         },
       );
     }
@@ -125,7 +124,7 @@ Deno.serve(async (req) => {
     // The RPC raises 'already_submitted' if completed_at was already set,
     // preventing the TOCTOU race from the previous multi-step write approach.
     const { error: submitError } = await supabase.rpc(
-      "submit_comparison_atomic",
+      'submit_comparison_atomic',
       {
         p_comparison_id: comparison_id,
         p_winner_id: winner_id,
@@ -136,16 +135,16 @@ Deno.serve(async (req) => {
     );
 
     if (submitError) {
-      const isAlreadyDone = submitError.code === "UE001";
+      const isAlreadyDone = submitError.code === 'UE001';
       return new Response(
         JSON.stringify({
           error: isAlreadyDone
-            ? "Comparison already submitted"
-            : "Failed to record comparison result",
+            ? 'Comparison already submitted'
+            : 'Failed to record comparison result',
         }),
         {
           status: isAlreadyDone ? 409 : 500,
-          headers: { ...CORS, "Content-Type": "application/json" },
+          headers: { ...CORS, 'Content-Type': 'application/json' },
         },
       );
     }
@@ -157,14 +156,14 @@ Deno.serve(async (req) => {
         winner_new_rating: winnerNew,
         loser_new_rating: loserNew,
       }),
-      { status: 200, headers: { ...CORS, "Content-Type": "application/json" } },
+      { status: 200, headers: { ...CORS, 'Content-Type': 'application/json' } },
     );
   } catch (err) {
     Sentry.captureException(err);
     await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
-      headers: { ...CORS, "Content-Type": "application/json" },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 });

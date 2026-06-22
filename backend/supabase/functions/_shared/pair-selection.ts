@@ -1,4 +1,4 @@
-import { type CompletedComparison, type Photo } from "./ranking-logic.ts";
+import { type CompletedComparison, type Photo } from './ranking-logic.ts';
 
 export const BOUNDARY_ALPHA = 1;
 export const WEIGHTS_POST = {
@@ -17,7 +17,7 @@ export const WEIGHTS_COVER = {
 };
 
 export function pairKey(a: string, b: string): string {
-  return [a, b].sort().join(":");
+  return [a, b].sort().join(':');
 }
 
 export function buildPairCounts(
@@ -74,9 +74,7 @@ export function selectPhotoB(
 ): Photo {
   const allCandidates = photos.filter((p) => p.id !== photoA.id);
   // Hard-exclude in-flight pending pairs; fall back to full pool if no eligible candidates remain.
-  const candidates = allCandidates.filter((p) =>
-    !pendingPairs.has(pairKey(photoA.id, p.id))
-  );
+  const candidates = allCandidates.filter((p) => !pendingPairs.has(pairKey(photoA.id, p.id)));
   const pool = candidates.length > 0 ? candidates : allCandidates;
 
   const w = inCoverage ? WEIGHTS_COVER : WEIGHTS_POST;
@@ -95,10 +93,9 @@ export function selectPhotoB(
     const fresh = 1 - b.comparison_count / maxCount;
     const count = pairCounts.get(pairKey(photoA.id, b.id)) ?? 0;
     const repeat = Math.exp(-count);
-    const cluster =
-      !b.cluster_id || !photoA.cluster_id || b.cluster_id !== photoA.cluster_id
-        ? 1
-        : 0;
+    const cluster = !b.cluster_id || !photoA.cluster_id || b.cluster_id !== photoA.cluster_id
+      ? 1
+      : 0;
 
     const score = w.elo * eloSim + w.overlap * overlap + w.fresh * fresh +
       w.repeat * repeat + w.cluster * cluster;
@@ -203,7 +200,7 @@ export function selectDedupPair(
   }
 
   if (!targetCluster) {
-    throw new Error("selectDedupPair called when dedup is already complete");
+    throw new Error('selectDedupPair called when dedup is already complete');
   }
 
   // Build seen-pair set for this cluster.
