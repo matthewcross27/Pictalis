@@ -9,7 +9,10 @@ export function calculateExpected(ratingA: number, ratingB: number): number {
   return 1 / (1 + Math.pow(10, (ratingB - ratingA) / 400));
 }
 
-export function updateElo(winnerRating: number, loserRating: number): EloUpdate {
+export function updateElo(
+  winnerRating: number,
+  loserRating: number,
+): EloUpdate {
   const expectedWinner = calculateExpected(winnerRating, loserRating);
   const expectedLoser = calculateExpected(loserRating, winnerRating);
   return {

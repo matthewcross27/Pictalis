@@ -1,8 +1,8 @@
-import { Jimp } from 'npm:jimp@1';
+import { Jimp } from "npm:jimp@1";
 
 // Count differing bits between two 16-char lowercase hex strings (64-bit hashes).
 export function hammingDistance(a: string, b: string): number {
-  let n = BigInt('0x' + a) ^ BigInt('0x' + b);
+  let n = BigInt("0x" + a) ^ BigInt("0x" + b);
   let count = 0;
   while (n > 0n) {
     n &= n - 1n; // Kernighan's bit-clearing trick
@@ -30,7 +30,7 @@ export async function computeDHash(buf: Uint8Array): Promise<string> {
       }
     }
   }
-  return bits.toString(16).padStart(16, '0');
+  return bits.toString(16).padStart(16, "0");
 }
 
 // Variance of pixel intensities in a 32×32 grayscale downsample.

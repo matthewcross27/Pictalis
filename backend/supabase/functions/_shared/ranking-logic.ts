@@ -19,7 +19,7 @@ export function computeMinComparisons(n: number, topK: number): number {
 }
 
 export function isBoundaryStable(
-  photos: Pick<Photo, 'elo_rating' | 'uncertainty' | 'comparison_count'>[],
+  photos: Pick<Photo, "elo_rating" | "uncertainty" | "comparison_count">[],
   topK: number,
 ): boolean {
   if (photos.length <= topK) return true;
@@ -28,6 +28,7 @@ export function isBoundaryStable(
   const contenders = byElo.slice(topK, Math.min(topK + 3, byElo.length));
   return !contenders.some(
     (c) =>
-      Math.abs(c.elo_rating - boundary.elo_rating) < (c.uncertainty + boundary.uncertainty) * 0.5,
+      Math.abs(c.elo_rating - boundary.elo_rating) <
+        (c.uncertainty + boundary.uncertainty) * 0.5,
   );
 }
