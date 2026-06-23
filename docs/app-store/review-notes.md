@@ -36,8 +36,7 @@ The full flow takes about 2 minutes with 10 photos.
 
 None required. The app is fully functional without any account.
 
-SUBMISSION CHECKLIST
-====================
+## SUBMISSION CHECKLIST
 
 App Identity
 [ ] Bundle ID registered in Apple Developer Portal: com.matthewcross.Pictalis
