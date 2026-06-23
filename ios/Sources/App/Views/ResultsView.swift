@@ -138,7 +138,7 @@ struct ResultsView: View {
                     .background(Color.photoOverlay)
                     .clipShape(Capsule())
                 }
-                .accessibilityLabel("Save to Photos library")
+                .accessibilityLabel("Save photo to library")
                 .accessibilityHint("Double-tap to save this photo to your Photos library")
                 .padding(8)
                 .disabled(exportingId != nil)

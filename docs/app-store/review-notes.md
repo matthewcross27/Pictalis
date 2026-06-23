@@ -11,11 +11,11 @@ password, or Apple ID is needed.
 1. Open the app
 2. Tap "Choose Photos" and grant photo library access when prompted
 3. Select 5–20 photos from your library (at least 5 for a meaningful session)
-4. Tap "Start Session"
-5. On the next screen, tap "Filter First" to do a quick cull pass (optional),
+4. Tap "Start Curating"
+5. On the next screen, tap "Filter then rank" to do a quick cull pass (optional),
    or tap to proceed directly to comparisons
 6. Tap through a few head-to-head comparisons — tap the photo you prefer
-7. Tap "See My Rankings" at any time to view the results
+7. Tap "See Full Rankings" at any time to view the results
 
 The full flow takes about 2 minutes with 10 photos.
 
