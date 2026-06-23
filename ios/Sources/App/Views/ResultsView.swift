@@ -46,8 +46,8 @@ struct ResultsView: View {
                     } else {
                         ScrollView {
                             LazyVGrid(columns: columns, spacing: 4) {
-                                ForEach(photos) { photo in
-                                    photoCell(photo: photo)
+                                ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
+                                    photoCell(photo: photo, rank: index + 1)
                                 }
                             }
                             .padding(4)
@@ -73,6 +73,8 @@ struct ResultsView: View {
                         .font(.labelSerif)
                         .foregroundStyle(Color.amber)
                         .disabled(photos.isEmpty)
+                        .accessibilityLabel("Save to Photos library")
+                        .accessibilityHint("Double-tap to save all ranked photos to your Photos library")
                 }
             }
         }
@@ -99,7 +101,7 @@ struct ResultsView: View {
     // MARK: - Private
 
     @ViewBuilder
-    private func photoCell(photo: RankedPhoto) -> some View {
+    private func photoCell(photo: RankedPhoto, rank: Int) -> some View {
         Color.grainPaper
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 180)
             .overlay {
@@ -136,6 +138,8 @@ struct ResultsView: View {
                     .background(Color.photoOverlay)
                     .clipShape(Capsule())
                 }
+                .accessibilityLabel("Save to Photos library")
+                .accessibilityHint("Double-tap to save this photo to your Photos library")
                 .padding(8)
                 .disabled(exportingId != nil)
             }
@@ -143,6 +147,8 @@ struct ResultsView: View {
             .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
             .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
             .onTapGesture { expandedPhoto = photo }
+            .accessibilityLabel("Photo ranked number \(rank)")
+            .accessibilityHint("Double-tap to view full screen")
     }
 
     private func fetchResults() async {

@@ -69,6 +69,8 @@ struct SessionSetupView: View {
                                 .fill(Color.grainPaper)
                         )
                     }
+                    .accessibilityLabel(selectionCount > 0 ? "\(selectionCount) photos selected" : "Choose photos")
+                    .accessibilityHint("Double-tap to open your photo library and select photos to curate")
 
                     // Error state
                     if let err = auth.authError {
@@ -93,6 +95,8 @@ struct SessionSetupView: View {
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(!canStart)
+                    .accessibilityLabel("Start Curating")
+                    .accessibilityHint("Double-tap to begin curating your selected photos")
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 40)

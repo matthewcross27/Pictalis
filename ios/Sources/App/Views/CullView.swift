@@ -170,6 +170,8 @@ struct CullView: View {
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("View full screen")
+                .accessibilityHint("Double-tap to expand this photo")
                 .padding(8)
             }
             .offset(x: dragOffset)
@@ -209,6 +211,8 @@ struct CullView: View {
                             .stroke(Color.divider, lineWidth: 1)
                     )
             }
+            .accessibilityLabel("Skip")
+            .accessibilityHint("Remove this photo from ranking")
             Button(action: { commitDecision(.keep, card: card) }) {
                 Label("Keep", systemImage: "checkmark")
                     .font(.labelSerif)
@@ -218,6 +222,8 @@ struct CullView: View {
                     .foregroundStyle(Color.filmWhite)
                     .cornerRadius(.interactiveRadius)
             }
+            .accessibilityLabel("Keep")
+            .accessibilityHint("Add this photo to the ranking round")
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 32)

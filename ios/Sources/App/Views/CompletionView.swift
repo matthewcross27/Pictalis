@@ -47,7 +47,7 @@ struct CompletionView: View {
                             .padding(.vertical, 40)
                     } else if !photos.isEmpty {
                         LazyVGrid(columns: columns, spacing: 4) {
-                            ForEach(photos.prefix(10)) { photo in
+                            ForEach(Array(photos.prefix(10).enumerated()), id: \.element.id) { index, photo in
                                 Color.grainPaper
                                     .aspectRatio(1, contentMode: .fit)
                                     .overlay {
@@ -67,6 +67,8 @@ struct CompletionView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
                                     .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
                                     .onTapGesture { expandedPhoto = photo }
+                                    .accessibilityLabel("Photo ranked number \(index + 1)")
+                                    .accessibilityHint("Double-tap to view full screen")
                             }
                         }
                         .padding(.horizontal, 8)
@@ -86,14 +88,20 @@ struct CompletionView: View {
                         .buttonStyle(PrimaryButtonStyle())
                         .disabled(photos.isEmpty || isExporting)
                         .padding(.horizontal, 24)
+                        .accessibilityLabel("Save to Photos library")
+                        .accessibilityHint("Double-tap to save all favorite photos to your Photos library")
 
                         Button("See Full Rankings") { onSeeFullRankings(photos) }
                             .buttonStyle(GhostButtonStyle())
+                            .accessibilityLabel("See Full Rankings")
+                            .accessibilityHint("Double-tap to view the complete ranked list of your photos")
 
                         Button("Start Over") { onStartOver() }
                             .font(.captionSerif)
                             .foregroundStyle(Color.secondaryText)
                             .padding(.vertical, 10)
+                            .accessibilityLabel("Start Over")
+                            .accessibilityHint("Double-tap to begin a new curation session")
                     }
                     .padding(.bottom, 40)
                 }
