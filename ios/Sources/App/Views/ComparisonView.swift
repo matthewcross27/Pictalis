@@ -167,6 +167,8 @@ struct ComparisonView: View {
                         .clipped()
                 }
                 .buttonStyle(PhotoTapStyle())
+                .accessibilityLabel(photo.id == pair?.photoA.id ? "Left photo" : "Right photo")
+                .accessibilityHint("Double-tap to choose this photo as your favorite")
 
                 VStack {
                     HStack {
@@ -180,6 +182,8 @@ struct ComparisonView: View {
                                 .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("View full screen")
+                        .accessibilityHint("Double-tap to expand this photo")
                         .padding(8)
                     }
                     Spacer()
