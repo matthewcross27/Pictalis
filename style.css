@@ -34,17 +34,8 @@ header .logo {
 header .logo-mark {
   width: 32px;
   height: 32px;
-  background: #f59e0b;
   border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-header .logo-mark svg {
-  width: 18px;
-  height: 18px;
-  fill: #fff;
+  display: block;
 }
 
 header .logo-name {
@@ -69,19 +60,10 @@ main {
 .hero-icon {
   width: 96px;
   height: 96px;
-  background: #f59e0b;
   border-radius: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
   margin: 0 auto 20px;
-  box-shadow: 0 8px 32px rgba(245, 158, 11, 0.25);
-}
-
-.hero-icon svg {
-  width: 52px;
-  height: 52px;
-  fill: #fff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
 }
 
 .hero h1 {
@@ -187,5 +169,4 @@ footer {
   .hero { padding: 48px 0 24px; }
   .hero h1 { font-size: 30px; }
   .hero-icon { width: 80px; height: 80px; border-radius: 18px; }
-  .hero-icon svg { width: 44px; height: 44px; }
 }
