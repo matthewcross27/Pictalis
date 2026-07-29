@@ -2,8 +2,8 @@ import SwiftUI
 import PhotosUI
 
 struct SessionSetupView: View {
-    @EnvironmentObject private var auth: AuthService
-    @EnvironmentObject private var api: APIClient
+    @Environment(AuthService.self) private var auth
+    @Environment(APIClient.self) private var api
 
     var onStart: (UUID, PhotoPipeline) -> Void
 

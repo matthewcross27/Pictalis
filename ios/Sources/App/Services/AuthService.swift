@@ -1,12 +1,13 @@
-import Combine
 import Foundation
+import Observation
 import Supabase
 
+@Observable
 @MainActor
-final class AuthService: ObservableObject {
-    @Published private(set) var isAuthenticated = false
-    @Published private(set) var userId: UUID?
-    @Published private(set) var authError: String?
+final class AuthService {
+    private(set) var isAuthenticated = false
+    private(set) var userId: UUID?
+    private(set) var authError: (any Error)?
 
     private let client: SupabaseClient
 
@@ -28,7 +29,7 @@ final class AuthService: ObservableObject {
             }
         } catch {
             print("Auth error: \(error)")
-            authError = error.localizedDescription
+            authError = error
         }
     }
 

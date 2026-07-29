@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Observation
 import UIKit
 
 enum PhotoRegistrationState {
@@ -14,8 +15,9 @@ enum PipelineError: Error {
 // Owns the per-photo state machine: materialize (compress to tmp disk) →
 // upload → register. Cull display images decode from the same tmp files,
 // so the cull phase never touches the network.
+@Observable
 @MainActor
-final class PhotoPipeline: ObservableObject {
+final class PhotoPipeline {
 
     enum ItemState: Equatable {
         case pending       // waiting to materialize
@@ -37,9 +39,9 @@ final class PhotoPipeline: ObservableObject {
         var materializeAttempts = 0
     }
 
-    @Published private(set) var registeredCount = 0
-    @Published private(set) var failedIds: [UUID] = []
-    @Published private(set) var isComplete = false
+    private(set) var registeredCount = 0
+    private(set) var failedIds: [UUID] = []
+    private(set) var isComplete = false
 
     private(set) var order: [UUID] = []
     var totalCount: Int { order.count }
@@ -49,6 +51,7 @@ final class PhotoPipeline: ObservableObject {
     private var activeUploads = 0
     private var waiters: [UUID: [CheckedContinuation<URL, Error>]] = [:]
     private var didMarkComplete = false
+    private var backgroundTasks: [Task<Void, Never>] = []
 
     private let transport: any PhotoUploadTransport
     private let sessionId: UUID
@@ -94,12 +97,19 @@ final class PhotoPipeline: ObservableObject {
             items[photo.id] = Item(photoId: photo.id, loader: photo.loader)
         }
         prepareSessionDirectory()
-        Task { await self.materializeAll() }
-        Task { [weak self] in
+        backgroundTasks.append(Task { await self.materializeAll() })
+        backgroundTasks.append(Task { [weak self] in
             guard let events = self?.connectivityEvents else { return }
             for await _ in events { self?.retryParked() }
-        }
+        })
     }
+
+    func cancel() {
+        for task in backgroundTasks { task.cancel() }
+        backgroundTasks.removeAll()
+    }
+
+    deinit { for task in backgroundTasks { task.cancel() } }
 
     // MARK: - Display access
 
@@ -184,8 +194,7 @@ final class PhotoPipeline: ObservableObject {
     }
 
     private func prepareSessionDirectory() {
-        let parent = FileManager.default.temporaryDirectory.appendingPathComponent("PictalisUploads")
-        try? FileManager.default.removeItem(at: parent) // clear previous sessions
+        try? FileManager.default.removeItem(at: sessionDirectory) // clear this session only
         try? FileManager.default.createDirectory(at: sessionDirectory, withIntermediateDirectories: true)
     }
 
@@ -311,10 +320,12 @@ final class PhotoPipeline: ObservableObject {
             do {
                 try await operation()
                 return
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 guard attempt < retryDelays.count else { throw error }
                 let jitter = Duration.milliseconds(Int.random(in: 0...300))
-                try? await Task.sleep(for: retryDelays[attempt] + jitter)
+                try await Task.sleep(for: retryDelays[attempt] + jitter)
                 attempt += 1
             }
         }

@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct ComparisonView: View {
-    @EnvironmentObject private var api: APIClient
+    @Environment(APIClient.self) private var api
 
     let sessionId: UUID
-    @ObservedObject var pipeline: PhotoPipeline
+    var pipeline: PhotoPipeline
     var onSkipToResults: () -> Void
     var onComplete: (Int) -> Void
 
@@ -15,7 +15,7 @@ struct ComparisonView: View {
     @State private var errorMessage: String?
     @State private var comparisonCount = 0
     @State private var fullscreenPhoto: PairPhoto?
-    @State private var currentStage: String?
+    @State private var currentStage: RankingStage?
     @State private var prefetchedPair: NextPairResponse?
     @State private var prefetchTask: Task<Void, Never>?
     @State private var isRemoving = false
@@ -94,7 +94,7 @@ struct ComparisonView: View {
         }
         .fullScreenCover(item: $fullscreenPhoto) { photo in
             ZStack {
-                Color(red: 0.059, green: 0.055, blue: 0.043).ignoresSafeArea()
+                Color.photoBackground.ignoresSafeArea()
                 AsyncImage(url: URL(string: photo.signedUrl)) { phase in
                     switch phase {
                     case .success(let image):
@@ -113,7 +113,7 @@ struct ComparisonView: View {
     private var bottomBar: some View {
         HStack {
             if let stage = currentStage {
-                StageBadge(stage: stage)
+                StageBadge(stage: stage, isComplete: false)
             }
 
             Spacer()
@@ -167,8 +167,8 @@ struct ComparisonView: View {
                         .clipped()
                 }
                 .buttonStyle(PhotoTapStyle())
-                .accessibilityLabel(photo.id == pair?.photoA.id ? "Left photo" : "Right photo")
-                .accessibilityHint("Double-tap to choose this photo as your favorite")
+                .accessibilityLabel(photo.id == pair?.photoA.id ? "First photo" : "Second photo")
+                .accessibilityHint("Choose this photo as your favorite")
 
                 VStack {
                     HStack {
@@ -183,7 +183,7 @@ struct ComparisonView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("View full screen")
-                        .accessibilityHint("Double-tap to expand this photo")
+                        .accessibilityHint("Expand this photo")
                         .padding(8)
                     }
                     Spacer()
@@ -252,7 +252,7 @@ struct ComparisonView: View {
         isSubmitting = false
         if let next = prefetchedPair {
             withAnimation(.pairTransition) {
-                currentStage = next.stage
+                currentStage = next.stage.flatMap { RankingStage(rawValue: $0) }
                 self.pair = next
             }
             prefetchedPair = nil
@@ -311,7 +311,7 @@ struct ComparisonView: View {
             if Task.isCancelled { return }
             do {
                 let response = try await api.nextPair(sessionId: sessionId)
-                currentStage = response.stage
+                currentStage = response.stage.flatMap { RankingStage(rawValue: $0) }
                 pair = response
                 isLoading = false
                 return

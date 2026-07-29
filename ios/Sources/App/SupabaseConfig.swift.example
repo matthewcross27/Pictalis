@@ -1,8 +1,13 @@
 // Copy this file to SupabaseConfig.swift and fill in your values.
-// Find these in: Supabase Dashboard → Project Settings → API
+// Supabase values: Dashboard → Project Settings → API
+// Sentry DSN: Sentry Dashboard → Project Settings → Client Keys
 import Foundation
 
 enum SupabaseConfig {
     static let url = URL(string: "https://YOUR_PROJECT_REF.supabase.co")!
     static let anonKey = "YOUR_ANON_KEY_HERE"
+}
+
+enum SentryConfig {
+    static let dsn = "YOUR_SENTRY_DSN_HERE"
 }

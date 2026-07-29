@@ -28,6 +28,7 @@ final class LocalCardProvider {
     private var remaining: [UUID] = []   // undecided ids, selection order, not yet queued
     private var isFilling = false
     private var currentMaxQueueSize = LocalCardProvider.normalQueueSize
+    private var fillTask: Task<Void, Never>?
     nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
 
     init(pipeline: PhotoPipeline) {
@@ -41,6 +42,7 @@ final class LocalCardProvider {
     }
 
     deinit {
+        fillTask?.cancel()
         if let observer = memoryWarningObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -57,7 +59,8 @@ final class LocalCardProvider {
         } else if !queue.isEmpty {
             state = .ready
         }
-        Task { await self.fill() }
+        fillTask?.cancel()
+        fillTask = Task { await self.fill() }
     }
 
     func advance() -> Card? {
@@ -69,14 +72,16 @@ final class LocalCardProvider {
         if queue.isEmpty && remaining.isEmpty {
             state = .exhausted
         } else {
-            Task { await self.fill() }
+            fillTask?.cancel()
+            fillTask = Task { await self.fill() }
         }
         return card
     }
 
     // Kept for CullView's error-state button; local loads rarely need it.
     func retry() {
-        Task {
+        fillTask?.cancel()
+        fillTask = Task {
             await self.fill()
             if !self.queue.isEmpty { self.state = .ready }
         }

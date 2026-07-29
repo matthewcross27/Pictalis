@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct CullView: View {
-    @EnvironmentObject private var api: APIClient
+    @Environment(APIClient.self) private var api
 
     let sessionId: UUID
-    @ObservedObject var pipeline: PhotoPipeline
+    var pipeline: PhotoPipeline
     var onComplete: () -> Void
 
     @State private var decisionStore  = DecisionStore()
@@ -16,72 +16,80 @@ struct CullView: View {
     @State private var finishFailed     = false
     @State private var isInitialized    = false
     @State private var expandedCard:     LocalCardProvider.Card?
+    @State private var screenWidth:      CGFloat = 390
 
-    private var screenWidth: CGFloat  { UIScreen.main.bounds.width }
     private var dragProgress: CGFloat { dragOffset / (screenWidth * 0.4) }
 
     var body: some View {
-        ZStack {
-            Color.filmWhite.ignoresSafeArea()
+        GeometryReader { geo in
+            ZStack {
+                Color.filmWhite.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                topBar
+                VStack(spacing: 0) {
+                    topBar
 
-                switch cardProvider?.state ?? .loading {
-                case .loading:
-                    Spacer()
-                    ProgressView().tint(Color.amber)
-                    Spacer()
-
-                case .ready:
-                    if let card = currentCard {
+                    switch cardProvider?.state ?? .loading {
+                    case .loading:
                         Spacer()
-                        cardStack(card: card)
+                        ProgressView().tint(Color.amber)
                         Spacer()
-                        bottomButtons(card: card)
-                    }
 
-                case .exhausted:
-                    Color.clear
+                    case .ready:
+                        if let card = currentCard {
+                            Spacer()
+                            cardStack(card: card)
+                            Spacer()
+                            bottomButtons(card: card)
+                        }
 
-                case .error(let message):
-                    Spacer()
-                    VStack(spacing: 12) {
-                        Text(message)
-                            .font(.bodySerif)
-                            .foregroundStyle(Color.amber)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
-                        Button("Retry") { cardProvider?.retry() }
-                            .font(.labelSerif)
-                            .foregroundStyle(Color.filmWhite)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .background(Color.amber)
-                            .cornerRadius(.interactiveRadius)
+                    case .exhausted:
+                        Color.clear
+
+                    case .error(let message):
+                        Spacer()
+                        VStack(spacing: 12) {
+                            Text(message)
+                                .font(.bodySerif)
+                                .foregroundStyle(Color.amber)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
+                            Button("Retry") { cardProvider?.retry() }
+                                .font(.labelSerif)
+                                .foregroundStyle(Color.filmWhite)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 12)
+                                .background(Color.amber)
+                                .clipShape(RoundedRectangle(cornerRadius: .interactiveRadius))
+                        }
+                        Spacer()
                     }
-                    Spacer()
                 }
             }
-        }
-        .task { await initialize() }
-        .fullScreenCover(item: $expandedCard) { card in
-            ZStack {
-                Color.black.ignoresSafeArea()
-                Image(uiImage: card.image)
-                    .resizable()
-                    .scaledToFit()
+            .task { await initialize() }
+            .fullScreenCover(item: $expandedCard) { card in
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    Image(uiImage: card.image)
+                        .resizable()
+                        .scaledToFit()
+                }
+                .onTapGesture { expandedCard = nil }
             }
-            .onTapGesture { expandedCard = nil }
-        }
-        .onChange(of: cardProvider?.queue.isEmpty) { _, isEmpty in
-            // Guard against firing during initialization — initialize() calls advance() itself.
-            if isEmpty == false, currentCard == nil, isInitialized {
-                currentCard = cardProvider?.advance()
+            .onChange(of: cardProvider?.queue.isEmpty) { _, isEmpty in
+                // Guard against firing during initialization — initialize() calls advance() itself.
+                if isEmpty == false, currentCard == nil, isInitialized {
+                    currentCard = cardProvider?.advance()
+                }
             }
-        }
-        .onChange(of: cardProvider?.state) { _, newState in
-            if newState == .exhausted { onComplete() }
+            .onChange(of: cardProvider?.state) { _, newState in
+                if newState == .exhausted { onComplete() }
+            }
+            .onChange(of: geo.size.width) { _, newWidth in
+                screenWidth = newWidth
+            }
+            .onAppear {
+                screenWidth = geo.size.width
+            }
         }
     }
 
@@ -146,20 +154,18 @@ struct CullView: View {
                 Image(uiImage: card.image)
                     .resizable()
                     .scaledToFit()
-                    .cornerRadius(.photoRadius)
+                    .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
             }
             .frame(width: geo.size.width, height: geo.size.height)
-            .overlay(
-                Group {
-                    if dragOffset > 0 {
-                        Color.green.opacity(min(dragProgress, 1.0) * 0.35)
-                            .cornerRadius(.photoRadius)
-                    } else if dragOffset < 0 {
-                        Color.red.opacity(min(-dragProgress, 1.0) * 0.35)
-                            .cornerRadius(.photoRadius)
-                    }
+            .overlay {
+                if dragOffset > 0 {
+                    Color.green.opacity(min(dragProgress, 1.0) * 0.35)
+                        .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+                } else if dragOffset < 0 {
+                    Color.red.opacity(min(-dragProgress, 1.0) * 0.35)
+                        .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
                 }
-            )
+            }
             .overlay(alignment: .topTrailing) {
                 Button { expandedCard = card } label: {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -171,7 +177,7 @@ struct CullView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("View full screen")
-                .accessibilityHint("Double-tap to expand this photo")
+                .accessibilityHint("Expand this photo")
                 .padding(8)
             }
             .offset(x: dragOffset)
@@ -179,7 +185,7 @@ struct CullView: View {
                 DragGesture()
                     .onChanged { value in dragOffset = value.translation.width }
                     .onEnded { value in
-                        let threshold = screenWidth * 0.4
+                        let threshold = geo.size.width * 0.4
                         if value.translation.width > threshold {
                             commitDecision(.keep, card: card)
                         } else if value.translation.width < -threshold {
@@ -205,7 +211,7 @@ struct CullView: View {
                     .padding(.vertical, 14)
                     .background(Color.grainPaper)
                     .foregroundStyle(Color.ink)
-                    .cornerRadius(.interactiveRadius)
+                    .clipShape(RoundedRectangle(cornerRadius: .interactiveRadius))
                     .overlay(
                         RoundedRectangle(cornerRadius: .interactiveRadius)
                             .stroke(Color.divider, lineWidth: 1)
@@ -220,7 +226,7 @@ struct CullView: View {
                     .padding(.vertical, 14)
                     .background(Color.amber)
                     .foregroundStyle(Color.filmWhite)
-                    .cornerRadius(.interactiveRadius)
+                    .clipShape(RoundedRectangle(cornerRadius: .interactiveRadius))
             }
             .accessibilityLabel("Keep")
             .accessibilityHint("Add this photo to the ranking round")
