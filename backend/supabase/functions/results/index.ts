@@ -18,23 +18,26 @@ serveAuthed(async (req, _authHeader, supabase) => {
   const parsed = parseQuery(req, QuerySchema);
   if (parsed instanceof Response) return parsed;
 
-  // Fetch session stage so iOS can show "Complete" / "In Progress" badge.
-  const { data: session } = await supabase
-    .from('sessions')
-    .select('stage')
-    .eq('id', parsed.session_id)
-    .single();
-
-  const { data: photos, error } = await supabase
-    .from('photos')
-    .select(
-      'id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, is_suppressed, cluster_id, quality_flags',
-    )
-    .eq('session_id', parsed.session_id)
-    .eq('is_suppressed', false)
-    .eq('upload_status', 'uploaded')
-    .order('elo_rating', { ascending: false })
-    .limit(parsed.limit);
+  // Session stage (for the iOS "Complete" / "In Progress" badge) and the
+  // ranked photo list are fetched concurrently - neither depends on the
+  // other's result.
+  const [{ data: session }, { data: photos, error }] = await Promise.all([
+    supabase
+      .from('sessions')
+      .select('stage')
+      .eq('id', parsed.session_id)
+      .single(),
+    supabase
+      .from('photos')
+      .select(
+        'id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, is_suppressed, cluster_id, quality_flags',
+      )
+      .eq('session_id', parsed.session_id)
+      .eq('is_suppressed', false)
+      .eq('upload_status', 'uploaded')
+      .order('elo_rating', { ascending: false })
+      .limit(parsed.limit),
+  ]);
 
   if (error) {
     return json({ error: 'Failed to fetch photos' }, 500);

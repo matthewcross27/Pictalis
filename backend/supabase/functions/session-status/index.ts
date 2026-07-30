@@ -17,14 +17,18 @@ serveAuthed(async (req, _authHeader, supabase) => {
 
   const { session_id } = parsed;
 
-  const session = await requireSession(supabase, session_id, 'id, stage, photo_count, top_k');
+  // Session and photos are fetched concurrently - the photos query only
+  // depends on session_id (already known from the parsed request), not on
+  // any field of the session row.
+  const [session, { data: photos, error: photosError }] = await Promise.all([
+    requireSession(supabase, session_id, 'id, stage, photo_count, top_k'),
+    supabase
+      .from('photos')
+      .select('comparison_count, elo_rating, uncertainty')
+      .eq('session_id', session_id)
+      .eq('is_suppressed', false),
+  ]);
   if (session instanceof Response) return session;
-
-  const { data: photos, error: photosError } = await supabase
-    .from('photos')
-    .select('comparison_count, elo_rating, uncertainty')
-    .eq('session_id', session_id)
-    .eq('is_suppressed', false);
 
   if (photosError) {
     return json({ error: 'Failed to fetch photos' }, 500);
