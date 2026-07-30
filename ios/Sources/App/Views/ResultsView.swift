@@ -95,17 +95,7 @@ struct ResultsView: View {
         Color.grainPaper
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 180)
             .overlay {
-                CachedPhotoImage(url: photo.signedUrl, cacheKey: photo.id) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    case .failure:
-                        Image(systemName: "photo")
-                            .foregroundStyle(Color.secondaryText)
-                    default:
-                        EmptyView()
-                    }
-                }
+                ThumbnailPhotoImage(url: photo.signedUrl, cacheKey: photo.id)
             }
             .overlay(alignment: .bottomTrailing) {
                 Button {

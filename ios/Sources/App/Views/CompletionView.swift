@@ -50,17 +50,7 @@ struct CompletionView: View {
                                 Color.grainPaper
                                     .aspectRatio(1, contentMode: .fit)
                                     .overlay {
-                                        CachedPhotoImage(url: photo.signedUrl, cacheKey: photo.id) { phase in
-                                            switch phase {
-                                            case .success(let image):
-                                                image.resizable().scaledToFill()
-                                            case .failure:
-                                                Image(systemName: "photo")
-                                                    .foregroundStyle(Color.secondaryText)
-                                            default:
-                                                EmptyView()
-                                            }
-                                        }
+                                        ThumbnailPhotoImage(url: photo.signedUrl, cacheKey: photo.id)
                                     }
                                     .clipped()
                                     .clipShape(RoundedRectangle(cornerRadius: .photoRadius))

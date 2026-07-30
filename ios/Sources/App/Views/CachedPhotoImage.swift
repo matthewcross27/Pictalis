@@ -52,6 +52,26 @@ struct CachedPhotoImage<Content: View>: View {
     }
 }
 
+/// Grid-cell thumbnail: scales to fill, shows a placeholder icon on failure.
+struct ThumbnailPhotoImage: View {
+    let url: URL
+    let cacheKey: UUID
+
+    var body: some View {
+        CachedPhotoImage(url: url, cacheKey: cacheKey) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().scaledToFill()
+            case .failure:
+                Image(systemName: "photo")
+                    .foregroundStyle(Color.secondaryText)
+            default:
+                EmptyView()
+            }
+        }
+    }
+}
+
 /// Fullscreen tap-to-dismiss photo viewer.
 struct PhotoExpandedView: View {
     let id: UUID
