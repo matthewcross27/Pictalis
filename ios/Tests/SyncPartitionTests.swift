@@ -45,8 +45,16 @@ final class MockSubmitter: CullDecisionSubmitting {
 @MainActor
 final class SyncServiceFlushTests: XCTestCase {
 
+    // An AsyncStream that never yields, in place of a real NWPathMonitor: the real
+    // monitor observes the actual OS network path, which can flip mid-test and race
+    // with the isDraining/paused assumptions these tests set up.
     private func makeService(_ api: MockSubmitter) -> SyncService {
-        SyncService(sessionId: UUID(), api: api, registrationState: { _ in .registered })
+        SyncService(
+            sessionId: UUID(),
+            api: api,
+            registrationState: { _ in .registered },
+            connectivityEvents: AsyncStream<Void> { _ in }
+        )
     }
 
     // The leak that put dropped photos into ranking: a decision recorded while a

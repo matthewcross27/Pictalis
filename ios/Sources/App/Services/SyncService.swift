@@ -20,15 +20,21 @@ final class SyncService {
     private let registrationState: (UUID) -> PhotoRegistrationState
     private var observerTasks: [Task<Void, Never>] = []
     private var streamContinuation: AsyncStream<Void>.Continuation?
+    // nil in production (a real NWPathMonitor is started in startObservers()); tests
+    // inject a stream they control so connectivity-restore drains are deterministic
+    // instead of depending on the real OS network path, which can flip mid-test.
+    private let injectedConnectivityEvents: AsyncStream<Void>?
 
     init(
         sessionId: UUID,
         api: any CullDecisionSubmitting,
-        registrationState: @escaping (UUID) -> PhotoRegistrationState = { _ in .registered }
+        registrationState: @escaping (UUID) -> PhotoRegistrationState = { _ in .registered },
+        connectivityEvents: AsyncStream<Void>? = nil
     ) {
         self.sessionId = sessionId
         self.api = api
         self.registrationState = registrationState
+        self.injectedConnectivityEvents = connectivityEvents
     }
 
     nonisolated static func partition(
@@ -81,17 +87,23 @@ final class SyncService {
         })
 
         // Re-drain on connectivity restore
-        let monitor = NWPathMonitor()
-        self.monitor = monitor
-        let (stream, continuation) = AsyncStream<Void>.makeStream()
-        self.streamContinuation = continuation
-        monitor.pathUpdateHandler = { path in
-            if path.status == .satisfied { continuation.yield() }
+        let connectivityStream: AsyncStream<Void>
+        if let injectedConnectivityEvents {
+            connectivityStream = injectedConnectivityEvents
+        } else {
+            let monitor = NWPathMonitor()
+            self.monitor = monitor
+            let (stream, continuation) = AsyncStream<Void>.makeStream()
+            self.streamContinuation = continuation
+            monitor.pathUpdateHandler = { path in
+                if path.status == .satisfied { continuation.yield() }
+            }
+            monitor.start(queue: DispatchQueue(label: "sync.monitor", qos: .background))
+            connectivityStream = stream
         }
-        monitor.start(queue: DispatchQueue(label: "sync.monitor", qos: .background))
 
         observerTasks.append(Task { @MainActor [weak self] in
-            for await _ in stream { await self?.drain() }
+            for await _ in connectivityStream { await self?.drain() }
         })
     }
 
