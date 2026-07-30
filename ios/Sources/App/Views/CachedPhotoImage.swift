@@ -1,31 +1,51 @@
 import SwiftUI
 import UIKit
+import ImageIO
 
 /// In-memory photo cache keyed by photo id. Signed URLs change between API
 /// responses, which defeats URLCache — keying by id lets a photo downloaded
 /// on one screen render instantly on the next.
+///
+/// Thumbnails and full-quality images are kept in separate NSCaches: grid
+/// cells decode+cache a downsampled copy (see `downsample`) so up to ~300
+/// on-screen thumbnails don't each retain a full 1920px decoded bitmap
+/// (~11MB apiece, multiple GB across a session) for a ~180pt cell.
 final class PhotoMemoryCache: @unchecked Sendable {
     static let shared = PhotoMemoryCache()
-    private let cache = NSCache<NSString, UIImage>()
+    private let fullCache = NSCache<NSString, UIImage>()
+    private let thumbnailCache = NSCache<NSString, UIImage>()
 
-    private init() { cache.countLimit = 300 }
-
-    func image(for key: UUID) -> UIImage? {
-        cache.object(forKey: key.uuidString as NSString)
+    private init() {
+        fullCache.countLimit = 300
+        thumbnailCache.countLimit = 300
     }
 
-    func store(_ image: UIImage, for key: UUID) {
-        cache.setObject(image, forKey: key.uuidString as NSString)
+    func image(for key: UUID, thumbnail: Bool) -> UIImage? {
+        cache(thumbnail).object(forKey: key.uuidString as NSString)
+    }
+
+    func store(_ image: UIImage, for key: UUID, thumbnail: Bool) {
+        let cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
+        cache(thumbnail).setObject(image, forKey: key.uuidString as NSString, cost: cost)
+    }
+
+    private func cache(_ thumbnail: Bool) -> NSCache<NSString, UIImage> {
+        thumbnail ? thumbnailCache : fullCache
     }
 }
 
-/// AsyncImage replacement backed by PhotoMemoryCache.
+/// AsyncImage replacement backed by PhotoMemoryCache. When `thumbnailMaxPixelSize`
+/// is set, the decoded image is downsampled to that size before caching/display,
+/// keeping grid-cell memory use proportional to what's actually on screen.
 struct CachedPhotoImage<Content: View>: View {
     let url: URL
     let cacheKey: UUID
+    var thumbnailMaxPixelSize: CGFloat? = nil
     @ViewBuilder var content: (AsyncImagePhase) -> Content
 
     @State private var phase: AsyncImagePhase = .empty
+
+    private var isThumbnail: Bool { thumbnailMaxPixelSize != nil }
 
     var body: some View {
         content(phase)
@@ -33,22 +53,42 @@ struct CachedPhotoImage<Content: View>: View {
     }
 
     private func load() async {
-        if let cached = PhotoMemoryCache.shared.image(for: cacheKey) {
+        if let cached = PhotoMemoryCache.shared.image(for: cacheKey, thumbnail: isThumbnail) {
             phase = .success(Image(uiImage: cached))
             return
         }
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            guard let uiImage = UIImage(data: data) else {
+            let uiImage: UIImage?
+            if let maxPixelSize = thumbnailMaxPixelSize {
+                uiImage = Self.downsample(data: data, maxPixelSize: maxPixelSize)
+            } else {
+                uiImage = UIImage(data: data)
+            }
+            guard let uiImage else {
                 phase = .failure(URLError(.cannotDecodeContentData))
                 return
             }
             guard !Task.isCancelled else { return }
-            PhotoMemoryCache.shared.store(uiImage, for: cacheKey)
+            PhotoMemoryCache.shared.store(uiImage, for: cacheKey, thumbnail: isThumbnail)
             phase = .success(Image(uiImage: uiImage))
         } catch {
             if !Task.isCancelled { phase = .failure(error) }
         }
+    }
+
+    /// Decodes directly at (approximately) the target pixel size via ImageIO,
+    /// avoiding the full-resolution decode a plain UIImage(data:) would incur.
+    private static func downsample(data: Data, maxPixelSize: CGFloat) -> UIImage? {
+        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else { return nil }
+        let thumbnailOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+        ] as CFDictionary
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else { return nil }
+        return UIImage(cgImage: cgImage)
     }
 }
 
@@ -58,7 +98,9 @@ struct ThumbnailPhotoImage: View {
     let cacheKey: UUID
 
     var body: some View {
-        CachedPhotoImage(url: url, cacheKey: cacheKey) { phase in
+        // 3x the largest grid cell size (~180pt) covers Retina displays with
+        // headroom for scaledToFill cropping, while staying far below full-res.
+        CachedPhotoImage(url: url, cacheKey: cacheKey, thumbnailMaxPixelSize: 540) { phase in
             switch phase {
             case .success(let image):
                 image.resizable().scaledToFill()
