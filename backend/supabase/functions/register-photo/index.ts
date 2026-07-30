@@ -11,10 +11,13 @@ import {
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
-  const user = await requireUser(supabase);
+  // requireUser (an auth-server round trip) and parseBody (no network call,
+  // just reading the request body) are independent - run them concurrently.
+  const [user, parsed] = await Promise.all([
+    requireUser(supabase),
+    parseBody(req, RegisterPhotoBody),
+  ]);
   if (user instanceof Response) return user;
-
-  const parsed = await parseBody(req, RegisterPhotoBody);
   if (parsed instanceof Response) return parsed;
 
   const { session_id, storage_path, photo_id } = parsed;

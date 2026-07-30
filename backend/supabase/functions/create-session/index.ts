@@ -9,10 +9,13 @@ const CreateSessionBody = z.object({
 });
 
 serveAuthed(async (req, _authHeader, supabase) => {
-  const user = await requireUser(supabase);
+  // requireUser (an auth-server round trip) and parseBody (no network call,
+  // just reading the request body) are independent - run them concurrently.
+  const [user, parsed] = await Promise.all([
+    requireUser(supabase),
+    parseBody(req, CreateSessionBody),
+  ]);
   if (user instanceof Response) return user;
-
-  const parsed = await parseBody(req, CreateSessionBody);
   if (parsed instanceof Response) return parsed;
 
   const topK = computeTopK(parsed.photo_count);
