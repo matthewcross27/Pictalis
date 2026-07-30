@@ -2,7 +2,7 @@ import { initSentry } from '../_shared/sentry.ts';
 import { RegisterPhotoBody } from '../_shared/photo-registration.ts';
 import {
   json,
-  parseJsonBody,
+  parseBody,
   requireSession,
   requireUser,
   serveAuthed,
@@ -14,15 +14,10 @@ serveAuthed(async (req, _authHeader, supabase) => {
   const user = await requireUser(supabase);
   if (user instanceof Response) return user;
 
-  const body = await parseJsonBody(req);
-  if (body instanceof Response) return body;
+  const parsed = await parseBody(req, RegisterPhotoBody);
+  if (parsed instanceof Response) return parsed;
 
-  const parsed = RegisterPhotoBody.safeParse(body);
-  if (!parsed.success) {
-    return json({ error: parsed.error.flatten() }, 400);
-  }
-
-  const { session_id, storage_path, photo_id } = parsed.data;
+  const { session_id, storage_path, photo_id } = parsed;
   const [pathUid, pathSessionId, filename] = storage_path.split('/');
 
   if (pathUid !== user.id) {

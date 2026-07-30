@@ -43,6 +43,23 @@ export async function parseJsonBody(req: Request): Promise<unknown | Response> {
   }
 }
 
+// Parses and validates a JSON request body against a zod schema in one step,
+// or returns a 400 Response (invalid JSON, or schema violation) - check
+// `instanceof Response` at the call site before using the result.
+export async function parseBody<T extends z.ZodTypeAny>(
+  req: Request,
+  schema: T,
+): Promise<z.infer<T> | Response> {
+  const body = await parseJsonBody(req);
+  if (body instanceof Response) return body;
+
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    return json({ error: parsed.error.flatten() }, 400);
+  }
+  return parsed.data;
+}
+
 // Returns the authenticated user, or a 401 Response if getUser() fails -
 // check `instanceof Response` at the call site before using the result.
 export async function requireUser(supabase: SupabaseClient): Promise<User | Response> {

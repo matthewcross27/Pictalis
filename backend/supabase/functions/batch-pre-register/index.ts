@@ -1,21 +1,16 @@
 import { BatchPreRegisterBody } from '../_shared/batch-pre-register.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseJsonBody, requireSession, requireUser, serveAuthed } from '../_shared/http.ts';
+import { json, parseBody, requireSession, requireUser, serveAuthed } from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
-  const body = await parseJsonBody(req);
-  if (body instanceof Response) return body;
-
-  const parsed = BatchPreRegisterBody.safeParse(body);
-  if (!parsed.success) {
-    return json({ error: parsed.error.flatten() }, 400);
-  }
+  const parsed = await parseBody(req, BatchPreRegisterBody);
+  if (parsed instanceof Response) return parsed;
 
   const user = await requireUser(supabase);
   if (user instanceof Response) return user;
 
-  const { session_id, photo_ids } = parsed.data;
+  const { session_id, photo_ids } = parsed;
 
   // Verify the session belongs to the authenticated user (RLS handles this,
   // but an explicit check gives a clear 404 rather than a silent empty result).

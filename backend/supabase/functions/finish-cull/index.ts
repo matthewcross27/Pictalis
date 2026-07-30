@@ -1,20 +1,15 @@
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseJsonBody, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
+import { json, parseBody, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
-  const body = await parseJsonBody(req);
-  if (body instanceof Response) return body;
-
-  const parsed = SessionIdSchema.safeParse(body);
-  if (!parsed.success) {
-    return json({ error: parsed.error.flatten() }, 400);
-  }
+  const parsed = await parseBody(req, SessionIdSchema);
+  if (parsed instanceof Response) return parsed;
 
   const { error, count } = await supabase
     .from('sessions')
     .update({ stage: 'ranking' }, { count: 'exact' })
-    .eq('id', parsed.data.session_id)
+    .eq('id', parsed.session_id)
     .eq('stage', 'cull');
 
   if (error) {

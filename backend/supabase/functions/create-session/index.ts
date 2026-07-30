@@ -1,7 +1,7 @@
 import { z } from 'npm:zod@3';
 import { computeTopK } from '../_shared/ranking-logic.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseJsonBody, requireUser, serveAuthed } from '../_shared/http.ts';
+import { json, parseBody, requireUser, serveAuthed } from '../_shared/http.ts';
 initSentry();
 
 const CreateSessionBody = z.object({
@@ -12,19 +12,14 @@ serveAuthed(async (req, _authHeader, supabase) => {
   const user = await requireUser(supabase);
   if (user instanceof Response) return user;
 
-  const body = await parseJsonBody(req);
-  if (body instanceof Response) return body;
+  const parsed = await parseBody(req, CreateSessionBody);
+  if (parsed instanceof Response) return parsed;
 
-  const parsed = CreateSessionBody.safeParse(body);
-  if (!parsed.success) {
-    return json({ error: parsed.error.flatten() }, 400);
-  }
-
-  const topK = computeTopK(parsed.data.photo_count);
+  const topK = computeTopK(parsed.photo_count);
   const { data: session, error } = await supabase
     .from('sessions')
     .insert({
-      photo_count: parsed.data.photo_count,
+      photo_count: parsed.photo_count,
       user_id: user.id,
       top_k: topK,
       stage: 'ranking',

@@ -1,6 +1,6 @@
 import { z } from 'npm:zod@3';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseJsonBody, serveAuthed } from '../_shared/http.ts';
+import { json, parseBody, serveAuthed } from '../_shared/http.ts';
 initSentry();
 
 const BodySchema = z.object({
@@ -12,15 +12,10 @@ const BodySchema = z.object({
 });
 
 serveAuthed(async (req, _authHeader, supabase) => {
-  const body = await parseJsonBody(req);
-  if (body instanceof Response) return body;
+  const parsed = await parseBody(req, BodySchema);
+  if (parsed instanceof Response) return parsed;
 
-  const parsed = BodySchema.safeParse(body);
-  if (!parsed.success) {
-    return json({ error: parsed.error.flatten() }, 400);
-  }
-
-  const { session_id, decisions } = parsed.data;
+  const { session_id, decisions } = parsed;
 
   // Apply each decision to the individual photo only.
   // cull_decision IS NULL guard makes this idempotent - safe to retry.

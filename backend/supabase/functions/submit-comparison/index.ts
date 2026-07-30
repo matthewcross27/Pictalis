@@ -1,7 +1,7 @@
 import { z } from 'npm:zod@3';
 import { updateElo } from '../_shared/elo.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseJsonBody, serveAuthed } from '../_shared/http.ts';
+import { json, parseBody, serveAuthed } from '../_shared/http.ts';
 initSentry();
 
 const SubmitBody = z.object({
@@ -10,15 +10,10 @@ const SubmitBody = z.object({
 });
 
 serveAuthed(async (req, _authHeader, supabase) => {
-  const body = await parseJsonBody(req);
-  if (body instanceof Response) return body;
+  const parsed = await parseBody(req, SubmitBody);
+  if (parsed instanceof Response) return parsed;
 
-  const parsed = SubmitBody.safeParse(body);
-  if (!parsed.success) {
-    return json({ error: parsed.error.flatten() }, 400);
-  }
-
-  const { comparison_id, winner_id } = parsed.data;
+  const { comparison_id, winner_id } = parsed;
 
   // RLS ensures this comparison belongs to the caller's session
   const { data: comparison, error: compError } = await supabase
