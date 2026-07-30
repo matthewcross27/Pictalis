@@ -36,10 +36,6 @@ jobs:
       - name: Lint
         run: deno lint .
       - name: Type-check function entry points
-        run: |
-          for f in */index.ts; do
-            echo "deno check $f"
-            deno check "$f"
-          done
+        run: deno check */index.ts
       - name: Test shared logic
         run: deno test --allow-env _shared/
