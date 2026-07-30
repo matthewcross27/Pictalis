@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import Observation
+import Sentry
 import UIKit
 
 enum PhotoRegistrationState {
@@ -333,7 +334,11 @@ final class PhotoPipeline {
         // Mark the session complete only once the server has been told, so
         // observers waiting on `isComplete` see a settled state.
         Task {
-            try? await self.transport.markUploadComplete(sessionId: self.sessionId)
+            do {
+                try await self.transport.markUploadComplete(sessionId: self.sessionId)
+            } catch {
+                SentrySDK.capture(error: error)
+            }
             self.isComplete = true
         }
     }

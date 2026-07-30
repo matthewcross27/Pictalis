@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Sentry
 import UIKit
 
 // Seam for testing: the one server call SyncService makes. APIClient conforms.
@@ -128,10 +129,15 @@ final class SyncService {
         if !markLocalOnly.isEmpty { store.markSynced(photoIds: markLocalOnly) }
         guard !send.isEmpty else { return }
 
-        let result = try? await retryWithBackoff(delays: [.seconds(1), .seconds(2), .seconds(4)]) {
-            try await self.api.batchSubmitCull(sessionId: self.sessionId, decisions: send)
+        let response: BatchSubmitResponse
+        do {
+            response = try await retryWithBackoff(delays: [.seconds(1), .seconds(2), .seconds(4)]) {
+                try await self.api.batchSubmitCull(sessionId: self.sessionId, decisions: send)
+            }
+        } catch {
+            SentrySDK.capture(error: error)
+            return
         }
-        guard let response = result else { return }
         let succeeded = response.results.filter(\.success).map(\.photoId)
         if !succeeded.isEmpty { store.markSynced(photoIds: succeeded) }
     }
