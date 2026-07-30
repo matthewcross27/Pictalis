@@ -12,7 +12,7 @@ export function calculateExpected(ratingA: number, ratingB: number): number {
 
 export function updateElo(
   winnerRating: number,
-  loserRating: number
+  loserRating: number,
 ): { winnerNew: number; loserNew: number } {
   const expectedWinner = calculateExpected(winnerRating, loserRating);
   const expectedLoser = 1 - expectedWinner;

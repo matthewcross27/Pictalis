@@ -48,6 +48,8 @@ cd ranking-engine
 npm install
 npm test          # 9 tests
 npm run typecheck
+npm run lint
+npm run format:check
 ```
 
 ### Processing worker
