@@ -1,6 +1,6 @@
 import { z } from 'npm:zod@3';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, serveAuthed } from '../_shared/http.ts';
+import { json, serveAuthed, WORKING_COPIES_BUCKET } from '../_shared/http.ts';
 initSentry();
 
 const QuerySchema = z.object({
@@ -43,7 +43,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   const photosWithUrls = await Promise.all(
     (photos ?? []).map(async (photo) => {
       const { data: signed, error: signedError } = await supabase.storage
-        .from('working-copies')
+        .from(WORKING_COPIES_BUCKET)
         .createSignedUrl(photo.storage_path, 3600);
       if (signedError) throw signedError;
       return { ...photo, signed_url: signed?.signedUrl ?? null };

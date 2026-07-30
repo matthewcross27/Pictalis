@@ -11,6 +11,10 @@ export const CORS = {
 // body field (mutations) or a query param (reads) - see call sites.
 export const SessionIdSchema = z.object({ session_id: z.string().uuid() });
 
+// The private Storage bucket compressed working copies are uploaded to and
+// signed-URL'd from - see backend/supabase/migrations/20260517000001_storage_bucket.sql.
+export const WORKING_COPIES_BUCKET = 'working-copies';
+
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,

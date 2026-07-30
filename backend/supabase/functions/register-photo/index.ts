@@ -1,6 +1,13 @@
 import { initSentry } from '../_shared/sentry.ts';
 import { RegisterPhotoBody } from '../_shared/photo-registration.ts';
-import { json, parseJsonBody, requireSession, requireUser, serveAuthed } from '../_shared/http.ts';
+import {
+  json,
+  parseJsonBody,
+  requireSession,
+  requireUser,
+  serveAuthed,
+  WORKING_COPIES_BUCKET,
+} from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
@@ -32,7 +39,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   }
 
   const { data: objects, error: listError } = await supabase.storage
-    .from('working-copies')
+    .from(WORKING_COPIES_BUCKET)
     .list(`${pathUid}/${pathSessionId}`, { search: filename });
 
   if (listError || !objects || !objects.some((o) => o.name === filename)) {
