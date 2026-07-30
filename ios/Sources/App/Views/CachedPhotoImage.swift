@@ -9,7 +9,11 @@ import ImageIO
 /// Thumbnails and full-quality images are kept in separate NSCaches: grid
 /// cells decode+cache a downsampled copy (see `downsample`) so up to ~300
 /// on-screen thumbnails don't each retain a full 1920px decoded bitmap
-/// (~11MB apiece, multiple GB across a session) for a ~180pt cell.
+/// (~11MB apiece, multiple GB across a session) for a ~180pt cell. Both
+/// caches also set `totalCostLimit` (cost = decoded byte size), since a
+/// full ranking session can page through most/all of a session's photos in
+/// ComparisonView/PhotoExpandedView, and `countLimit` alone doesn't bound
+/// fullCache's worst case (up to 300 * ~11MB ≈ 3.3GB).
 final class PhotoMemoryCache: @unchecked Sendable {
     static let shared = PhotoMemoryCache()
     private let fullCache = NSCache<NSString, UIImage>()
@@ -17,7 +21,9 @@ final class PhotoMemoryCache: @unchecked Sendable {
 
     private init() {
         fullCache.countLimit = 300
+        fullCache.totalCostLimit = 200 * 1024 * 1024
         thumbnailCache.countLimit = 300
+        thumbnailCache.totalCostLimit = 150 * 1024 * 1024
     }
 
     func image(for key: UUID, thumbnail: Bool) -> UIImage? {
