@@ -399,7 +399,7 @@ wheels = [
 ]
 
 [[package]]
-name = "pichelper-worker"
+name = "pictalis-worker"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
