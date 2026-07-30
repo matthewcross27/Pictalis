@@ -40,17 +40,15 @@ struct ComparisonView: View {
                     .padding(.vertical, 6)
                 }
 
+                Spacer()
                 if isLoading {
-                    Spacer()
                     VStack(spacing: 12) {
                         ProgressView().tint(Color.amber)
                         Text(waitingForUploads ? "Waiting for photos to finish uploading…" : "Loading photos…")
                             .font(.captionSerif)
                             .foregroundStyle(Color.secondaryText)
                     }
-                    Spacer()
                 } else if let errorMessage {
-                    Spacer()
                     VStack(spacing: 16) {
                         Text(errorMessage)
                             .font(.bodySerif)
@@ -63,9 +61,7 @@ struct ComparisonView: View {
                         .font(.labelSerif)
                         .foregroundStyle(Color.ink)
                     }
-                    Spacer()
                 } else if let pair {
-                    Spacer()
                     VStack(spacing: 8) {
                         photoCard(photo: pair.photoA, dragOffset: $dragOffsetA, hasDragged: $hasDraggedA)
                         photoCard(photo: pair.photoB, dragOffset: $dragOffsetB, hasDragged: $hasDraggedB)
@@ -74,8 +70,8 @@ struct ComparisonView: View {
                     .opacity((isSubmitting || isRemoving) ? 0.7 : 1.0)
                     .disabled(isSubmitting || isRemoving)
                     .animation(.buttonPress, value: isSubmitting)
-                    Spacer()
                 }
+                Spacer()
 
                 bottomBar
             }
