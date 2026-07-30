@@ -7,9 +7,6 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc"
   },
-  "dependencies": {
-    "zod": "^3.22.0"
-  },
   "devDependencies": {
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
