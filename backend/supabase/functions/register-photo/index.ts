@@ -1,13 +1,11 @@
 import { initSentry } from '../_shared/sentry.ts';
 import { RegisterPhotoBody } from '../_shared/photo-registration.ts';
-import { json, parseJsonBody, serveAuthed } from '../_shared/http.ts';
+import { json, parseJsonBody, requireUser, serveAuthed } from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  const user = await requireUser(supabase);
+  if (user instanceof Response) return user;
 
   const body = await parseJsonBody(req);
   if (body instanceof Response) return body;

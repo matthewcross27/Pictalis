@@ -1,6 +1,6 @@
 import { BatchPreRegisterBody } from '../_shared/batch-pre-register.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseJsonBody, serveAuthed } from '../_shared/http.ts';
+import { json, parseJsonBody, requireUser, serveAuthed } from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
@@ -12,10 +12,8 @@ serveAuthed(async (req, _authHeader, supabase) => {
     return json({ error: parsed.error.flatten() }, 400);
   }
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  const user = await requireUser(supabase);
+  if (user instanceof Response) return user;
 
   const { session_id, photo_ids } = parsed.data;
 

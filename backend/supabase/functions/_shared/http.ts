@@ -1,5 +1,5 @@
 import { z } from 'npm:zod@3';
-import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient, type User } from 'jsr:@supabase/supabase-js@2';
 import { Sentry } from './sentry.ts';
 
 export const CORS = {
@@ -34,6 +34,16 @@ export async function parseJsonBody(req: Request): Promise<unknown | Response> {
   } catch {
     return json({ error: 'Invalid JSON body' }, 400);
   }
+}
+
+// Returns the authenticated user, or a 401 Response if getUser() fails -
+// check `instanceof Response` at the call site before using the result.
+export async function requireUser(supabase: SupabaseClient): Promise<User | Response> {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) {
+    return json({ error: 'Unauthorized' }, 401);
+  }
+  return user;
 }
 
 // Wraps a handler with the boilerplate every Edge Function repeated
