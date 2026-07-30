@@ -80,12 +80,7 @@ final class PhotoPipeline {
         if let connectivityEvents {
             self.connectivityEvents = connectivityEvents
         } else {
-            let monitor = NWPathMonitor()
-            let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
-            monitor.pathUpdateHandler = { path in
-                if path.status == .satisfied { continuation.yield() }
-            }
-            monitor.start(queue: DispatchQueue(label: "pipeline.connectivity", qos: .background))
+            let (stream, monitor) = ConnectivityMonitor.makeStream(label: "pipeline.connectivity")
             self.connectivityEvents = stream
             self.monitor = monitor
         }

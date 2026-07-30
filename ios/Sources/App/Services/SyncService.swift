@@ -19,7 +19,6 @@ final class SyncService {
     private var monitor:   NWPathMonitor?
     private let registrationState: (UUID) -> PhotoRegistrationState
     private var observerTasks: [Task<Void, Never>] = []
-    private var streamContinuation: AsyncStream<Void>.Continuation?
     // nil in production (a real NWPathMonitor is started in startObservers()); tests
     // inject a stream they control so connectivity-restore drains are deterministic
     // instead of depending on the real OS network path, which can flip mid-test.
@@ -91,14 +90,8 @@ final class SyncService {
         if let injectedConnectivityEvents {
             connectivityStream = injectedConnectivityEvents
         } else {
-            let monitor = NWPathMonitor()
+            let (stream, monitor) = ConnectivityMonitor.makeStream(label: "sync.monitor")
             self.monitor = monitor
-            let (stream, continuation) = AsyncStream<Void>.makeStream()
-            self.streamContinuation = continuation
-            monitor.pathUpdateHandler = { path in
-                if path.status == .satisfied { continuation.yield() }
-            }
-            monitor.start(queue: DispatchQueue(label: "sync.monitor", qos: .background))
             connectivityStream = stream
         }
 
@@ -110,15 +103,12 @@ final class SyncService {
     func stop() {
         for task in observerTasks { task.cancel() }
         observerTasks.removeAll()
-        streamContinuation?.finish()
-        streamContinuation = nil
         monitor?.cancel()
         monitor = nil
     }
 
     deinit {
         for task in observerTasks { task.cancel() }
-        streamContinuation?.finish()
         monitor?.cancel()
     }
 
