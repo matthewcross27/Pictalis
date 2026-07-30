@@ -9,7 +9,7 @@ password, or Apple ID is needed.
 ## Step-by-Step Demo for Reviewers
 
 1. Open the app
-2. Tap "Choose Photos" and grant photo library access when prompted
+2. Tap "Choose photos" and grant photo library access when prompted
 3. Select 5–20 photos from your library (at least 5 for a meaningful session)
 4. Tap "Start Curating"
 5. On the next screen, tap "Filter then rank" to do a quick cull pass (optional),
@@ -82,4 +82,4 @@ Final Smoke Test (on device or simulator, Release build)
     "Pictalis needs access to your photos to help you curate your favorites."
 [ ] Session can be created and first comparison displayed within 10 seconds
 [ ] Tapping a comparison photo advances to the next pair
-[ ] "See My Rankings" shows a ranked list of photos
+[ ] "See Full Rankings" shows a ranked list of photos
