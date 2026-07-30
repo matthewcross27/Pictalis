@@ -220,6 +220,7 @@ final class PhotoPipeline {
             if items[id]?.materializeAttempts == 1 {
                 await materialize(id) // one immediate retry
             } else {
+                SentrySDK.capture(error: error)
                 items[id]?.state = .failed
                 updateFailedIds()
                 resumeWaiters(for: id, with: .failure(PipelineError.photoUnavailable))
@@ -293,6 +294,7 @@ final class PhotoPipeline {
             registeredCount += 1
             updateFailedIds()
         } catch {
+            SentrySDK.capture(error: error)
             if items[id]?.state == .uploading { items[id]?.state = .parked }
             updateFailedIds()
         }

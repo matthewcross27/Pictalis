@@ -1,3 +1,4 @@
+import Sentry
 import SwiftUI
 import UIKit
 import ImageIO
@@ -79,7 +80,10 @@ struct CachedPhotoImage<Content: View>: View {
             PhotoMemoryCache.shared.store(uiImage, for: cacheKey, thumbnail: isThumbnail)
             phase = .success(Image(uiImage: uiImage))
         } catch {
-            if !Task.isCancelled { phase = .failure(error) }
+            if !Task.isCancelled {
+                SentrySDK.capture(error: error)
+                phase = .failure(error)
+            }
         }
     }
 

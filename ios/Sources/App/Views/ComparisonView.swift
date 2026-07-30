@@ -304,6 +304,7 @@ struct ComparisonView: View {
                 try? await Task.sleep(for: delay)
                 delay = min(delay * 2, .seconds(4))
             } catch {
+                SentrySDK.capture(error: error)
                 errorMessage = "Failed to load next pair: \(error.localizedDescription)"
                 isLoading = false
                 return

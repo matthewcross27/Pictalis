@@ -1,3 +1,4 @@
+import Sentry
 import SwiftUI
 
 struct CullView: View {
@@ -232,6 +233,7 @@ struct CullView: View {
             try await api.finishCull(sessionId: sessionId)
             onComplete()
         } catch {
+            SentrySDK.capture(error: error)
             finishFailed = true
         }
         isFinishing = false

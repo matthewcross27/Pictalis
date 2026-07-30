@@ -137,6 +137,7 @@ struct ResultsView: View {
             sessionStage = (response.session?.stage).flatMap { RankingStage(rawValue: $0) }
             isSessionComplete = response.session?.isComplete ?? false
         } catch {
+            SentrySDK.capture(error: error)
             // Keep showing initial photos if the full fetch fails.
             if photos.isEmpty {
                 errorMessage = "Failed to load results: \(error.localizedDescription)"
