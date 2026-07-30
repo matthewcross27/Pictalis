@@ -85,7 +85,7 @@ MVP feature-complete. Core flow is end-to-end functional:
 |-----------|--------|
 | iOS app | Full flow: session setup → photo selection → pairwise comparison → results/completion |
 | Backend edge functions | 12 deployed: `create-session`, `register-photo`, `batch-pre-register`, `next-pair`, `submit-comparison`, `session-status`, `results`, `remove-photo`, `mark-upload-complete`, `start-cull`, `batch-submit-cull`, `finish-cull` |
-| Database | 16 migrations applied: schema, storage, RLS, atomic comparison, phash, session stages, adaptive ranking, dedup stage, upload pipeline, local-first cull stage |
+| Database | 18 migrations applied: schema, storage, RLS (+ perf hardening), atomic comparison, phash, session stages, adaptive ranking, dedup stage, upload pipeline, local-first cull stage |
 | Ranking engine | Elo + adaptive pair selection (9 tests passing) |
 | Processing worker | Scaffolded — embeddings/clustering not yet wired |
 
