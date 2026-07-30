@@ -24,9 +24,6 @@ extension AppState: Equatable {
 }
 
 struct ContentView: View {
-    @Environment(AuthService.self) private var auth
-    @Environment(APIClient.self) private var api
-
     @State private var appState: AppState = .setup
 
     var body: some View {
