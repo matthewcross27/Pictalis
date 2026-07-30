@@ -172,8 +172,8 @@ final class APIClient {
     func batchSubmitCull(sessionId: UUID, decisions: [StoredDecision]) async throws -> BatchSubmitResponse {
         let req = try buildRequest(path: "batch-submit-cull", method: "POST", body: [
             "session_id": sessionId.lowercased,
-            "decisions":  decisions.map { d in
-                ["photo_id": d.photoId.lowercased, "decision": d.decision.rawValue]
+            "decisions":  decisions.map { item in
+                ["photo_id": item.photoId.lowercased, "decision": item.decision.rawValue]
             },
         ])
         let data = try await send(req)

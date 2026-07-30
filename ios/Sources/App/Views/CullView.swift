@@ -79,16 +79,15 @@ struct CullView: View {
 
     private func initialize() async {
         let provider = LocalCardProvider(pipeline: pipeline)
-        let p = pipeline
-        let ss = SyncService(
+        let sync = SyncService(
             sessionId: sessionId,
             api: api,
-            registrationState: { p.registrationState(for: $0) }
+            registrationState: { pipeline.registrationState(for: $0) }
         )
         cardProvider = provider
-        syncService  = ss
+        syncService  = sync
 
-        async let syncReady: Void = ss.start(store: decisionStore)
+        async let syncReady: Void = sync.start(store: decisionStore)
         let decidedIds = await decisionStore.load(sessionId: sessionId)
         await provider.start(excluding: decidedIds)
         await syncReady

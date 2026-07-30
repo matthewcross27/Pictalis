@@ -19,9 +19,9 @@ final class DecisionStore {
         decisions = await persistence.load(sessionId: sessionId)
         // Capture stream and persistence by value to avoid retaining self in the Task.
         // The stream terminates when deinit calls continuation.finish().
-        let s = stream
-        let p = persistence
-        Task { await p.run(stream: s, sessionId: sessionId) }
+        let capturedStream = stream
+        let capturedPersistence = persistence
+        Task { await capturedPersistence.run(stream: capturedStream, sessionId: sessionId) }
         return allDecidedIds
     }
 

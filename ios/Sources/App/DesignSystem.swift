@@ -171,11 +171,11 @@ extension View {
 // MARK: - Expanded Photo Cover
 
 extension View {
-    /// Presents `PhotoExpandedView` full-screen for `photo` whenever it's non-nil,
+    /// Presents `PhotoExpandedView` full-screen for `expandedPhoto` whenever it's non-nil,
     /// clearing it back to nil on dismissal.
-    func expandedPhotoCover(_ photo: Binding<RankedPhoto?>) -> some View {
-        fullScreenCover(item: photo) { p in
-            PhotoExpandedView(id: p.id, signedUrl: p.signedUrl) { photo.wrappedValue = nil }
+    func expandedPhotoCover(_ expandedPhoto: Binding<RankedPhoto?>) -> some View {
+        fullScreenCover(item: expandedPhoto) { photo in
+            PhotoExpandedView(id: photo.id, signedUrl: photo.signedUrl) { expandedPhoto.wrappedValue = nil }
         }
     }
 }
