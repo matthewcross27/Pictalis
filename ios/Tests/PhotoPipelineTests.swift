@@ -5,13 +5,16 @@ import XCTest
 // MARK: - Test fixtures
 
 enum TestImage {
-    static func jpegData(width: CGFloat = 64, height: CGFloat = 48) -> Data {
+    static func make(width: CGFloat = 64, height: CGFloat = 48, color: UIColor = .systemTeal) -> UIImage {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
-        let image = renderer.image { ctx in
-            UIColor.systemTeal.setFill()
+        return renderer.image { ctx in
+            color.setFill()
             ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
         }
-        return image.jpegData(compressionQuality: 0.8)!
+    }
+
+    static func jpegData(width: CGFloat = 64, height: CGFloat = 48) -> Data {
+        make(width: width, height: height).jpegData(compressionQuality: 0.8)!
     }
 }
 

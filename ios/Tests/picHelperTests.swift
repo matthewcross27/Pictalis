@@ -86,12 +86,7 @@ final class APIClientTests: XCTestCase {
 
 final class ImageCompressorTests: XCTestCase {
     func testCompressionScalesLargeImage() async throws {
-        // Draw a 3000×2000 image in memory
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 3000, height: 2000))
-        let image = renderer.image { ctx in
-            UIColor.systemBlue.setFill()
-            ctx.fill(CGRect(x: 0, y: 0, width: 3000, height: 2000))
-        }
+        let image = TestImage.make(width: 3000, height: 2000, color: .systemBlue)
         let data = try ImageCompressor.compressImage(image)
         let compressed = UIImage(data: data)!
         // Longest edge must be ≤ 1920
@@ -101,11 +96,7 @@ final class ImageCompressorTests: XCTestCase {
     }
 
     func testCompressionPreservesSmallImage() async throws {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 800, height: 600))
-        let image = renderer.image { ctx in
-            UIColor.systemRed.setFill()
-            ctx.fill(CGRect(x: 0, y: 0, width: 800, height: 600))
-        }
+        let image = TestImage.make(width: 800, height: 600, color: .systemRed)
         let data = try ImageCompressor.compressImage(image)
         let compressed = UIImage(data: data)!
         // Small image must not be upscaled
