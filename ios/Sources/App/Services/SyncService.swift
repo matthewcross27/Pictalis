@@ -135,20 +135,11 @@ final class SyncService {
         if !markLocalOnly.isEmpty { store.markSynced(photoIds: markLocalOnly) }
         guard !send.isEmpty else { return }
 
-        let backoff: [Duration] = [.seconds(1), .seconds(2), .seconds(4)]
-        var attempt = 0
-
-        while true {
-            do {
-                let response = try await api.batchSubmitCull(sessionId: sessionId, decisions: send)
-                let succeeded = response.results.filter(\.success).map(\.photoId)
-                if !succeeded.isEmpty { store.markSynced(photoIds: succeeded) }
-                return
-            } catch {
-                guard attempt < backoff.count else { return }
-                try? await Task.sleep(for: backoff[attempt])
-                attempt += 1
-            }
+        let result = try? await retryWithBackoff(delays: [.seconds(1), .seconds(2), .seconds(4)]) {
+            try await self.api.batchSubmitCull(sessionId: self.sessionId, decisions: send)
         }
+        guard let response = result else { return }
+        let succeeded = response.results.filter(\.success).map(\.photoId)
+        if !succeeded.isEmpty { store.markSynced(photoIds: succeeded) }
     }
 }

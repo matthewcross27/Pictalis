@@ -290,14 +290,16 @@ final class PhotoPipeline {
         let storagePath = "\(userId.uuidString.lowercased())/\(sessionId.uuidString.lowercased())/\(id.uuidString.lowercased()).jpg"
         do {
             if items[id]?.didUpload != true {
-                try await withRetries { try await self.transport.upload(storagePath: storagePath, data: data) }
+                try await retryWithBackoff(delays: retryDelays, jitter: 0...300) {
+                    try await self.transport.upload(storagePath: storagePath, data: data)
+                }
                 items[id]?.didUpload = true
             }
             // Photo may have been dropped while bytes were in flight. Skip
             // markUploaded — the drop is already on the server (is_suppressed=true),
             // and upload_status staying 'pending' is a second exclusion from ranking.
             guard items[id]?.state == .uploading else { return }
-            try await withRetries {
+            try await retryWithBackoff(delays: retryDelays, jitter: 0...300) {
                 try await self.transport.markUploaded(sessionId: self.sessionId, photoId: id, storagePath: storagePath)
             }
             items[id]?.state = .uploaded
@@ -306,23 +308,6 @@ final class PhotoPipeline {
         } catch {
             if items[id]?.state == .uploading { items[id]?.state = .parked }
             updateFailedIds()
-        }
-    }
-
-    private func withRetries(_ operation: () async throws -> Void) async throws {
-        var attempt = 0
-        while true {
-            do {
-                try await operation()
-                return
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                guard attempt < retryDelays.count else { throw error }
-                let jitter = Duration.milliseconds(Int.random(in: 0...300))
-                try await Task.sleep(for: retryDelays[attempt] + jitter)
-                attempt += 1
-            }
         }
     }
 
