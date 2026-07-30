@@ -89,6 +89,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
     minComparisons,
     totalComparisons(typedPhotos),
     session.photo_count,
+    allHaveCoverage,
   );
 
   if (complete) {

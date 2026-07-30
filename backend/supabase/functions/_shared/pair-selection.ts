@@ -1,4 +1,4 @@
-import { type CompletedComparison, type Photo } from './ranking-logic.ts';
+import { type CompletedComparison, type Photo, sortByEloDesc } from './ranking-logic.ts';
 
 export const BOUNDARY_ALPHA = 1;
 export const WEIGHTS_POST = {
@@ -48,7 +48,7 @@ export function selectPhotoA(
   }
 
   // Priority = uncertainty × boundary weight (α=1, symmetric around topK)
-  const byElo = [...photos].sort((a, b) => b.elo_rating - a.elo_rating);
+  const byElo = sortByEloDesc(photos);
   const rankOf = new Map(byElo.map((p, i) => [p.id, i + 1]));
 
   let best = -Infinity;
@@ -115,7 +115,7 @@ export function totalComparisons(
 }
 
 export function computeProgress(photos: Photo[], topK: number): number {
-  const byElo = [...photos].sort((a, b) => b.elo_rating - a.elo_rating);
+  const byElo = sortByEloDesc(photos);
   const boundary = byElo[Math.min(topK - 1, byElo.length - 1)]!;
   return Math.min(1, 1 - boundary.uncertainty / 350);
 }

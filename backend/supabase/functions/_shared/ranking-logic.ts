@@ -28,12 +28,18 @@ export function resolveTopKAndMinComparisons(
   return { topK, minComparisons };
 }
 
+export function sortByEloDesc<T extends Pick<Photo, 'elo_rating'>>(
+  photos: T[],
+): T[] {
+  return [...photos].sort((a, b) => b.elo_rating - a.elo_rating);
+}
+
 export function isBoundaryStable(
   photos: Pick<Photo, 'elo_rating' | 'uncertainty' | 'comparison_count'>[],
   topK: number,
 ): boolean {
   if (photos.length <= topK) return true;
-  const byElo = [...photos].sort((a, b) => b.elo_rating - a.elo_rating);
+  const byElo = sortByEloDesc(photos);
   const boundary = byElo[topK - 1]!;
   const contenders = byElo.slice(topK, Math.min(topK + 3, byElo.length));
   return !contenders.some(
@@ -54,15 +60,21 @@ export function hasFullCoverage(
 // Session is complete once every photo has its coverage floor met and the
 // top-K boundary has stabilized, or once the comparison budget is exhausted
 // as a safety net against never-stabilizing sessions.
+//
+// allHaveCoverage defaults to being derived internally, but callers that
+// already computed it (e.g. next-pair, which also needs it to pick weights
+// for photo B) can pass it in to avoid recomputing it a second time.
 export function isSessionComplete(
   photos: Pick<Photo, 'elo_rating' | 'uncertainty' | 'comparison_count'>[],
   topK: number,
   minComparisons: number,
   totalComparisons: number,
   photoCount: number,
+  allHaveCoverage: boolean = hasFullCoverage(photos, minComparisons),
 ): boolean {
-  const allHaveCoverage = hasFullCoverage(photos, minComparisons);
-  const stable = isBoundaryStable(photos, topK);
+  // Short-circuits past the boundary-stability sort once coverage isn't met,
+  // since its result can't change the outcome in that case.
+  const stable = allHaveCoverage && isBoundaryStable(photos, topK);
   const exhausted = totalComparisons >= photoCount * 4;
-  return (allHaveCoverage && stable) || exhausted;
+  return stable || exhausted;
 }
