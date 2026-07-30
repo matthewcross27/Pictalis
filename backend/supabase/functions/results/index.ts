@@ -40,18 +40,26 @@ serveAuthed(async (req, _authHeader, supabase) => {
     return json({ error: 'Failed to fetch photos' }, 500);
   }
 
-  const photosWithUrls = await Promise.all(
-    (photos ?? []).map(async (photo) => {
-      const { data: signed, error: signedError } = await supabase.storage
-        .from(WORKING_COPIES_BUCKET)
-        .createSignedUrl(photo.storage_path, SIGNED_URL_EXPIRY_SECONDS);
-      if (signedError) throw signedError;
-      return { ...photo, signed_url: signed?.signedUrl ?? null };
-    }),
-  ).catch(() => null);
-
-  if (!photosWithUrls) {
-    return json({ error: 'Failed to generate photo URLs' }, 500);
+  const photoList = photos ?? [];
+  let photosWithUrls: (typeof photoList[number] & { signed_url: string | null })[];
+  if (photoList.length === 0) {
+    photosWithUrls = [];
+  } else {
+    // Single batch call instead of one createSignedUrl round trip per photo
+    // (up to `limit`, i.e. 100, photos per request).
+    const { data: signedUrls, error: signError } = await supabase.storage
+      .from(WORKING_COPIES_BUCKET)
+      .createSignedUrls(
+        photoList.map((photo) => photo.storage_path),
+        SIGNED_URL_EXPIRY_SECONDS,
+      );
+    if (signError || !signedUrls || signedUrls.some((s) => s.error)) {
+      return json({ error: 'Failed to generate photo URLs' }, 500);
+    }
+    photosWithUrls = photoList.map((photo, i) => ({
+      ...photo,
+      signed_url: signedUrls[i]!.signedUrl,
+    }));
   }
 
   return json({
