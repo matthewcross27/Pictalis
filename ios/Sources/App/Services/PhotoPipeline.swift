@@ -205,8 +205,7 @@ final class PhotoPipeline {
         do {
             let raw = try await loader.loadData()
             let jpeg = try await Task.detached(priority: .userInitiated) {
-                guard let image = UIImage(data: raw) else { throw CompressionError.noImageData }
-                return try ImageCompressor.compressImage(image)
+                try ImageCompressor.compressData(raw)
             }.value
             // The photo may have been dropped while we were decoding.
             guard items[id]?.state == .pending else { return }

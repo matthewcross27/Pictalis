@@ -1,3 +1,4 @@
+import ImageIO
 import UIKit
 
 enum CompressionError: Error {
@@ -9,10 +10,32 @@ enum ImageCompressor {
     static let maxDimension: CGFloat = 1920
     static let jpegQuality: CGFloat = 0.75
 
+    // Downsamples raw image bytes straight to ~maxDimension via ImageIO, without ever
+    // decoding the source at native resolution first (source photos can be 12-48MP,
+    // so a full decode-then-resize would spike memory/CPU for every photo materialized).
+    static func compressData(_ data: Data) throws -> Data {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            throw CompressionError.noImageData
+        }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension,
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            throw CompressionError.noImageData
+        }
+        return try encodeJPEG(UIImage(cgImage: cgImage))
+    }
+
     // Exposed for unit tests: scale + JPEG-encode a UIImage directly.
     static func compressImage(_ image: UIImage) throws -> Data {
         let scaled = scale(image, maxDimension: maxDimension)
-        guard let data = scaled.jpegData(compressionQuality: jpegQuality) else {
+        return try encodeJPEG(scaled)
+    }
+
+    private static func encodeJPEG(_ image: UIImage) throws -> Data {
+        guard let data = image.jpegData(compressionQuality: jpegQuality) else {
             throw CompressionError.encodingFailed
         }
         return data
