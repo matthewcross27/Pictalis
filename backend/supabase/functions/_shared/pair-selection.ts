@@ -135,18 +135,16 @@ function buildClusterGroups(photos: Photo[]): Map<string, Photo[]> {
   return groups;
 }
 
-export function isDedupComplete(
+function countCompletedIntraComparisons(
   photos: Photo[],
   comparisons: IntraComparison[],
-): boolean {
-  const clusterGroups = buildClusterGroups(photos);
-  if (clusterGroups.size === 0) return true;
-
+): Map<string, number> {
+  const photosById = new Map(photos.map((p) => [p.id, p]));
   const completedIntraCount = new Map<string, number>();
   for (const c of comparisons) {
     if (!c.completed_at) continue;
-    const photoA = photos.find((p) => p.id === c.photo_a_id);
-    const photoB = photos.find((p) => p.id === c.photo_b_id);
+    const photoA = photosById.get(c.photo_a_id);
+    const photoB = photosById.get(c.photo_b_id);
     if (!photoA?.cluster_id || photoA.cluster_id !== photoB?.cluster_id) {
       continue;
     }
@@ -156,6 +154,20 @@ export function isDedupComplete(
       (completedIntraCount.get(clusterId) ?? 0) + 1,
     );
   }
+  return completedIntraCount;
+}
+
+export function isDedupComplete(
+  photos: Photo[],
+  comparisons: IntraComparison[],
+): boolean {
+  const clusterGroups = buildClusterGroups(photos);
+  if (clusterGroups.size === 0) return true;
+
+  const completedIntraCount = countCompletedIntraComparisons(
+    photos,
+    comparisons,
+  );
 
   for (const [clusterId, members] of clusterGroups) {
     if (members.length < 2) continue;
@@ -170,20 +182,10 @@ export function selectDedupPair(
   comparisons: IntraComparison[],
 ): [Photo, Photo] {
   const clusterGroups = buildClusterGroups(photos);
-
-  const completedIntraCount = new Map<string, number>();
-  for (const c of comparisons) {
-    if (!c.completed_at) continue;
-    const photoA = photos.find((p) => p.id === c.photo_a_id);
-    const photoB = photos.find((p) => p.id === c.photo_b_id);
-    if (!photoA?.cluster_id || photoA.cluster_id !== photoB?.cluster_id) {
-      continue;
-    }
-    completedIntraCount.set(
-      photoA.cluster_id,
-      (completedIntraCount.get(photoA.cluster_id) ?? 0) + 1,
-    );
-  }
+  const completedIntraCount = countCompletedIntraComparisons(
+    photos,
+    comparisons,
+  );
 
   // Find the unresolved cluster with the fewest completed comparisons.
   let targetCluster: Photo[] | null = null;
