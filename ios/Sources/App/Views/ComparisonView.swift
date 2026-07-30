@@ -252,11 +252,9 @@ struct ComparisonView: View {
         }
         isRemoving = false
         self.pair = nil
-        if let status = try? await api.sessionStatus(sessionId: sessionId), status.isComplete {
-            onComplete(status.totalComparisons)
-        } else {
-            await fetchNextPair()
-        }
+        // fetchNextPair() already detects and handles session completion via
+        // its own 422-triggered sessionStatus check - no need to check here too.
+        await fetchNextPair()
     }
 
     private func fetchNextPair() async {
