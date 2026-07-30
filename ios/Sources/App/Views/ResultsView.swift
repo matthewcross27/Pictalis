@@ -14,6 +14,7 @@ struct ResultsView: View {
     @State private var expandedPhoto: RankedPhoto?
     @State private var errorMessage: String?
     @State private var exportingId: UUID?
+    @State private var isExportingAll = false
     @State private var exportAlertMessage: String?
     @State private var sessionStage: RankingStage?
     @State private var isSessionComplete = false
@@ -66,10 +67,10 @@ struct ResultsView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Export All") { exportAll() }
+                    Button("Export All") { Task { @MainActor in await exportAll() } }
                         .font(.labelSerif)
                         .foregroundStyle(Color.amber)
-                        .disabled(photos.isEmpty)
+                        .disabled(photos.isEmpty || isExportingAll)
                         .accessibilityLabel("Save to Photos library")
                         .accessibilityHint("Save all ranked photos to your Photos library")
                 }
@@ -158,15 +159,12 @@ struct ResultsView: View {
         }
     }
 
-    private func exportAll() {
-        Task { @MainActor in
-            var saved = 0
-            for photo in photos {
-                if await exportPhoto(photo: photo) { saved += 1 }
-            }
-            if saved > 0 {
-                exportAlertMessage = PhotoExporter.savedMessage(count: saved)
-            }
+    private func exportAll() async {
+        isExportingAll = true
+        let saved = await PhotoExporter.exportAll(photos)
+        isExportingAll = false
+        if saved > 0 {
+            exportAlertMessage = PhotoExporter.savedMessage(count: saved)
         }
     }
 }
