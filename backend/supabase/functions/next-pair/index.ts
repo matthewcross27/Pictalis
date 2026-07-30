@@ -17,6 +17,7 @@ import { initSentry } from '../_shared/sentry.ts';
 import {
   json,
   markSessionComplete,
+  parseQuery,
   requireSession,
   serveAuthed,
   SessionIdSchema,
@@ -26,15 +27,10 @@ import {
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
-  const url = new URL(req.url);
-  const parsed = SessionIdSchema.safeParse({
-    session_id: url.searchParams.get('session_id'),
-  });
-  if (!parsed.success) {
-    return json({ error: parsed.error.flatten() }, 400);
-  }
+  const parsed = parseQuery(req, SessionIdSchema);
+  if (parsed instanceof Response) return parsed;
 
-  const { session_id } = parsed.data;
+  const { session_id } = parsed;
 
   // 1. Fetch session
   const session = await requireSession(supabase, session_id, 'id, stage, photo_count, top_k');

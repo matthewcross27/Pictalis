@@ -1,6 +1,12 @@
 import { z } from 'npm:zod@3';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, serveAuthed, SIGNED_URL_EXPIRY_SECONDS, WORKING_COPIES_BUCKET } from '../_shared/http.ts';
+import {
+  json,
+  parseQuery,
+  serveAuthed,
+  SIGNED_URL_EXPIRY_SECONDS,
+  WORKING_COPIES_BUCKET,
+} from '../_shared/http.ts';
 initSentry();
 
 const QuerySchema = z.object({
@@ -9,20 +15,14 @@ const QuerySchema = z.object({
 });
 
 serveAuthed(async (req, _authHeader, supabase) => {
-  const url = new URL(req.url);
-  const parsed = QuerySchema.safeParse({
-    session_id: url.searchParams.get('session_id'),
-    limit: url.searchParams.get('limit') ?? 20,
-  });
-  if (!parsed.success) {
-    return json({ error: parsed.error.flatten() }, 400);
-  }
+  const parsed = parseQuery(req, QuerySchema);
+  if (parsed instanceof Response) return parsed;
 
   // Fetch session stage so iOS can show "Complete" / "In Progress" badge.
   const { data: session } = await supabase
     .from('sessions')
     .select('stage')
-    .eq('id', parsed.data.session_id)
+    .eq('id', parsed.session_id)
     .single();
 
   const { data: photos, error } = await supabase
@@ -30,11 +30,11 @@ serveAuthed(async (req, _authHeader, supabase) => {
     .select(
       'id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, is_suppressed, cluster_id, quality_flags',
     )
-    .eq('session_id', parsed.data.session_id)
+    .eq('session_id', parsed.session_id)
     .eq('is_suppressed', false)
     .eq('upload_status', 'uploaded')
     .order('elo_rating', { ascending: false })
-    .limit(parsed.data.limit);
+    .limit(parsed.limit);
 
   if (error) {
     return json({ error: 'Failed to fetch photos' }, 500);

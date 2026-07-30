@@ -60,6 +60,21 @@ export async function parseBody<T extends z.ZodTypeAny>(
   return parsed.data;
 }
 
+// Parses and validates a request URL's query params against a zod schema in
+// one step, or returns a 400 Response (schema violation) - check `instanceof
+// Response` at the call site before using the result.
+export function parseQuery<T extends z.ZodTypeAny>(
+  req: Request,
+  schema: T,
+): z.infer<T> | Response {
+  const url = new URL(req.url);
+  const parsed = schema.safeParse(Object.fromEntries(url.searchParams));
+  if (!parsed.success) {
+    return json({ error: parsed.error.flatten() }, 400);
+  }
+  return parsed.data;
+}
+
 // Returns the authenticated user, or a 401 Response if getUser() fails -
 // check `instanceof Response` at the call site before using the result.
 export async function requireUser(supabase: SupabaseClient): Promise<User | Response> {
