@@ -4,6 +4,7 @@ import {
   isSessionComplete,
   type Photo,
   resolveTopKAndMinComparisons,
+  sortByEloDesc,
 } from '../_shared/ranking-logic.ts';
 import {
   buildPairCounts,
@@ -83,6 +84,10 @@ serveAuthed(async (req, _authHeader, supabase) => {
 
   // 4. Check completion (safety net - session-status also writes this)
   const allHaveCoverage = hasFullCoverage(photos, minComparisons);
+  // Once coverage is met, isBoundaryStable/selectPhotoA/computeProgress all
+  // sort the same immutable photos array by elo - compute it once here and
+  // reuse it instead of sorting up to 3 times per request.
+  const sortedByElo = allHaveCoverage ? sortByEloDesc(typedPhotos) : undefined;
   const complete = isSessionComplete(
     typedPhotos,
     topK,
@@ -90,6 +95,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
     totalComparisons(typedPhotos),
     session.photo_count,
     allHaveCoverage,
+    sortedByElo,
   );
 
   if (complete) {
@@ -99,7 +105,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
 
   // 5. Select Photo A and Photo B
   const inCoverage = !allHaveCoverage;
-  const photoA = selectPhotoA(typedPhotos, topK, minComparisons);
+  const photoA = selectPhotoA(typedPhotos, topK, minComparisons, sortedByElo);
   const photoB = selectPhotoB(
     typedPhotos,
     photoA,
@@ -139,7 +145,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   return json({
     comparison_id: comparison.id,
     stage: session.stage,
-    progress: computeProgress(typedPhotos, topK),
+    progress: computeProgress(typedPhotos, topK, sortedByElo),
     photo_a: { ...photoA, signed_url: signedA.signedUrl },
     photo_b: { ...photoB, signed_url: signedB.signedUrl },
   });

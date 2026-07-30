@@ -39,6 +39,7 @@ export function selectPhotoA(
   photos: Photo[],
   topK: number,
   minComparisons: number,
+  sortedByElo?: Photo[],
 ): Photo {
   // Coverage floor: under-compared photos always win
   const under = photos.filter((p) => p.comparison_count < minComparisons);
@@ -48,7 +49,7 @@ export function selectPhotoA(
   }
 
   // Priority = uncertainty × boundary weight (α=1, symmetric around topK)
-  const byElo = sortByEloDesc(photos);
+  const byElo = sortedByElo ?? sortByEloDesc(photos);
   const rankOf = new Map(byElo.map((p, i) => [p.id, i + 1]));
 
   let best = -Infinity;
@@ -114,8 +115,12 @@ export function totalComparisons(
   return photos.reduce((s, p) => s + p.comparison_count, 0) / 2;
 }
 
-export function computeProgress(photos: Photo[], topK: number): number {
-  const byElo = sortByEloDesc(photos);
+export function computeProgress(
+  photos: Photo[],
+  topK: number,
+  sortedByElo?: Photo[],
+): number {
+  const byElo = sortedByElo ?? sortByEloDesc(photos);
   const boundary = byElo[Math.min(topK - 1, byElo.length - 1)]!;
   return Math.min(1, 1 - boundary.uncertainty / 350);
 }
