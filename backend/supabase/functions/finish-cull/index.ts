@@ -1,87 +1,32 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
-import { initSentry, Sentry } from '../_shared/sentry.ts';
+import { initSentry } from '../_shared/sentry.ts';
+import { json, parseJsonBody, serveAuthed } from '../_shared/http.ts';
 initSentry();
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 const BodySchema = z.object({ session_id: z.string().uuid() });
 
-Deno.serve(async (req) => {
-  try {
-    if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+serveAuthed(async (req, _authHeader, supabase) => {
+  const body = await parseJsonBody(req);
+  if (body instanceof Response) return body;
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing Authorization header' }),
-        {
-          status: 401,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    let body: unknown;
-    try {
-      body = await req.json();
-    } catch {
-      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-        status: 400,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const parsed = BodySchema.safeParse(body);
-    if (!parsed.success) {
-      return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
-        status: 400,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } },
-    );
-
-    const { error, count } = await supabase
-      .from('sessions')
-      .update({ stage: 'ranking' }, { count: 'exact' })
-      .eq('id', parsed.data.session_id)
-      .eq('stage', 'cull');
-
-    if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (count === 0) {
-      return new Response(
-        JSON.stringify({ error: 'Session not in cull stage' }),
-        {
-          status: 409,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    return new Response(JSON.stringify({ stage: 'ranking' }), {
-      status: 200,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
-    Sentry.captureException(err);
-    await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
+  const parsed = BodySchema.safeParse(body);
+  if (!parsed.success) {
+    return json({ error: parsed.error.flatten() }, 400);
   }
+
+  const { error, count } = await supabase
+    .from('sessions')
+    .update({ stage: 'ranking' }, { count: 'exact' })
+    .eq('id', parsed.data.session_id)
+    .eq('stage', 'cull');
+
+  if (error) {
+    return json({ error: error.message }, 500);
+  }
+
+  if (count === 0) {
+    return json({ error: 'Session not in cull stage' }, 409);
+  }
+
+  return json({ stage: 'ranking' });
 });
