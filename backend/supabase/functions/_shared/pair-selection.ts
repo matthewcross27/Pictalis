@@ -108,7 +108,9 @@ export function selectPhotoB(
   return bestB;
 }
 
-export function totalComparisons(photos: Photo[]): number {
+export function totalComparisons(
+  photos: Pick<Photo, 'comparison_count'>[],
+): number {
   return photos.reduce((s, p) => s + p.comparison_count, 0) / 2;
 }
 

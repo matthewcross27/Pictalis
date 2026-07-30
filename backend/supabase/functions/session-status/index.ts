@@ -1,4 +1,5 @@
 import { isSessionComplete, resolveTopKAndMinComparisons } from '../_shared/ranking-logic.ts';
+import { totalComparisons } from '../_shared/pair-selection.ts';
 import { initSentry } from '../_shared/sentry.ts';
 import {
   json,
@@ -31,9 +32,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
 
   const photoList = photos ?? [];
   const { topK, minComparisons } = resolveTopKAndMinComparisons(session);
-  const totalComps = Math.round(
-    photoList.reduce((s, p) => s + p.comparison_count, 0) / 2,
-  );
+  const totalComps = Math.round(totalComparisons(photoList));
 
   // Detect and persist completion
   let currentStage = session.stage as string;
