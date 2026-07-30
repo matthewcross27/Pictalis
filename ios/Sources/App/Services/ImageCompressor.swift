@@ -1,5 +1,4 @@
 import UIKit
-import Photos
 
 enum CompressionError: Error {
     case noImageData
@@ -10,18 +9,6 @@ enum ImageCompressor {
     static let maxDimension: CGFloat = 1920
     static let jpegQuality: CGFloat = 0.75
 
-    // Compress a PHAsset: fetch full-size data, scale, encode as JPEG.
-    // CPU-heavy scaling is detached from the main actor.
-    static func compress(asset: PHAsset) async throws -> Data {
-        let imageData = try await fetchData(from: asset)
-        guard let image = UIImage(data: imageData) else {
-            throw CompressionError.noImageData
-        }
-        return try await Task.detached(priority: .userInitiated) {
-            try compressImage(image)
-        }.value
-    }
-
     // Exposed for unit tests: scale + JPEG-encode a UIImage directly.
     static func compressImage(_ image: UIImage) throws -> Data {
         let scaled = scale(image, maxDimension: maxDimension)
@@ -29,28 +16,6 @@ enum ImageCompressor {
             throw CompressionError.encodingFailed
         }
         return data
-    }
-
-    // MARK: - Private
-
-    private static func fetchData(from asset: PHAsset) async throws -> Data {
-        try await withCheckedThrowingContinuation { continuation in
-            let options = PHImageRequestOptions()
-            options.deliveryMode = .highQualityFormat
-            options.isNetworkAccessAllowed = true
-            options.isSynchronous = false
-            PHImageManager.default().requestImageDataAndOrientation(
-                for: asset, options: options
-            ) { data, _, _, info in
-                if let error = info?[PHImageErrorKey] as? Error {
-                    continuation.resume(throwing: error)
-                } else if let data {
-                    continuation.resume(returning: data)
-                } else {
-                    continuation.resume(throwing: CompressionError.noImageData)
-                }
-            }
-        }
     }
 
     private static func scale(_ image: UIImage, maxDimension: CGFloat) -> UIImage {

@@ -100,13 +100,6 @@ final class SyncService {
         })
     }
 
-    func stop() {
-        for task in observerTasks { task.cancel() }
-        observerTasks.removeAll()
-        monitor?.cancel()
-        monitor = nil
-    }
-
     deinit {
         for task in observerTasks { task.cancel() }
         monitor?.cancel()
