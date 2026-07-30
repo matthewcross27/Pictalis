@@ -19,41 +19,22 @@ serveAuthed(async (req, _authHeader, supabase) => {
   const keepIds = decisions.filter((d) => d.decision === 'keep').map((d) => d.photo_id);
   const dropIds = decisions.filter((d) => d.decision === 'drop').map((d) => d.photo_id);
 
-  // One bulk UPDATE per decision type instead of one per photo (up to 300).
+  // Single RPC call replaces the two concurrent bulk UPDATEs this used to
+  // issue - the DB function merges them into one CASE-based UPDATE.
   // cull_decision IS NULL guard makes this idempotent - safe to retry.
-  const [keepResult, dropResult] = await Promise.all([
-    keepIds.length > 0
-      ? supabase
-        .from('photos')
-        .update({ cull_decision: 'keep' })
-        .eq('session_id', session_id)
-        .in('id', keepIds)
-        .is('cull_decision', null)
-      : { error: null },
-    dropIds.length > 0
-      ? supabase
-        .from('photos')
-        .update({ cull_decision: 'drop', is_suppressed: true })
-        .eq('session_id', session_id)
-        .in('id', dropIds)
-        .is('cull_decision', null)
-      : { error: null },
-  ]);
+  const { error } = await supabase.rpc('batch_submit_cull', {
+    p_session_id: session_id,
+    p_keep_ids: keepIds,
+    p_drop_ids: dropIds,
+  });
 
   // Zero rows updated for a given photo: decision already set - idempotent
   // success. With pre-registration, the photo row always exists before cull
   // starts, so that case just means cull_decision was already written.
-  const resultFor = (ids: string[], error: { message: string } | null) => {
-    const entry = error
-      ? { success: false as const, error: error.message }
-      : { success: true as const };
-    return new Map(ids.map((photo_id) => [photo_id, entry]));
-  };
-  const resultMap = new Map([
-    ...resultFor(keepIds, keepResult.error),
-    ...resultFor(dropIds, dropResult.error),
-  ]);
-  const results = decisions.map(({ photo_id }) => ({ photo_id, ...resultMap.get(photo_id)! }));
+  const entry = error
+    ? { success: false as const, error: error.message }
+    : { success: true as const };
+  const results = decisions.map(({ photo_id }) => ({ photo_id, ...entry }));
 
   return json({ results });
 });
