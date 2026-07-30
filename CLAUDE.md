@@ -33,9 +33,9 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
 
 ## Key Business Rules (from PRD)
 - Elo updates must happen in < 200ms (real-time feel)
-- Duplicate suppression only in Stage 1 — alternates remain accessible
+- Duplicate suppression only in the `dedup` stage (currently scaffolded, not yet wired - see README) - alternates remain accessible
 - Users can always override/pin/remove any ranking result
-- Session state persists for 24–72 hours server-side
+- Session state persists for up to 72 hours server-side (fixed TTL, reaped hourly)
 
 ## Never Do
 - Never recommend permanent cloud storage of original photos
