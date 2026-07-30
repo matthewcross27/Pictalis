@@ -154,7 +154,7 @@ struct ResultsView: View {
         do {
             let response = try await api.results(sessionId: sessionId)
             photos = response.photos
-            sessionStage = response.session?.stage.flatMap { RankingStage(rawValue: $0) }
+            sessionStage = (response.session?.stage).flatMap { RankingStage(rawValue: $0) }
             isSessionComplete = response.session?.isComplete ?? false
         } catch {
             // Keep showing initial photos if the full fetch fails.

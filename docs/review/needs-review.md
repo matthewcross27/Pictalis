@@ -89,3 +89,22 @@ This is acceptable until SE-0371 (isolated deinit) lands.
 The task iterates over an `AsyncStream`. When `DecisionStore` deallocates, `deinit` calls
 `continuation.finish()`, which terminates the stream and the task. Cancellation is managed through the
 stream lifecycle, not a handle. This is intentional and correct.
+
+---
+
+## Follow-ups (new)
+
+### 8. SyncService / PhotoPipeline — real NWPathMonitor makes tests flaky
+
+`SyncServiceFlushTests.testCoalescedDrainMissesDecisionRecordedInFlight` failed once in a full-suite
+run (2026-07-29) but passed 3/3 when run in isolation. Both `SyncService` and `PhotoPipeline` start a
+real `NWPathMonitor` with no test seam; a genuine OS-reported network path change during a longer test
+run can fire the "re-drain on connectivity restore" observer mid-test, letting an extra decision reach
+the mock API outside the test's `paused`/`isDraining` assumptions.
+
+**Fix:** introduce an injectable connectivity-signal abstraction (protocol or closure) in both types so
+tests can drive path updates deterministically instead of depending on the real network stack.
+
+**Not caused by the `@Observable` migration** — the monitor already existed on `main`; the migration
+only added `stop()`/`deinit` cancellation of the observer tasks, which can only reduce cross-test
+bleed, not cause it.

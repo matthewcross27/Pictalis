@@ -28,7 +28,7 @@ final class LocalCardProvider {
     private var remaining: [UUID] = []   // undecided ids, selection order, not yet queued
     private var isFilling = false
     private var currentMaxQueueSize = LocalCardProvider.normalQueueSize
-    private var fillTask: Task<Void, Never>?
+    nonisolated(unsafe) private var fillTask: Task<Void, Never>?
     nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
 
     init(pipeline: PhotoPipeline) {
