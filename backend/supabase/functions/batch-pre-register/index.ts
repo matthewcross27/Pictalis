@@ -1,6 +1,6 @@
 import { BatchPreRegisterBody } from '../_shared/batch-pre-register.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseJsonBody, requireUser, serveAuthed } from '../_shared/http.ts';
+import { json, parseJsonBody, requireSession, requireUser, serveAuthed } from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
@@ -19,15 +19,8 @@ serveAuthed(async (req, _authHeader, supabase) => {
 
   // Verify the session belongs to the authenticated user (RLS handles this,
   // but an explicit check gives a clear 404 rather than a silent empty result).
-  const { data: session, error: sessionError } = await supabase
-    .from('sessions')
-    .select('id')
-    .eq('id', session_id)
-    .single();
-
-  if (sessionError || !session) {
-    return json({ error: 'Session not found' }, 404);
-  }
+  const session = await requireSession(supabase, session_id);
+  if (session instanceof Response) return session;
 
   // Insert photo identity rows. ignoreDuplicates makes this idempotent:
   // a network retry after partial success won't double-insert existing rows.

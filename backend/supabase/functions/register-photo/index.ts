@@ -1,6 +1,6 @@
 import { initSentry } from '../_shared/sentry.ts';
 import { RegisterPhotoBody } from '../_shared/photo-registration.ts';
-import { json, parseJsonBody, requireUser, serveAuthed } from '../_shared/http.ts';
+import { json, parseJsonBody, requireSession, requireUser, serveAuthed } from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
@@ -16,7 +16,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   }
 
   const { session_id, storage_path, photo_id } = parsed.data;
-  const [pathUid, pathSessionId] = storage_path.split('/');
+  const [pathUid, pathSessionId, filename] = storage_path.split('/');
 
   if (pathUid !== user.id) {
     return json(
@@ -31,7 +31,6 @@ serveAuthed(async (req, _authHeader, supabase) => {
     );
   }
 
-  const filename = storage_path.split('/')[2];
   const { data: objects, error: listError } = await supabase.storage
     .from('working-copies')
     .list(`${pathUid}/${pathSessionId}`, { search: filename });
@@ -40,15 +39,8 @@ serveAuthed(async (req, _authHeader, supabase) => {
     return json({ error: 'Storage object not found' }, 404);
   }
 
-  const { data: session, error: sessionError } = await supabase
-    .from('sessions')
-    .select('id')
-    .eq('id', session_id)
-    .single();
-
-  if (sessionError || !session) {
-    return json({ error: 'Session not found' }, 404);
-  }
+  const session = await requireSession(supabase, session_id);
+  if (session instanceof Response) return session;
 
   const PHOTO_COLUMNS =
     'id, session_id, storage_path, elo_rating, comparison_count, created_at, is_suppressed';

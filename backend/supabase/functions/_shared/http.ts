@@ -46,6 +46,26 @@ export async function requireUser(supabase: SupabaseClient): Promise<User | Resp
   return user;
 }
 
+// Fetches a session row by id, or returns a 404 Response if it doesn't
+// exist - check `instanceof Response` at the call site before using the
+// result. `columns` defaults to just 'id' for call sites that only need to
+// verify the session exists.
+export async function requireSession(
+  supabase: SupabaseClient,
+  sessionId: string,
+  columns = 'id',
+) {
+  const { data: session, error } = await supabase
+    .from('sessions')
+    .select(columns)
+    .eq('id', sessionId)
+    .single();
+  if (error || !session) {
+    return json({ error: 'Session not found' }, 404);
+  }
+  return session;
+}
+
 // Wraps a handler with the boilerplate every Edge Function repeated
 // identically: OPTIONS preflight, Authorization header presence check,
 // Supabase client construction, and top-level Sentry error reporting.

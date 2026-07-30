@@ -15,7 +15,7 @@ import {
   totalComparisons,
 } from '../_shared/pair-selection.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
+import { json, requireSession, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
@@ -30,15 +30,8 @@ serveAuthed(async (req, _authHeader, supabase) => {
   const { session_id } = parsed.data;
 
   // 1. Fetch session
-  const { data: session, error: sessionError } = await supabase
-    .from('sessions')
-    .select('id, stage, photo_count, top_k')
-    .eq('id', session_id)
-    .single();
-
-  if (sessionError || !session) {
-    return json({ error: 'Session not found' }, 404);
-  }
+  const session = await requireSession(supabase, session_id, 'id, stage, photo_count, top_k');
+  if (session instanceof Response) return session;
 
   // Already marked complete (e.g. by session-status)
   if (session.stage === 'complete') {

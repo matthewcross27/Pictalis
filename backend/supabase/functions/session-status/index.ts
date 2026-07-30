@@ -1,6 +1,6 @@
 import { computeMinComparisons, computeTopK, isSessionComplete } from '../_shared/ranking-logic.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
+import { json, requireSession, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
@@ -14,15 +14,8 @@ serveAuthed(async (req, _authHeader, supabase) => {
 
   const { session_id } = parsed.data;
 
-  const { data: session, error: sessionError } = await supabase
-    .from('sessions')
-    .select('id, stage, photo_count, top_k')
-    .eq('id', session_id)
-    .single();
-
-  if (sessionError || !session) {
-    return json({ error: 'Session not found' }, 404);
-  }
+  const session = await requireSession(supabase, session_id, 'id, stage, photo_count, top_k');
+  if (session instanceof Response) return session;
 
   const { data: photos, error: photosError } = await supabase
     .from('photos')
