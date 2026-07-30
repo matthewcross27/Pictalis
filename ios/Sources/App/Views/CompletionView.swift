@@ -4,7 +4,6 @@ struct CompletionView: View {
     @Environment(APIClient.self) private var api
 
     let sessionId: UUID
-    let totalComparisons: Int
     var onSeeFullRankings: ([RankedPhoto]) -> Void
     var onStartOver: () -> Void
 

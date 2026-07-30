@@ -69,7 +69,6 @@ struct ContentView: View {
             case .complete(let sessionId, let totalComparisons):
                 CompletionView(
                     sessionId: sessionId,
-                    totalComparisons: totalComparisons,
                     onSeeFullRankings: { photos in
                         appState = .results(sessionId: sessionId, previousComparisons: totalComparisons, initialPhotos: photos)
                     },

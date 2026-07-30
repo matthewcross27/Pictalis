@@ -30,7 +30,6 @@ final class PhotoPipeline {
     }
 
     private struct Item {
-        let photoId: UUID
         let loader: any PhotoDataLoading
         var state: ItemState = .pending
         var isKept = false
@@ -89,7 +88,7 @@ final class PhotoPipeline {
     func start(photos: [PendingPhoto]) {
         order = photos.map(\.id)
         for photo in photos {
-            items[photo.id] = Item(photoId: photo.id, loader: photo.loader)
+            items[photo.id] = Item(loader: photo.loader)
         }
         prepareSessionDirectory()
         backgroundTasks.append(Task { await self.materializeAll() })
@@ -97,11 +96,6 @@ final class PhotoPipeline {
             guard let events = self?.connectivityEvents else { return }
             for await _ in events { self?.retryParked() }
         })
-    }
-
-    func cancel() {
-        for task in backgroundTasks { task.cancel() }
-        backgroundTasks.removeAll()
     }
 
     deinit { for task in backgroundTasks { task.cancel() } }
