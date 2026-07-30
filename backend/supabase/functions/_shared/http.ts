@@ -15,6 +15,9 @@ export const SessionIdSchema = z.object({ session_id: z.string().uuid() });
 // signed-URL'd from - see backend/supabase/migrations/20260517000001_storage_bucket.sql.
 export const WORKING_COPIES_BUCKET = 'working-copies';
 
+// Expiry (in seconds) for signed URLs generated for working-copy photos.
+export const SIGNED_URL_EXPIRY_SECONDS = 3600;
+
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,

@@ -15,7 +15,14 @@ import {
   totalComparisons,
 } from '../_shared/pair-selection.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, requireSession, serveAuthed, SessionIdSchema, WORKING_COPIES_BUCKET } from '../_shared/http.ts';
+import {
+  json,
+  requireSession,
+  serveAuthed,
+  SessionIdSchema,
+  SIGNED_URL_EXPIRY_SECONDS,
+  WORKING_COPIES_BUCKET,
+} from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
@@ -105,15 +112,15 @@ serveAuthed(async (req, _authHeader, supabase) => {
     pendingPairs,
   );
 
-  // 6. Generate signed URLs (1-hour expiry)
+  // 6. Generate signed URLs
   const [signedA, signedB] = await Promise.all([
     supabase.storage.from(WORKING_COPIES_BUCKET).createSignedUrl(
       photoA.storage_path,
-      3600,
+      SIGNED_URL_EXPIRY_SECONDS,
     ),
     supabase.storage.from(WORKING_COPIES_BUCKET).createSignedUrl(
       photoB.storage_path,
-      3600,
+      SIGNED_URL_EXPIRY_SECONDS,
     ),
   ]);
 
