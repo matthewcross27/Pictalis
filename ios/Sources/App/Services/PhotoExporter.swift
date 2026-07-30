@@ -8,9 +8,14 @@ enum PhotoExporter {
         case invalidImageData
     }
 
-    static func exportPhoto(signedUrl: URL) async throws {
-        let (data, _) = try await URLSession.shared.data(from: signedUrl)
+    private static func downloadImage(from url: URL) async throws -> UIImage {
+        let (data, _) = try await URLSession.shared.data(from: url)
         guard let image = UIImage(data: data) else { throw ExportError.invalidImageData }
+        return image
+    }
+
+    static func exportPhoto(signedUrl: URL) async throws {
+        let image = try await downloadImage(from: signedUrl)
         try await PHPhotoLibrary.shared().performChanges {
             PHAssetCreationRequest.creationRequestForAsset(from: image)
         }
@@ -25,9 +30,7 @@ enum PhotoExporter {
             for photo in photos {
                 group.addTask {
                     do {
-                        let (data, _) = try await URLSession.shared.data(from: photo.signedUrl)
-                        guard let image = UIImage(data: data) else { throw ExportError.invalidImageData }
-                        return image
+                        return try await downloadImage(from: photo.signedUrl)
                     } catch {
                         print("Export download failed: \(error)")
                         return nil
