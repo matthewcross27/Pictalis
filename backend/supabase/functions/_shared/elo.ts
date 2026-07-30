@@ -14,7 +14,7 @@ export function updateElo(
   loserRating: number,
 ): EloUpdate {
   const expectedWinner = calculateExpected(winnerRating, loserRating);
-  const expectedLoser = calculateExpected(loserRating, winnerRating);
+  const expectedLoser = 1 - expectedWinner;
   return {
     winnerNew: winnerRating + K_FACTOR * (1 - expectedWinner),
     loserNew: loserRating + K_FACTOR * (0 - expectedLoser),
