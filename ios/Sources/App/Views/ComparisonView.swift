@@ -136,7 +136,7 @@ struct ComparisonView: View {
                         .frame(maxWidth: .infinity)
                         .aspectRatio(4 / 3, contentMode: .fit)
                         .overlay {
-                            AsyncImage(url: photo.signedUrl) { phase in
+                            CachedPhotoImage(url: photo.signedUrl, cacheKey: photo.id) { phase in
                                 switch phase {
                                 case .empty:
                                     ProgressView().tint(Color.secondaryText)
