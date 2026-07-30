@@ -85,7 +85,7 @@ struct ResultsView: View {
             await fetchResults()
         }
         .fullScreenCover(item: $expandedPhoto) { photo in
-            PhotoExpandedView(photo: photo) { expandedPhoto = nil }
+            PhotoExpandedView(id: photo.id, signedUrl: photo.signedUrl) { expandedPhoto = nil }
         }
         .savedToPhotosAlert(message: $exportAlertMessage)
     }

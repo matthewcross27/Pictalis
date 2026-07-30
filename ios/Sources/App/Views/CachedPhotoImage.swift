@@ -54,13 +54,15 @@ struct CachedPhotoImage<Content: View>: View {
 
 /// Fullscreen tap-to-dismiss photo viewer.
 struct PhotoExpandedView: View {
-    let photo: RankedPhoto
+    let id: UUID
+    let signedUrl: URL
+    var background: Color = .black
     var onDismiss: () -> Void
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-            CachedPhotoImage(url: photo.signedUrl, cacheKey: photo.id) { phase in
+            background.ignoresSafeArea()
+            CachedPhotoImage(url: signedUrl, cacheKey: id) { phase in
                 switch phase {
                 case .success(let image):
                     image.resizable().scaledToFit()

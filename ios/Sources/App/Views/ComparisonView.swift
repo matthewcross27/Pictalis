@@ -93,18 +93,9 @@ struct ComparisonView: View {
             prefetchedPair = nil
         }
         .fullScreenCover(item: $fullscreenPhoto) { photo in
-            ZStack {
-                Color.photoBackground.ignoresSafeArea()
-                AsyncImage(url: photo.signedUrl) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFit()
-                    default:
-                        ProgressView().tint(Color.filmWhite)
-                    }
-                }
+            PhotoExpandedView(id: photo.id, signedUrl: photo.signedUrl, background: .photoBackground) {
+                fullscreenPhoto = nil
             }
-            .onTapGesture { fullscreenPhoto = nil }
         }
     }
 
