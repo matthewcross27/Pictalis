@@ -32,6 +32,7 @@ targets:
           - Fraunces-SemiBold.ttf
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        ITSAppUsesNonExemptEncryption: false
     settings:
       base:
         SWIFT_VERSION: "5.9"
