@@ -33,6 +33,14 @@ export function isBoundaryStable(
   );
 }
 
+export function hasFullCoverage(
+  photos: Pick<Photo, 'comparison_count'>[],
+  minComparisons: number,
+): boolean {
+  return photos.length > 0 &&
+    photos.every((p) => p.comparison_count >= minComparisons);
+}
+
 // Session is complete once every photo has its coverage floor met and the
 // top-K boundary has stabilized, or once the comparison budget is exhausted
 // as a safety net against never-stabilizing sessions.
@@ -43,8 +51,7 @@ export function isSessionComplete(
   totalComparisons: number,
   photoCount: number,
 ): boolean {
-  const allHaveCoverage = photos.length > 0 &&
-    photos.every((p) => p.comparison_count >= minComparisons);
+  const allHaveCoverage = hasFullCoverage(photos, minComparisons);
   const stable = isBoundaryStable(photos, topK);
   const exhausted = totalComparisons >= photoCount * 4;
   return (allHaveCoverage && stable) || exhausted;

@@ -1,5 +1,11 @@
 import { assertEquals } from 'jsr:@std/assert@1';
-import { computeMinComparisons, computeTopK, isBoundaryStable, isSessionComplete } from './ranking-logic.ts';
+import {
+  computeMinComparisons,
+  computeTopK,
+  hasFullCoverage,
+  isBoundaryStable,
+  isSessionComplete,
+} from './ranking-logic.ts';
 
 // --- computeTopK ---
 
@@ -138,4 +144,20 @@ Deno.test('isSessionComplete — coverage not met and budget not exhausted → n
     makePhoto('b', 1000, 50, 0),
   ];
   assertEquals(isSessionComplete(photos, 2, 5, 0, 2), false);
+});
+
+// --- hasFullCoverage ---
+
+Deno.test('hasFullCoverage — empty photos → false (vacuous truth guard)', () => {
+  assertEquals(hasFullCoverage([], 1), false);
+});
+
+Deno.test('hasFullCoverage — every photo meets the floor → true', () => {
+  const photos = [makePhoto('a', 1600, 50, 3), makePhoto('b', 1000, 50, 3)];
+  assertEquals(hasFullCoverage(photos, 3), true);
+});
+
+Deno.test('hasFullCoverage — one photo below the floor → false', () => {
+  const photos = [makePhoto('a', 1600, 50, 3), makePhoto('b', 1000, 50, 2)];
+  assertEquals(hasFullCoverage(photos, 3), false);
 });

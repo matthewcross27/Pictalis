@@ -3,6 +3,7 @@ import {
   type CompletedComparison,
   computeMinComparisons,
   computeTopK,
+  hasFullCoverage,
   isSessionComplete,
   type Photo,
 } from '../_shared/ranking-logic.ts';
@@ -86,7 +87,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   );
 
   // 4. Check completion (safety net - session-status also writes this)
-  const allHaveCoverage = photos.every((p) => p.comparison_count >= minComparisons);
+  const allHaveCoverage = hasFullCoverage(photos, minComparisons);
   const complete = isSessionComplete(
     photos as Photo[],
     topK,
