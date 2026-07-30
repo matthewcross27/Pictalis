@@ -1,10 +1,9 @@
 import { z } from 'npm:zod@3';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseBody, serveAuthed } from '../_shared/http.ts';
+import { json, parseBody, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
 initSentry();
 
-const BodySchema = z.object({
-  session_id: z.string().uuid(),
+const BodySchema = SessionIdSchema.extend({
   decisions: z.array(z.object({
     photo_id: z.string().uuid(),
     decision: z.enum(['keep', 'drop']),

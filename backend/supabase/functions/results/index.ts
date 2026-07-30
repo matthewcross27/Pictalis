@@ -4,13 +4,13 @@ import {
   json,
   parseQuery,
   serveAuthed,
+  SessionIdSchema,
   SIGNED_URL_EXPIRY_SECONDS,
   WORKING_COPIES_BUCKET,
 } from '../_shared/http.ts';
 initSentry();
 
-const QuerySchema = z.object({
-  session_id: z.string().uuid(),
+const QuerySchema = SessionIdSchema.extend({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
