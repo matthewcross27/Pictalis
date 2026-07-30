@@ -95,7 +95,7 @@ struct ComparisonView: View {
         .fullScreenCover(item: $fullscreenPhoto) { photo in
             ZStack {
                 Color.photoBackground.ignoresSafeArea()
-                AsyncImage(url: URL(string: photo.signedUrl)) { phase in
+                AsyncImage(url: photo.signedUrl) { phase in
                     switch phase {
                     case .success(let image):
                         image.resizable().scaledToFit()
@@ -149,7 +149,7 @@ struct ComparisonView: View {
                         .frame(maxWidth: .infinity)
                         .aspectRatio(4 / 3, contentMode: .fit)
                         .overlay {
-                            AsyncImage(url: URL(string: photo.signedUrl)) { phase in
+                            AsyncImage(url: photo.signedUrl) { phase in
                                 switch phase {
                                 case .empty:
                                     ProgressView().tint(Color.secondaryText)

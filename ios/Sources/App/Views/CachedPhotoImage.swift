@@ -21,7 +21,7 @@ final class PhotoMemoryCache: @unchecked Sendable {
 
 /// AsyncImage replacement backed by PhotoMemoryCache.
 struct CachedPhotoImage<Content: View>: View {
-    let url: String
+    let url: URL
     let cacheKey: UUID
     @ViewBuilder var content: (AsyncImagePhase) -> Content
 
@@ -37,12 +37,8 @@ struct CachedPhotoImage<Content: View>: View {
             phase = .success(Image(uiImage: cached))
             return
         }
-        guard let requestURL = URL(string: url) else {
-            phase = .failure(URLError(.badURL))
-            return
-        }
         do {
-            let (data, _) = try await URLSession.shared.data(from: requestURL)
+            let (data, _) = try await URLSession.shared.data(from: url)
             guard let uiImage = UIImage(data: data) else {
                 phase = .failure(URLError(.cannotDecodeContentData))
                 return

@@ -68,7 +68,7 @@ struct PairPhoto: Decodable, Identifiable, Equatable {
     let thumbnailPath: String?
     let eloRating: Double
     let comparisonCount: Int
-    let signedUrl: String
+    let signedUrl: URL
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -121,7 +121,7 @@ struct RankedPhoto: Decodable, Identifiable, Equatable {
     let uncertainty:     Double?
     let comparisonCount: Int
     let isSuppressed:    Bool
-    let signedUrl:       String
+    let signedUrl:       URL
 
     enum CodingKeys: String, CodingKey {
         case id

@@ -21,7 +21,7 @@ final class ModelsTests: XCTestCase {
         """.data(using: .utf8)!
         let response = try decoder.decode(NextPairResponse.self, from: json)
         XCTAssertEqual(response.comparisonId, UUID(uuidString: "aaaabbbb-e29b-41d4-a716-446655440000"))
-        XCTAssertEqual(response.photoA.signedUrl, "https://example.com/a.jpg")
+        XCTAssertEqual(response.photoA.signedUrl, URL(string: "https://example.com/a.jpg")!)
         XCTAssertEqual(response.photoB.comparisonCount, 0)
     }
 
