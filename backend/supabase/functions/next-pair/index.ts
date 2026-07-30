@@ -41,16 +41,24 @@ serveAuthed(async (req, _authHeader, supabase) => {
     return json({ error: 'Session already complete' }, 422);
   }
 
-  // 2. Fetch non-suppressed, non-dropped photos
-  const { data: photos, error: photosError } = await supabase
-    .from('photos')
-    .select(
-      'id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, cluster_id',
-    )
-    .eq('session_id', session_id)
-    .eq('is_suppressed', false)
-    .eq('upload_status', 'uploaded')
-    .or('cull_decision.is.null,cull_decision.eq.keep');
+  // 2. Fetch non-suppressed, non-dropped photos, and all comparisons (pending + completed)
+  // for pair-count deduplication, concurrently - neither query depends on the other's result.
+  // Pending comparisons (completed_at IS NULL) are hard-excluded from re-selection.
+  const [{ data: photos, error: photosError }, { data: rawComparisons }] = await Promise.all([
+    supabase
+      .from('photos')
+      .select(
+        'id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, cluster_id',
+      )
+      .eq('session_id', session_id)
+      .eq('is_suppressed', false)
+      .eq('upload_status', 'uploaded')
+      .or('cull_decision.is.null,cull_decision.eq.keep'),
+    supabase
+      .from('comparisons')
+      .select('photo_a_id, photo_b_id, completed_at')
+      .eq('session_id', session_id),
+  ]);
 
   if (photosError) {
     return json({ error: photosError.message }, 500);
@@ -61,13 +69,6 @@ serveAuthed(async (req, _authHeader, supabase) => {
   }
 
   const { topK, minComparisons } = resolveTopKAndMinComparisons(session);
-
-  // 3. Fetch all comparisons (pending + completed) for pair-count deduplication.
-  // Pending comparisons (completed_at IS NULL) are hard-excluded from re-selection.
-  const { data: rawComparisons } = await supabase
-    .from('comparisons')
-    .select('photo_a_id, photo_b_id, completed_at')
-    .eq('session_id', session_id);
 
   type RawComparison = CompletedComparison & { completed_at: string | null };
   const allComparisons = (rawComparisons ?? []) as RawComparison[];
