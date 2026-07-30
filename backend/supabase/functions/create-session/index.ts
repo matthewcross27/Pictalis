@@ -1,7 +1,7 @@
 import { z } from 'npm:zod@3';
 import { computeTopK } from '../_shared/ranking-logic.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseBody, requireUser, serveAuthed } from '../_shared/http.ts';
+import { json, parseBody, requireUser, serveAuthed, serverError } from '../_shared/http.ts';
 initSentry();
 
 const CreateSessionBody = z.object({
@@ -31,7 +31,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
     .single();
 
   if (error) {
-    return json({ error: error.message }, 500);
+    return await serverError(error, error.message);
   }
 
   return json({ session }, 201);

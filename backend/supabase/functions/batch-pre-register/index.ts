@@ -1,6 +1,13 @@
 import { BatchPreRegisterBody } from '../_shared/batch-pre-register.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseBody, requireSession, requireUser, serveAuthed } from '../_shared/http.ts';
+import {
+  json,
+  parseBody,
+  requireSession,
+  requireUser,
+  serveAuthed,
+  serverError,
+} from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
@@ -33,8 +40,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
     .upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
 
   if (insertError) {
-    console.error('Failed to pre-register photos:', insertError);
-    return json({ error: 'Failed to pre-register photos' }, 500);
+    return await serverError(insertError, 'Failed to pre-register photos');
   }
 
   return json({ ok: true });

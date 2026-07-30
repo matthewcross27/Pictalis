@@ -4,6 +4,7 @@ import {
   json,
   parseQuery,
   serveAuthed,
+  serverError,
   SessionIdSchema,
   SIGNED_URL_EXPIRY_SECONDS,
   WORKING_COPIES_BUCKET,
@@ -40,7 +41,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   ]);
 
   if (error) {
-    return json({ error: 'Failed to fetch photos' }, 500);
+    return await serverError(error, 'Failed to fetch photos');
   }
 
   const photoList = photos ?? [];
@@ -57,7 +58,10 @@ serveAuthed(async (req, _authHeader, supabase) => {
         SIGNED_URL_EXPIRY_SECONDS,
       );
     if (signError || !signedUrls || signedUrls.some((s) => s.error)) {
-      return json({ error: 'Failed to generate photo URLs' }, 500);
+      return await serverError(
+        signError ?? new Error('createSignedUrls returned no data'),
+        'Failed to generate photo URLs',
+      );
     }
     photosWithUrls = photoList.map((photo, i) => ({
       ...photo,

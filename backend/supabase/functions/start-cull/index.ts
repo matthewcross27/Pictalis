@@ -1,5 +1,5 @@
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseBody, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
+import { json, parseBody, serveAuthed, serverError, SessionIdSchema } from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
@@ -15,7 +15,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
     .not('stage', 'eq', 'complete');
 
   if (error) {
-    return json({ error: error.message }, 500);
+    return await serverError(error, error.message);
   }
 
   if (count === 0) {

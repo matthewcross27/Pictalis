@@ -21,6 +21,7 @@ import {
   parseQuery,
   requireSession,
   serveAuthed,
+  serverError,
   SessionIdSchema,
   SIGNED_URL_EXPIRY_SECONDS,
   WORKING_COPIES_BUCKET,
@@ -68,7 +69,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   }
 
   if (photosError) {
-    return json({ error: photosError.message }, 500);
+    return await serverError(photosError, photosError.message);
   }
 
   if (!photos || photos.length < 2) {
@@ -144,13 +145,19 @@ serveAuthed(async (req, _authHeader, supabase) => {
     signError || !signedUrls || signedUrls.length !== 2 ||
     signedUrls.some((s) => s.error || !s.signedUrl)
   ) {
-    return json({ error: 'Failed to generate photo URLs' }, 500);
+    return await serverError(
+      signError ?? new Error('createSignedUrls returned no data'),
+      'Failed to generate photo URLs',
+    );
   }
 
   const [signedA, signedB] = signedUrls;
 
   if (compError || !comparison) {
-    return json({ error: 'Failed to create comparison' }, 500);
+    return await serverError(
+      compError ?? new Error('comparisons insert returned no row'),
+      'Failed to create comparison',
+    );
   }
 
   return json({

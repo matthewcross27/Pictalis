@@ -7,6 +7,7 @@ import {
   parseQuery,
   requireSession,
   serveAuthed,
+  serverError,
   SessionIdSchema,
 } from '../_shared/http.ts';
 initSentry();
@@ -31,7 +32,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   if (session instanceof Response) return session;
 
   if (photosError) {
-    return json({ error: 'Failed to fetch photos' }, 500);
+    return await serverError(photosError, 'Failed to fetch photos');
   }
 
   const photoList = photos ?? [];

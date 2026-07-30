@@ -1,6 +1,6 @@
 import { z } from 'npm:zod@3';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseBody, serveAuthed } from '../_shared/http.ts';
+import { json, parseBody, serveAuthed, serverError } from '../_shared/http.ts';
 initSentry();
 
 const SubmitBody = z.object({
@@ -39,7 +39,10 @@ serveAuthed(async (req, _authHeader, supabase) => {
       case 'UE003':
         return json({ error: 'winner_id must be one of the two compared photos' }, 400);
       default:
-        return json({ error: 'Failed to record comparison result' }, 500);
+        return await serverError(
+          submitError ?? new Error('submit_comparison_atomic returned no row'),
+          'Failed to record comparison result',
+        );
     }
   }
 

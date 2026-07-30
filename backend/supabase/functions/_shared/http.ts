@@ -25,6 +25,20 @@ export function json(body: unknown, status = 200): Response {
   });
 }
 
+// Reports a handled (non-thrown) failure - e.g. a Supabase query returning
+// an `error` field instead of throwing - to Sentry before building the error
+// Response, so DB/storage failures are as visible in production as the
+// uncaught exceptions serveAuthed's top-level catch already reports.
+export async function serverError(
+  cause: unknown,
+  message: string,
+  status = 500,
+): Promise<Response> {
+  Sentry.captureException(cause instanceof Error ? cause : new Error(String(cause)));
+  await Sentry.flush(2000);
+  return json({ error: message }, status);
+}
+
 export function supabaseFromAuth(authHeader: string): SupabaseClient {
   return createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
