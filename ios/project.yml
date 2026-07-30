@@ -24,7 +24,6 @@ targets:
       properties:
         CFBundleDisplayName: Pictalis
         UILaunchScreen: {}
-        NSPhotoLibraryUsageDescription: "Pictalis needs access to your photos to help you curate your favorites."
         NSPhotoLibraryAddUsageDescription: "Pictalis saves your favorite photos back to your library."
         UIUserInterfaceStyle: Light
         UIAppFonts:
