@@ -69,9 +69,13 @@ supabase db reset # applies migrations
 
 ## CI
 
-GitHub Actions runs on every push and PR to `main`:
-- **Ranking engine** — `npm test` + `npm run typecheck`
-- **Processing worker** — `pytest` + `ruff`
+GitHub Actions runs on every push and PR to `main` (path-filtered per subsystem):
+- **iOS** - `xcodebuild test` on an iPhone simulator
+- **Edge Functions** - `deno fmt --check` + `deno lint` + `deno check` per function + `deno test`
+- **Migrations** - applies all migrations to a fresh local Supabase database
+- **Ranking engine** - `npm test` + `npm run typecheck`
+- **Processing worker** - `ruff` + `black --check` + `mypy` (strict) + `pytest`
+- **Secret scan** - `gitleaks`, on every push and PR (not path-filtered)
 
 ## Project status
 
