@@ -157,28 +157,6 @@ struct StartCullResponse: Decodable {
     let stage: String
 }
 
-// MARK: - next-cull
-
-struct CullCard: Decodable {
-    let done:           Bool
-    let photoId:        UUID?
-    let photoUrl:       String?
-    let cardsRemaining: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case done
-        case photoId        = "photo_id"
-        case photoUrl       = "photo_url"
-        case cardsRemaining = "cards_remaining"
-    }
-}
-
-// MARK: - submit-cull / finish-cull
-
-struct CullActionResponse: Decodable {
-    let done: Bool
-}
-
 // MARK: - Errors
 
 struct APIErrorResponse: Decodable {
@@ -230,12 +208,6 @@ struct BatchDecisionResult: Decodable {
         case success
         case error
     }
-}
-
-// MARK: - batch-pre-register
-
-struct BatchPreRegisterResponse: Decodable {
-    let ok: Bool
 }
 
 struct BatchSubmitResponse: Decodable {

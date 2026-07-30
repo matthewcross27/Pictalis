@@ -44,24 +44,6 @@ struct CullView: View {
 
                     case .exhausted:
                         Color.clear
-
-                    case .error(let message):
-                        Spacer()
-                        VStack(spacing: 12) {
-                            Text(message)
-                                .font(.bodySerif)
-                                .foregroundStyle(Color.amber)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
-                            Button("Retry") { cardProvider?.retry() }
-                                .font(.labelSerif)
-                                .foregroundStyle(Color.filmWhite)
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 12)
-                                .background(Color.amber)
-                                .clipShape(RoundedRectangle(cornerRadius: .interactiveRadius))
-                        }
-                        Spacer()
                     }
                 }
             }

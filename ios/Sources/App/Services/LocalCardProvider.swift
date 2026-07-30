@@ -4,7 +4,6 @@ enum CullQueueState: Equatable {
     case loading
     case ready
     case exhausted
-    case error(String)
 }
 
 // Serves cull cards from PhotoPipeline's on-disk compressed copies.
@@ -76,15 +75,6 @@ final class LocalCardProvider {
             fillTask = Task { await self.fill() }
         }
         return card
-    }
-
-    // Kept for CullView's error-state button; local loads rarely need it.
-    func retry() {
-        fillTask?.cancel()
-        fillTask = Task {
-            await self.fill()
-            if !self.queue.isEmpty { self.state = .ready }
-        }
     }
 
     // MARK: - Private

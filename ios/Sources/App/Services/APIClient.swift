@@ -158,31 +158,6 @@ final class APIClient {
         return try decoder.decode(StartCullResponse.self, from: data)
     }
 
-    // MARK: - next-cull
-    // GET ?session_id=... → CullCard (done:true when empty)
-
-    func nextCull(sessionId: UUID) async throws -> CullCard {
-        let req = try buildRequest(
-            path: "next-cull",
-            queryItems: [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
-        )
-        let data = try await send(req)
-        return try decoder.decode(CullCard.self, from: data)
-    }
-
-    // MARK: - submit-cull
-    // POST { session_id, photo_id, decision } → { done }
-
-    func submitCull(sessionId: UUID, photoId: UUID, decision: String) async throws -> CullActionResponse {
-        let req = try buildRequest(path: "submit-cull", method: "POST", body: [
-            "session_id": sessionId.uuidString.lowercased(),
-            "photo_id":   photoId.uuidString.lowercased(),
-            "decision":   decision,
-        ])
-        let data = try await send(req)
-        return try decoder.decode(CullActionResponse.self, from: data)
-    }
-
     // MARK: - finish-cull
     // POST { session_id } → { stage }
 
