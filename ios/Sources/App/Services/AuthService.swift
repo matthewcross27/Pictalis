@@ -32,8 +32,4 @@ final class AuthService {
             authError = error
         }
     }
-
-    var accessToken: String? {
-        client.auth.currentSession?.accessToken
-    }
 }
