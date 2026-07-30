@@ -104,21 +104,22 @@ serveAuthed(async (req, _authHeader, supabase) => {
     pendingPairs,
   );
 
-  // 6. Generate signed URLs
-  const [signedA, signedB] = await Promise.all([
-    supabase.storage.from(WORKING_COPIES_BUCKET).createSignedUrl(
-      photoA.storage_path,
+  // 6. Generate signed URLs (single batch call instead of one round trip per photo)
+  const { data: signedUrls, error: signError } = await supabase.storage
+    .from(WORKING_COPIES_BUCKET)
+    .createSignedUrls(
+      [photoA.storage_path, photoB.storage_path],
       SIGNED_URL_EXPIRY_SECONDS,
-    ),
-    supabase.storage.from(WORKING_COPIES_BUCKET).createSignedUrl(
-      photoB.storage_path,
-      SIGNED_URL_EXPIRY_SECONDS,
-    ),
-  ]);
+    );
 
-  if (!signedA.data?.signedUrl || !signedB.data?.signedUrl) {
+  if (
+    signError || !signedUrls || signedUrls.length !== 2 ||
+    signedUrls.some((s) => s.error || !s.signedUrl)
+  ) {
     return json({ error: 'Failed to generate photo URLs' }, 500);
   }
+
+  const [signedA, signedB] = signedUrls;
 
   // 7. Insert pending comparison record
   const { data: comparison, error: compError } = await supabase
@@ -135,7 +136,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
     comparison_id: comparison.id,
     stage: session.stage,
     progress: computeProgress(photos as Photo[], topK),
-    photo_a: { ...photoA, signed_url: signedA.data.signedUrl },
-    photo_b: { ...photoB, signed_url: signedB.data.signedUrl },
+    photo_a: { ...photoA, signed_url: signedA.signedUrl },
+    photo_b: { ...photoB, signed_url: signedB.signedUrl },
   });
 });
