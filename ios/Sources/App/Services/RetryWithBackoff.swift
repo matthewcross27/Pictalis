@@ -4,6 +4,7 @@ import Foundation
 // random jitter from `jitter` (if given) to each wait. Cancellation is never treated
 // as a transient failure to retry - it rethrows immediately. On final exhaustion,
 // rethrows the last error.
+@MainActor
 func retryWithBackoff<T>(
     delays: [Duration],
     jitter: ClosedRange<Int>? = nil,

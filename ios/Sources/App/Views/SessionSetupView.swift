@@ -40,23 +40,26 @@ struct SessionSetupView: View {
                 // Bottom action stack
                 VStack(spacing: 10) {
                     // Photo picker
+                    // `count` is captured as a plain Int before the label closure since
+                    // PhotosPicker's label closure is @Sendable/nonisolated and cannot
+                    // read the main-actor-isolated `selectionCount` computed property directly.
                     PhotosPicker(
                         selection: $selectedItems,
                         maxSelectionCount: 300,
                         matching: .images
-                    ) {
+                    ) { [count = selectionCount] in
                         HStack(spacing: 12) {
-                            Image(systemName: selectionCount > 0 ? "photo.stack" : "plus")
+                            Image(systemName: count > 0 ? "photo.stack" : "plus")
                                 .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(selectionCount > 0 ? Color.ink : Color.secondaryText)
+                                .foregroundStyle(count > 0 ? Color.ink : Color.secondaryText)
 
-                            Text(selectionCount > 0 ? "\(selectionCount) photos" : "Choose photos")
+                            Text(count > 0 ? "\(count) photos" : "Choose photos")
                                 .font(.titleSerif)
-                                .foregroundStyle(selectionCount > 0 ? Color.ink : Color.secondaryText)
+                                .foregroundStyle(count > 0 ? Color.ink : Color.secondaryText)
 
                             Spacer()
 
-                            if selectionCount > 0 {
+                            if count > 0 {
                                 Text("Change")
                                     .font(.captionSerif)
                                     .foregroundStyle(Color.secondaryText)

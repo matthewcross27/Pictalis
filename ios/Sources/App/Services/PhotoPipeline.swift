@@ -198,7 +198,7 @@ final class PhotoPipeline {
             var iterator = order.makeIterator()
             func addNext() {
                 guard let id = iterator.next() else { return }
-                group.addTask { @MainActor in await self.materialize(id) }
+                group.addTask { await self.materialize(id) }
             }
             for _ in 0..<materializeConcurrency { addNext() }
             for await _ in group { addNext() }
