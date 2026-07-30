@@ -33,15 +33,18 @@ serveAuthed(async (req, _authHeader, supabase) => {
     );
   }
 
-  const { data: objects, error: listError } = await supabase.storage
-    .from(WORKING_COPIES_BUCKET)
-    .list(`${pathUid}/${pathSessionId}`, { search: filename });
+  // Storage existence check and session lookup are independent reads - run
+  // them concurrently to save a round trip on the upload hot path.
+  const [{ data: objects, error: listError }, session] = await Promise.all([
+    supabase.storage
+      .from(WORKING_COPIES_BUCKET)
+      .list(`${pathUid}/${pathSessionId}`, { search: filename }),
+    requireSession(supabase, session_id),
+  ]);
 
   if (listError || !objects || !objects.some((o) => o.name === filename)) {
     return json({ error: 'Storage object not found' }, 404);
   }
-
-  const session = await requireSession(supabase, session_id);
   if (session instanceof Response) return session;
 
   const PHOTO_COLUMNS =
