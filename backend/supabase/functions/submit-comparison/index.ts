@@ -14,57 +14,38 @@ serveAuthed(async (req, _authHeader, supabase) => {
 
   const { comparison_id, winner_id } = parsed;
 
-  // RLS ensures this comparison belongs to the caller's session
-  const { data: comparison, error: compError } = await supabase
-    .from('comparisons')
-    .select('id, photo_a_id, photo_b_id')
-    .eq('id', comparison_id)
-    .single();
-
-  if (compError || !comparison) {
-    return json({ error: 'Comparison not found' }, 404);
-  }
-
-  if (
-    winner_id !== comparison.photo_a_id && winner_id !== comparison.photo_b_id
-  ) {
-    return json({ error: 'winner_id must be one of the two compared photos' }, 400);
-  }
-
-  const loser_id = winner_id === comparison.photo_a_id
-    ? comparison.photo_b_id
-    : comparison.photo_a_id;
-
-  // Single atomic transaction: claim comparison + compute and write both new
-  // Elo ratings. The RPC computes the Elo update itself (no need to fetch
-  // photo ratings here first) and raises 'UE001' if completed_at was already
-  // set, preventing the TOCTOU race from the previous multi-step write
-  // approach.
+  // Single atomic transaction, and the only round trip this endpoint makes:
+  // the RPC itself fetches the comparison row (RLS-scoped to the caller's
+  // session), validates winner_id, computes loser_id, and writes both new
+  // Elo ratings. It raises 'UE002' if the comparison doesn't exist, 'UE003'
+  // if winner_id isn't one of the two compared photos, and 'UE001' if
+  // completed_at was already set (preventing the TOCTOU race from the
+  // original multi-step write approach).
   const { data, error: submitError } = await supabase.rpc(
     'submit_comparison_atomic',
     {
       p_comparison_id: comparison_id,
       p_winner_id: winner_id,
-      p_loser_id: loser_id,
     },
   );
 
   const result = data?.[0];
   if (submitError || !result) {
-    const isAlreadyDone = submitError?.code === 'UE001';
-    return json(
-      {
-        error: isAlreadyDone
-          ? 'Comparison already submitted'
-          : 'Failed to record comparison result',
-      },
-      isAlreadyDone ? 409 : 500,
-    );
+    switch (submitError?.code) {
+      case 'UE001':
+        return json({ error: 'Comparison already submitted' }, 409);
+      case 'UE002':
+        return json({ error: 'Comparison not found' }, 404);
+      case 'UE003':
+        return json({ error: 'winner_id must be one of the two compared photos' }, 400);
+      default:
+        return json({ error: 'Failed to record comparison result' }, 500);
+    }
   }
 
   return json({
     winner_id,
-    loser_id,
+    loser_id: result.loser_id,
     winner_new_rating: result.winner_new_rating,
     loser_new_rating: result.loser_new_rating,
   });
