@@ -91,14 +91,14 @@ func waitUntil(
 
 @MainActor
 func makeTestPipeline(
-    transport: MockTransport = MockTransport(),
+    transport: MockTransport? = nil,
     retryDelays: [Duration] = [],
     materializeConcurrency: Int = 1,
     uploadConcurrency: Int = 1,
     connectivity: AsyncStream<Void> = AsyncStream { $0.finish() }
 ) -> PhotoPipeline {
     PhotoPipeline(
-        transport: transport,
+        transport: transport ?? MockTransport(),
         sessionId: UUID(),
         userId: UUID(),
         retryDelays: retryDelays,
