@@ -1,5 +1,5 @@
 import { z } from 'npm:zod@3';
-import { computeMinComparisons, computeTopK, isBoundaryStable } from '../_shared/ranking-logic.ts';
+import { computeMinComparisons, computeTopK, isSessionComplete } from '../_shared/ranking-logic.ts';
 import { initSentry } from '../_shared/sentry.ts';
 import { json, serveAuthed } from '../_shared/http.ts';
 initSentry();
@@ -47,12 +47,14 @@ serveAuthed(async (req, _authHeader, supabase) => {
   // Detect and persist completion
   let currentStage = session.stage as string;
   if (currentStage !== 'complete') {
-    // Guard against vacuous truth: [].every(...) === true in JS
-    const allHaveCoverage = photoList.length > 0 &&
-      photoList.every((p) => p.comparison_count >= minComparisons);
-    const stable = isBoundaryStable(photoList, topK);
-    const exhausted = totalComps >= session.photo_count * 4;
-    if ((allHaveCoverage && stable) || exhausted) {
+    const complete = isSessionComplete(
+      photoList,
+      topK,
+      minComparisons,
+      totalComps,
+      session.photo_count,
+    );
+    if (complete) {
       currentStage = 'complete';
       await supabase.from('sessions').update({ stage: 'complete' }).eq(
         'id',

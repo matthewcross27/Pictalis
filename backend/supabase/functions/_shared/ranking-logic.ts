@@ -32,3 +32,20 @@ export function isBoundaryStable(
         (c.uncertainty + boundary.uncertainty) * 0.5,
   );
 }
+
+// Session is complete once every photo has its coverage floor met and the
+// top-K boundary has stabilized, or once the comparison budget is exhausted
+// as a safety net against never-stabilizing sessions.
+export function isSessionComplete(
+  photos: Pick<Photo, 'elo_rating' | 'uncertainty' | 'comparison_count'>[],
+  topK: number,
+  minComparisons: number,
+  totalComparisons: number,
+  photoCount: number,
+): boolean {
+  const allHaveCoverage = photos.length > 0 &&
+    photos.every((p) => p.comparison_count >= minComparisons);
+  const stable = isBoundaryStable(photos, topK);
+  const exhausted = totalComparisons >= photoCount * 4;
+  return (allHaveCoverage && stable) || exhausted;
+}
