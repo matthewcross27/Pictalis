@@ -25,32 +25,30 @@ struct ResultsView: View {
             ZStack {
                 Color.filmWhite.ignoresSafeArea()
 
-                Group {
-                    if isLoading {
-                        VStack(spacing: 12) {
-                            ProgressView().tint(Color.amber)
-                            Text("Loading results…")
-                                .font(.captionSerif)
-                                .foregroundStyle(Color.secondaryText)
-                        }
-                    } else if let errorMessage {
-                        Text(errorMessage)
-                            .font(.bodySerif)
-                            .foregroundStyle(Color.amber)
-                            .padding(.horizontal, 32)
-                    } else if photos.isEmpty {
-                        Text("No photos ranked yet.")
-                            .font(.bodySerif)
+                if isLoading {
+                    VStack(spacing: 12) {
+                        ProgressView().tint(Color.amber)
+                        Text("Loading results…")
+                            .font(.captionSerif)
                             .foregroundStyle(Color.secondaryText)
-                    } else {
-                        ScrollView {
-                            LazyVGrid(columns: columns, spacing: 4) {
-                                ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
-                                    photoCell(photo: photo, rank: index + 1)
-                                }
+                    }
+                } else if let errorMessage {
+                    Text(errorMessage)
+                        .font(.bodySerif)
+                        .foregroundStyle(Color.amber)
+                        .padding(.horizontal, 32)
+                } else if photos.isEmpty {
+                    Text("No photos ranked yet.")
+                        .font(.bodySerif)
+                        .foregroundStyle(Color.secondaryText)
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 4) {
+                            ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
+                                photoCell(photo: photo, rank: index + 1)
                             }
-                            .padding(4)
                         }
+                        .padding(4)
                     }
                 }
             }
