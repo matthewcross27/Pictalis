@@ -7,6 +7,7 @@ import {
   isSessionComplete,
   resolveTopKAndMinComparisons,
 } from './ranking-logic.ts';
+import { makePhoto } from './test-helpers.ts';
 
 // --- computeTopK ---
 
@@ -58,23 +59,6 @@ Deno.test('resolveTopKAndMinComparisons — explicit top_k override → used as-
 });
 
 // --- isBoundaryStable ---
-
-function makePhoto(
-  id: string,
-  elo: number,
-  uncertainty: number,
-  comparisons = 0,
-) {
-  return {
-    id,
-    storage_path: '',
-    thumbnail_path: null,
-    elo_rating: elo,
-    uncertainty,
-    comparison_count: comparisons,
-    cluster_id: null,
-  };
-}
 
 Deno.test('isBoundaryStable — empty array returns true (vacuous truth guard)', () => {
   assertEquals(isBoundaryStable([], 5), true);
