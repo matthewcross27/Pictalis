@@ -51,7 +51,7 @@ final class PhotoPipeline {
     private var activeUploads = 0
     private var waiters: [UUID: [CheckedContinuation<URL, Error>]] = [:]
     private var didMarkComplete = false
-    nonisolated(unsafe) private var backgroundTasks: [Task<Void, Never>] = []
+    @ObservationIgnored nonisolated(unsafe) private var backgroundTasks: [Task<Void, Never>] = []
 
     private let transport: any PhotoUploadTransport
     private let sessionId: UUID

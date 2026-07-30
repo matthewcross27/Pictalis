@@ -29,8 +29,8 @@ final class LocalCardProvider {
     private var hasRemaining: Bool { remainingCursor < remaining.count }
     private var isFilling = false
     private var currentMaxQueueSize = LocalCardProvider.normalQueueSize
-    nonisolated(unsafe) private var fillTask: Task<Void, Never>?
-    nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
+    @ObservationIgnored nonisolated(unsafe) private var fillTask: Task<Void, Never>?
+    @ObservationIgnored nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
 
     init(pipeline: PhotoPipeline) {
         self.pipeline = pipeline
