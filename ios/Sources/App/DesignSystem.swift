@@ -101,15 +101,15 @@ struct PhotoTapStyle: ButtonStyle {
 // MARK: - Stage Badge
 
 enum RankingStage: String {
-    case stage1 = "stage_1"
-    case stage2 = "stage_2"
-    case stage3 = "stage_3"
+    case cull
+    case ranking
+    case complete
 
     var label: String {
         switch self {
-        case .stage1: return "Stage 1"
-        case .stage2: return "Stage 2"
-        case .stage3: return "Stage 3"
+        case .cull: return "Cull"
+        case .ranking: return "Ranking"
+        case .complete: return "Complete"
         }
     }
 }
