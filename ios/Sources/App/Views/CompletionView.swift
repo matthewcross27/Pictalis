@@ -97,9 +97,7 @@ struct CompletionView: View {
             }
         }
         .task { await fetchTopPhotos() }
-        .fullScreenCover(item: $expandedPhoto) { photo in
-            PhotoExpandedView(id: photo.id, signedUrl: photo.signedUrl) { expandedPhoto = nil }
-        }
+        .expandedPhotoCover($expandedPhoto)
         .savedToPhotosAlert(message: $exportAlertMessage)
     }
 

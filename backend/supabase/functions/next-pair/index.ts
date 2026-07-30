@@ -68,6 +68,8 @@ serveAuthed(async (req, _authHeader, supabase) => {
     return json({ error: 'Not enough photos to compare' }, 422);
   }
 
+  const typedPhotos = photos as Photo[];
+
   const { topK, minComparisons } = resolveTopKAndMinComparisons(session);
 
   type RawComparison = CompletedComparison & { completed_at: string | null };
@@ -82,10 +84,10 @@ serveAuthed(async (req, _authHeader, supabase) => {
   // 4. Check completion (safety net - session-status also writes this)
   const allHaveCoverage = hasFullCoverage(photos, minComparisons);
   const complete = isSessionComplete(
-    photos as Photo[],
+    typedPhotos,
     topK,
     minComparisons,
-    totalComparisons(photos as Photo[]),
+    totalComparisons(typedPhotos),
     session.photo_count,
   );
 
@@ -96,9 +98,9 @@ serveAuthed(async (req, _authHeader, supabase) => {
 
   // 5. Select Photo A and Photo B
   const inCoverage = !allHaveCoverage;
-  const photoA = selectPhotoA(photos as Photo[], topK, minComparisons);
+  const photoA = selectPhotoA(typedPhotos, topK, minComparisons);
   const photoB = selectPhotoB(
-    photos as Photo[],
+    typedPhotos,
     photoA,
     pairCounts,
     inCoverage,
@@ -136,7 +138,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   return json({
     comparison_id: comparison.id,
     stage: session.stage,
-    progress: computeProgress(photos as Photo[], topK),
+    progress: computeProgress(typedPhotos, topK),
     photo_a: { ...photoA, signed_url: signedA.signedUrl },
     photo_b: { ...photoB, signed_url: signedB.signedUrl },
   });
