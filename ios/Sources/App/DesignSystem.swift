@@ -129,3 +129,24 @@ struct StageBadge: View {
             )
     }
 }
+
+// MARK: - Expand Photo Button
+
+struct ExpandPhotoButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(8)
+                .background(Color.photoOverlay)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("View full screen")
+        .accessibilityHint("Expand this photo")
+        .padding(8)
+    }
+}
