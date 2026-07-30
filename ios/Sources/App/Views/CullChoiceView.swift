@@ -92,7 +92,7 @@ struct CullChoiceView: View {
         isStarting = true
         errorMessage = nil
         do {
-            _ = try await api.startCull(sessionId: sessionId)
+            try await api.startCull(sessionId: sessionId)
             isStarting = false
             onFilterThenRank()
         } catch {

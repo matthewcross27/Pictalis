@@ -90,14 +90,13 @@ final class APIClient {
     // MARK: - register-photo
     // POST { session_id, photo_id, storage_path } → { photo: { id, ... } }
 
-    func registerPhoto(sessionId: UUID, photoId: UUID, storagePath: String) async throws -> RegisteredPhoto {
+    func registerPhoto(sessionId: UUID, photoId: UUID, storagePath: String) async throws {
         let req = try buildRequest(path: "register-photo", method: "POST", body: [
             "session_id": sessionId.lowercased,
             "photo_id": photoId.lowercased,
             "storage_path": storagePath,
         ])
-        let data = try await send(req)
-        return try decoder.decode(RegisterPhotoResponse.self, from: data).photo
+        _ = try await send(req)
     }
 
     // MARK: - next-pair
@@ -111,13 +110,12 @@ final class APIClient {
     // MARK: - submit-comparison
     // POST { comparison_id, winner_id } → { winner_id, loser_id, winner_new_rating, loser_new_rating }
 
-    func submitComparison(comparisonId: UUID, winnerId: UUID) async throws -> SubmitComparisonResponse {
+    func submitComparison(comparisonId: UUID, winnerId: UUID) async throws {
         let req = try buildRequest(path: "submit-comparison", method: "POST", body: [
             "comparison_id": comparisonId.lowercased,
             "winner_id": winnerId.lowercased,
         ])
-        let data = try await send(req)
-        return try decoder.decode(SubmitComparisonResponse.self, from: data)
+        _ = try await send(req)
     }
 
     // MARK: - remove-photo
@@ -157,9 +155,8 @@ final class APIClient {
     // MARK: - start-cull
     // POST { session_id } → { stage }
 
-    func startCull(sessionId: UUID) async throws -> StartCullResponse {
-        let data = try await postSessionId("start-cull", sessionId: sessionId)
-        return try decoder.decode(StartCullResponse.self, from: data)
+    func startCull(sessionId: UUID) async throws {
+        _ = try await postSessionId("start-cull", sessionId: sessionId)
     }
 
     // MARK: - finish-cull

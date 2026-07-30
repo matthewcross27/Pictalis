@@ -29,7 +29,6 @@ final class DecisionStore {
         decisions.append(StoredDecision(
             photoId: photoId,
             decision: decision,
-            timestamp: .now,
             synced: false
         ))
         continuation.yield(decisions)
@@ -94,7 +93,7 @@ actor DecisionPersistence {
             print("[DecisionStore] Could not resolve file URL for save \(sessionId): \(error)")
             return
         }
-        let file = SessionDecisionFile(sessionId: sessionId, decisions: decisions)
+        let file = SessionDecisionFile(decisions: decisions)
         guard let data = try? encoder.encode(file) else { return }
         let tmp  = dest.deletingLastPathComponent()
             .appendingPathComponent("cull_\(sessionId.lowercased).tmp.json")

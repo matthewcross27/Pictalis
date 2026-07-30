@@ -25,7 +25,7 @@ struct SupabaseUploadTransport: PhotoUploadTransport {
     }
 
     func markUploaded(sessionId: UUID, photoId: UUID, storagePath: String) async throws {
-        _ = try await api.registerPhoto(sessionId: sessionId, photoId: photoId, storagePath: storagePath)
+        try await api.registerPhoto(sessionId: sessionId, photoId: photoId, storagePath: storagePath)
     }
 
     func markUploadComplete(sessionId: UUID) async throws {

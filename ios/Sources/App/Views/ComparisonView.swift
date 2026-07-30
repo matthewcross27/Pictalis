@@ -211,7 +211,7 @@ struct ComparisonView: View {
         guard let pair else { return }
         isSubmitting = true
         do {
-            _ = try await api.submitComparison(
+            try await api.submitComparison(
                 comparisonId: pair.comparisonId,
                 winnerId: winner.id
             )

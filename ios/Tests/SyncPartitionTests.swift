@@ -6,8 +6,8 @@ final class SyncPartitionTests: XCTestCase {
         let registered = UUID()
         let failed = UUID()
         let decisions = [
-            StoredDecision(photoId: registered, decision: .keep, timestamp: .now, synced: false),
-            StoredDecision(photoId: failed, decision: .drop, timestamp: .now, synced: false),
+            StoredDecision(photoId: registered, decision: .keep, synced: false),
+            StoredDecision(photoId: failed, decision: .drop, synced: false),
         ]
         let states: [UUID: PhotoRegistrationState] = [
             registered: .registered,
@@ -37,7 +37,7 @@ final class MockSubmitter: CullDecisionSubmitting {
         while paused { try? await Task.sleep(for: .milliseconds(5)) }
         submitted.append(contentsOf: decisions.map(\.photoId))
         return BatchSubmitResponse(
-            results: decisions.map { BatchDecisionResult(photoId: $0.photoId, success: true, error: nil) }
+            results: decisions.map { BatchDecisionResult(photoId: $0.photoId, success: true) }
         )
     }
 }
