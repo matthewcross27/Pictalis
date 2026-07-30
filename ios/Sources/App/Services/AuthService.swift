@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import Sentry
 import Supabase
 
 @Observable
@@ -29,7 +28,7 @@ final class AuthService {
                 isAuthenticated = true
             }
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             authError = error
         }
     }

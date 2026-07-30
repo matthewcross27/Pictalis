@@ -1,4 +1,3 @@
-import Sentry
 import SwiftUI
 import PhotosUI
 
@@ -129,7 +128,7 @@ struct SessionSetupView: View {
                 pipeline.start(photos: pendingPhotos)
                 onStart(session.id, pipeline)
             } catch {
-                SentrySDK.capture(error: error)
+                ErrorReporter.capture(error)
                 errorMessage = "Could not start: \(error.localizedDescription)"
                 isStarting = false
             }

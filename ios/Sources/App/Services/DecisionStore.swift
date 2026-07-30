@@ -1,5 +1,4 @@
 import Foundation
-import Sentry
 
 @Observable @MainActor
 final class DecisionStore {
@@ -67,7 +66,7 @@ actor DecisionPersistence {
         do {
             url = try fileURL(sessionId: sessionId)
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             return []
         }
         guard let data = try? Data(contentsOf: url) else { return [] }
@@ -75,7 +74,7 @@ actor DecisionPersistence {
             let file = try decoder.decode(SessionDecisionFile.self, from: data)
             return file.decisions
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             return []
         }
     }
@@ -91,7 +90,7 @@ actor DecisionPersistence {
         do {
             dest = try fileURL(sessionId: sessionId)
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             return
         }
         let file = SessionDecisionFile(decisions: decisions)
@@ -105,7 +104,7 @@ actor DecisionPersistence {
                 backupItemName: nil, options: [], resultingItemURL: nil
             )
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             try? fileManager.removeItem(at: tmp)
         }
     }

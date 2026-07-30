@@ -1,4 +1,3 @@
-import Sentry
 import SwiftUI
 
 struct ResultsView: View {
@@ -137,7 +136,7 @@ struct ResultsView: View {
             sessionStage = (response.session?.stage).flatMap { RankingStage(rawValue: $0) }
             isSessionComplete = response.session?.isComplete ?? false
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             // Keep showing initial photos if the full fetch fails.
             if photos.isEmpty {
                 errorMessage = "Failed to load results: \(error.localizedDescription)"
@@ -154,7 +153,7 @@ struct ResultsView: View {
             try await PhotoExporter.exportPhoto(signedUrl: photo.signedUrl)
             return true
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             return false
         }
     }

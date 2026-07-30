@@ -1,6 +1,5 @@
 import Foundation
 import Photos
-import Sentry
 import UIKit
 
 /// Downloads a ranked photo from its signed URL and saves it to the user's Photos library.
@@ -33,7 +32,7 @@ enum PhotoExporter {
                     do {
                         return try await downloadImage(from: photo.signedUrl)
                     } catch {
-                        SentrySDK.capture(error: error)
+                        ErrorReporter.capture(error)
                         return nil
                     }
                 }
@@ -53,7 +52,7 @@ enum PhotoExporter {
             }
             return images.count
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             return 0
         }
     }

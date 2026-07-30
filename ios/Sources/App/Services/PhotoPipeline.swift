@@ -1,7 +1,6 @@
 import Foundation
 import Network
 import Observation
-import Sentry
 import UIKit
 
 enum PhotoRegistrationState {
@@ -220,7 +219,7 @@ final class PhotoPipeline {
             if items[id]?.materializeAttempts == 1 {
                 await materialize(id) // one immediate retry
             } else {
-                SentrySDK.capture(error: error)
+                ErrorReporter.capture(error)
                 items[id]?.state = .failed
                 updateFailedIds()
                 resumeWaiters(for: id, with: .failure(PipelineError.photoUnavailable))
@@ -294,7 +293,7 @@ final class PhotoPipeline {
             registeredCount += 1
             updateFailedIds()
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             if items[id]?.state == .uploading { items[id]?.state = .parked }
             updateFailedIds()
         }
@@ -339,7 +338,7 @@ final class PhotoPipeline {
             do {
                 try await self.transport.markUploadComplete(sessionId: self.sessionId)
             } catch {
-                SentrySDK.capture(error: error)
+                ErrorReporter.capture(error)
             }
             self.isComplete = true
         }

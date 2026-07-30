@@ -1,4 +1,3 @@
-import Sentry
 import SwiftUI
 
 struct CullChoiceView: View {
@@ -97,7 +96,7 @@ struct CullChoiceView: View {
             isStarting = false
             onFilterThenRank()
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             errorMessage = "Couldn't start — tap to try again."
             isStarting = false
         }

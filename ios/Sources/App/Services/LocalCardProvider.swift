@@ -1,4 +1,3 @@
-import Sentry
 import UIKit
 
 enum CullQueueState: Equatable {
@@ -100,7 +99,7 @@ final class LocalCardProvider {
                 // deck moves on regardless, but a materialize failure here is still
                 // silent to the user in this swipe-deck flow (unlike ComparisonView's
                 // failedIds banner), so it's worth capturing for production visibility.
-                SentrySDK.capture(error: error)
+                ErrorReporter.capture(error)
                 continue
             }
         }

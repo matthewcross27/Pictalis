@@ -1,4 +1,3 @@
-import Sentry
 import SwiftUI
 
 struct ComparisonView: View {
@@ -218,7 +217,7 @@ struct ComparisonView: View {
             )
             comparisonCount += 1
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             prefetchedPair = nil
             prefetchTask?.cancel()
             isSubmitting = false
@@ -247,7 +246,7 @@ struct ComparisonView: View {
         do {
             try await api.removePhoto(sessionId: sessionId, photoId: photo.id)
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             isRemoving = false
             return
         }
@@ -304,7 +303,7 @@ struct ComparisonView: View {
                 try? await Task.sleep(for: delay)
                 delay = min(delay * 2, .seconds(4))
             } catch {
-                SentrySDK.capture(error: error)
+                ErrorReporter.capture(error)
                 errorMessage = "Failed to load next pair: \(error.localizedDescription)"
                 isLoading = false
                 return

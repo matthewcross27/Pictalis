@@ -1,6 +1,5 @@
 import Foundation
 import Network
-import Sentry
 import UIKit
 
 // Seam for testing: the one server call SyncService makes. APIClient conforms.
@@ -135,7 +134,7 @@ final class SyncService {
                 try await self.api.batchSubmitCull(sessionId: self.sessionId, decisions: send)
             }
         } catch {
-            SentrySDK.capture(error: error)
+            ErrorReporter.capture(error)
             return
         }
         let succeeded = response.results.filter(\.success).map(\.photoId)
