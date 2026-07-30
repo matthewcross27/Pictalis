@@ -16,19 +16,42 @@ enum PhotoExporter {
         }
     }
 
-    /// Exports each photo, logging (not throwing) individual failures, and returns the count saved.
+    /// Downloads every photo concurrently, then saves all successful downloads in a single
+    /// Photos library transaction (instead of one round trip + one transaction per photo),
+    /// logging individual download failures. Returns the count saved.
     @discardableResult
     static func exportAll(_ photos: [RankedPhoto]) async -> Int {
-        var saved = 0
-        for photo in photos {
-            do {
-                try await exportPhoto(signedUrl: photo.signedUrl)
-                saved += 1
-            } catch {
-                print("Export failed: \(error)")
+        let images: [UIImage] = await withTaskGroup(of: UIImage?.self) { group in
+            for photo in photos {
+                group.addTask {
+                    do {
+                        let (data, _) = try await URLSession.shared.data(from: photo.signedUrl)
+                        guard let image = UIImage(data: data) else { throw ExportError.invalidImageData }
+                        return image
+                    } catch {
+                        print("Export download failed: \(error)")
+                        return nil
+                    }
+                }
             }
+            var results: [UIImage] = []
+            for await image in group {
+                if let image { results.append(image) }
+            }
+            return results
         }
-        return saved
+        guard !images.isEmpty else { return 0 }
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                for image in images {
+                    PHAssetCreationRequest.creationRequestForAsset(from: image)
+                }
+            }
+            return images.count
+        } catch {
+            print("Export save failed: \(error)")
+            return 0
+        }
     }
 
     /// A pluralized "N photo(s) saved to your library." confirmation message.
