@@ -86,13 +86,14 @@ MVP feature-complete. Core flow is end-to-end functional:
 | iOS app | Full flow: session setup → photo selection → pairwise comparison → results/completion |
 | Backend edge functions | 12 deployed: `create-session`, `register-photo`, `batch-pre-register`, `next-pair`, `submit-comparison`, `session-status`, `results`, `remove-photo`, `mark-upload-complete`, `start-cull`, `batch-submit-cull`, `finish-cull` |
 | Database | 16 migrations applied: schema, storage, RLS, atomic comparison, phash, session stages, adaptive ranking, dedup stage, upload pipeline, local-first cull stage |
-| Ranking engine | Elo + adaptive pair selection + cluster-first dedup stage (9 tests passing) |
+| Ranking engine | Elo + adaptive pair selection (9 tests passing) |
 | Processing worker | Scaffolded — embeddings/clustering not yet wired |
 
 Notable implemented features:
-- Cluster-first dedup stage: surfaces intra-cluster comparisons before broad ranking begins
 - Photo removal during comparison: suppresses a photo and clears open comparisons
-- Session stage tracking: `dedup → ranking → refine → complete`
+- Session stage tracking: `cull → ranking → complete`
 - Adaptive pair selection: prioritizes high-uncertainty pairs for efficient convergence
+
+Scaffolded but not wired into any handler: a cluster-first dedup stage (`photos.phash`/`photos.cluster_id` columns, `_shared/phash.ts`, `_shared/pair-selection.ts`'s `selectDedupPair`/`isDedupComplete`, and a `dedup` value still allowed by the `sessions_stage_check` constraint). No code path ever sets or reads a `dedup` stage - `create-session` always starts sessions at `ranking`.
 
 See [`docs/PRD.md`](docs/PRD.md) for the full product spec.
