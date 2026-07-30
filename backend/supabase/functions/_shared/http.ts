@@ -1,3 +1,4 @@
+import { z } from 'npm:zod@3';
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { Sentry } from './sentry.ts';
 
@@ -5,6 +6,10 @@ export const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Shared by every endpoint that takes only a session_id, whether as a JSON
+// body field (mutations) or a query param (reads) - see call sites.
+export const SessionIdSchema = z.object({ session_id: z.string().uuid() });
 
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

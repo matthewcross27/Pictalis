@@ -1,15 +1,12 @@
-import { z } from 'npm:zod@3';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseJsonBody, serveAuthed } from '../_shared/http.ts';
+import { json, parseJsonBody, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
 initSentry();
-
-const BodySchema = z.object({ session_id: z.string().uuid() });
 
 serveAuthed(async (req, _authHeader, supabase) => {
   const body = await parseJsonBody(req);
   if (body instanceof Response) return body;
 
-  const parsed = BodySchema.safeParse(body);
+  const parsed = SessionIdSchema.safeParse(body);
   if (!parsed.success) {
     return json({ error: parsed.error.flatten() }, 400);
   }

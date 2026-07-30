@@ -1,14 +1,11 @@
-import { z } from 'npm:zod@3';
 import { computeMinComparisons, computeTopK, isSessionComplete } from '../_shared/ranking-logic.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, serveAuthed } from '../_shared/http.ts';
+import { json, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
 initSentry();
-
-const QuerySchema = z.object({ session_id: z.string().uuid() });
 
 serveAuthed(async (req, _authHeader, supabase) => {
   const url = new URL(req.url);
-  const parsed = QuerySchema.safeParse({
+  const parsed = SessionIdSchema.safeParse({
     session_id: url.searchParams.get('session_id'),
   });
   if (!parsed.success) {
