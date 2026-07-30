@@ -185,7 +185,7 @@ final class PhotoPipeline {
     private var sessionDirectory: URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("PictalisUploads")
-            .appendingPathComponent(sessionId.uuidString.lowercased())
+            .appendingPathComponent(sessionId.lowercased)
     }
 
     private func prepareSessionDirectory() {
@@ -216,7 +216,7 @@ final class PhotoPipeline {
             }.value
             // The photo may have been dropped while we were decoding.
             guard items[id]?.state == .pending else { return }
-            let url = sessionDirectory.appendingPathComponent("\(id.uuidString.lowercased()).jpg")
+            let url = sessionDirectory.appendingPathComponent("\(id.lowercased).jpg")
             try jpeg.write(to: url)
             items[id]?.fileURL = url
             items[id]?.state = .materialized
@@ -287,7 +287,7 @@ final class PhotoPipeline {
             updateFailedIds()
             return
         }
-        let storagePath = "\(userId.uuidString.lowercased())/\(sessionId.uuidString.lowercased())/\(id.uuidString.lowercased()).jpg"
+        let storagePath = "\(userId.lowercased)/\(sessionId.lowercased)/\(id.lowercased).jpg"
         do {
             if items[id]?.didUpload != true {
                 try await retryWithBackoff(delays: retryDelays, jitter: 0...300) {

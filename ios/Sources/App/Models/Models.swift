@@ -1,5 +1,10 @@
 import Foundation
 
+extension UUID {
+    // Backend zod schemas validate session/photo ids as lowercase UUID strings.
+    var lowercased: String { uuidString.lowercased() }
+}
+
 // MARK: - create-session
 
 struct CreateSessionResponse: Decodable {

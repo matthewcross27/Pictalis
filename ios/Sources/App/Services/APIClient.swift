@@ -77,8 +77,8 @@ final class APIClient {
 
     func registerPhoto(sessionId: UUID, photoId: UUID, storagePath: String) async throws -> RegisteredPhoto {
         let req = try buildRequest(path: "register-photo", method: "POST", body: [
-            "session_id": sessionId.uuidString.lowercased(),
-            "photo_id": photoId.uuidString.lowercased(),
+            "session_id": sessionId.lowercased,
+            "photo_id": photoId.lowercased,
             "storage_path": storagePath,
         ])
         let data = try await send(req)
@@ -91,7 +91,7 @@ final class APIClient {
     func nextPair(sessionId: UUID) async throws -> NextPairResponse {
         let req = try buildRequest(
             path: "next-pair",
-            queryItems: [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
+            queryItems: [URLQueryItem(name: "session_id", value: sessionId.lowercased)]
         )
         let data = try await send(req)
         return try decoder.decode(NextPairResponse.self, from: data)
@@ -102,8 +102,8 @@ final class APIClient {
 
     func submitComparison(comparisonId: UUID, winnerId: UUID) async throws -> SubmitComparisonResponse {
         let req = try buildRequest(path: "submit-comparison", method: "POST", body: [
-            "comparison_id": comparisonId.uuidString.lowercased(),
-            "winner_id": winnerId.uuidString.lowercased(),
+            "comparison_id": comparisonId.lowercased,
+            "winner_id": winnerId.lowercased,
         ])
         let data = try await send(req)
         return try decoder.decode(SubmitComparisonResponse.self, from: data)
@@ -114,8 +114,8 @@ final class APIClient {
 
     func removePhoto(sessionId: UUID, photoId: UUID) async throws {
         let req = try buildRequest(path: "remove-photo", method: "POST", body: [
-            "session_id": sessionId.uuidString.lowercased(),
-            "photo_id":   photoId.uuidString.lowercased(),
+            "session_id": sessionId.lowercased,
+            "photo_id":   photoId.lowercased,
         ])
         _ = try await send(req)
     }
@@ -126,7 +126,7 @@ final class APIClient {
     func sessionStatus(sessionId: UUID) async throws -> SessionStatus {
         let req = try buildRequest(
             path: "session-status",
-            queryItems: [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
+            queryItems: [URLQueryItem(name: "session_id", value: sessionId.lowercased)]
         )
         let data = try await send(req)
         return try decoder.decode(SessionStatus.self, from: data)
@@ -139,7 +139,7 @@ final class APIClient {
         let req = try buildRequest(
             path: "results",
             queryItems: [
-                URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased()),
+                URLQueryItem(name: "session_id", value: sessionId.lowercased),
                 URLQueryItem(name: "limit", value: "\(limit)"),
             ]
         )
@@ -152,7 +152,7 @@ final class APIClient {
 
     func startCull(sessionId: UUID) async throws -> StartCullResponse {
         let req = try buildRequest(path: "start-cull", method: "POST", body: [
-            "session_id": sessionId.uuidString.lowercased(),
+            "session_id": sessionId.lowercased,
         ])
         let data = try await send(req)
         return try decoder.decode(StartCullResponse.self, from: data)
@@ -163,7 +163,7 @@ final class APIClient {
 
     func finishCull(sessionId: UUID) async throws {
         let req = try buildRequest(path: "finish-cull", method: "POST", body: [
-            "session_id": sessionId.uuidString.lowercased(),
+            "session_id": sessionId.lowercased,
         ])
         _ = try await send(req)
     }
@@ -173,9 +173,9 @@ final class APIClient {
 
     func batchSubmitCull(sessionId: UUID, decisions: [StoredDecision]) async throws -> BatchSubmitResponse {
         let req = try buildRequest(path: "batch-submit-cull", method: "POST", body: [
-            "session_id": sessionId.uuidString.lowercased(),
+            "session_id": sessionId.lowercased,
             "decisions":  decisions.map { d in
-                ["photo_id": d.photoId.uuidString.lowercased(), "decision": d.decision.rawValue]
+                ["photo_id": d.photoId.lowercased, "decision": d.decision.rawValue]
             },
         ])
         let data = try await send(req)
@@ -187,7 +187,7 @@ final class APIClient {
 
     func markUploadComplete(sessionId: UUID) async throws {
         let req = try buildRequest(path: "mark-upload-complete", method: "POST", body: [
-            "session_id": sessionId.uuidString.lowercased(),
+            "session_id": sessionId.lowercased,
         ])
         _ = try await send(req)
     }
@@ -197,8 +197,8 @@ final class APIClient {
 
     func batchPreRegister(sessionId: UUID, photoIds: [UUID]) async throws {
         let req = try buildRequest(path: "batch-pre-register", method: "POST", body: [
-            "session_id": sessionId.uuidString.lowercased(),
-            "photo_ids": photoIds.map { $0.uuidString.lowercased() },
+            "session_id": sessionId.lowercased,
+            "photo_ids": photoIds.map { $0.lowercased },
         ])
         _ = try await send(req)
     }

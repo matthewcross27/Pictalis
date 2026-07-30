@@ -59,7 +59,7 @@ actor DecisionPersistence {
         guard let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             throw PersistenceError.noAppSupportDirectory
         }
-        return support.appendingPathComponent("cull_\(sessionId.uuidString.lowercased()).json")
+        return support.appendingPathComponent("cull_\(sessionId.lowercased).json")
     }
 
     func load(sessionId: UUID) -> [StoredDecision] {
@@ -97,7 +97,7 @@ actor DecisionPersistence {
         let file = SessionDecisionFile(sessionId: sessionId, decisions: decisions)
         guard let data = try? encoder.encode(file) else { return }
         let tmp  = dest.deletingLastPathComponent()
-            .appendingPathComponent("cull_\(sessionId.uuidString.lowercased()).tmp.json")
+            .appendingPathComponent("cull_\(sessionId.lowercased).tmp.json")
         do {
             try data.write(to: tmp)
             _ = try fileManager.replaceItem(
