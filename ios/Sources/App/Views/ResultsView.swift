@@ -2,7 +2,7 @@ import SwiftUI
 import Photos
 
 struct ResultsView: View {
-    @EnvironmentObject private var api: APIClient
+    @Environment(APIClient.self) private var api
 
     let sessionId: UUID
     var onBack: (() -> Void)? = nil
@@ -16,7 +16,7 @@ struct ResultsView: View {
     @State private var errorMessage: String?
     @State private var exportingId: UUID?
     @State private var exportAlertMessage: String?
-    @State private var sessionStage: String?
+    @State private var sessionStage: RankingStage?
     @State private var isSessionComplete = false
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
@@ -64,8 +64,8 @@ struct ResultsView: View {
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundStyle(Color.ink)
                         }
-                    } else if sessionStage != nil {
-                        StageBadge(stage: sessionStage ?? "", isComplete: isSessionComplete)
+                    } else if let sessionStage {
+                        StageBadge(stage: sessionStage, isComplete: isSessionComplete)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -74,7 +74,7 @@ struct ResultsView: View {
                         .foregroundStyle(Color.amber)
                         .disabled(photos.isEmpty)
                         .accessibilityLabel("Save to Photos library")
-                        .accessibilityHint("Double-tap to save all ranked photos to your Photos library")
+                        .accessibilityHint("Save all ranked photos to your Photos library")
                 }
             }
         }
@@ -125,21 +125,19 @@ struct ResultsView: View {
                         }
                     }
                 } label: {
-                    Group {
-                        if exportingId == photo.id {
-                            ProgressView().tint(.white)
-                        } else {
-                            Image(systemName: "square.and.arrow.down")
-                                .foregroundStyle(.white)
-                        }
+                    if exportingId == photo.id {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "square.and.arrow.down")
+                            .foregroundStyle(.white)
                     }
-                    .font(.system(size: 12, weight: .medium))
-                    .padding(8)
-                    .background(Color.photoOverlay)
-                    .clipShape(Capsule())
                 }
+                .font(.system(size: 12, weight: .medium))
+                .padding(8)
+                .background(Color.photoOverlay)
+                .clipShape(Capsule())
                 .accessibilityLabel("Save photo to library")
-                .accessibilityHint("Double-tap to save this photo to your Photos library")
+                .accessibilityHint("Save this photo to your Photos library")
                 .padding(8)
                 .disabled(exportingId != nil)
             }
@@ -148,7 +146,7 @@ struct ResultsView: View {
             .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
             .onTapGesture { expandedPhoto = photo }
             .accessibilityLabel("Photo ranked number \(rank)")
-            .accessibilityHint("Double-tap to view full screen")
+            .accessibilityHint("View full screen")
     }
 
     private func fetchResults() async {
@@ -156,7 +154,7 @@ struct ResultsView: View {
         do {
             let response = try await api.results(sessionId: sessionId)
             photos = response.photos
-            sessionStage = response.session?.stage
+            sessionStage = (response.session?.stage).flatMap { RankingStage(rawValue: $0) }
             isSessionComplete = response.session?.isComplete ?? false
         } catch {
             // Keep showing initial photos if the full fetch fails.

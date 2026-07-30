@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Supabase
 
 enum APIError: Error {
@@ -6,8 +7,9 @@ enum APIError: Error {
     case httpError(statusCode: Int, body: Data)
 }
 
+@Observable
 @MainActor
-final class APIClient: ObservableObject {
+final class APIClient {
     private let supabase: SupabaseClient
     private let decoder = JSONDecoder()
 
@@ -26,6 +28,18 @@ final class APIClient: ObservableObject {
             throw APIError.unauthenticated
         }
         return "Bearer \(token)"
+    }
+
+    private func buildRequest(path: String, queryItems: [URLQueryItem] = []) throws -> URLRequest {
+        guard var comps = URLComponents(url: functionsBase.appending(path: path), resolvingAgainstBaseURL: false) else {
+            throw URLError(.badURL)
+        }
+        if !queryItems.isEmpty { comps.queryItems = queryItems }
+        guard let url = comps.url else { throw URLError(.badURL) }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(supabase.auth.currentSession?.accessToken ?? "")", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        return req
     }
 
     private func validate(_ response: URLResponse, data: Data) throws {
@@ -72,11 +86,11 @@ final class APIClient: ObservableObject {
     // GET ?session_id=... → { comparison_id, photo_a, photo_b }
 
     func nextPair(sessionId: UUID) async throws -> NextPairResponse {
-        var comps = URLComponents(url: functionsBase.appending(path: "next-pair"), resolvingAgainstBaseURL: false)!
-        comps.queryItems = [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
-        var req = URLRequest(url: comps.url!)
+        var req = try buildRequest(
+            path: "next-pair",
+            queryItems: [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
+        )
         req.httpMethod = "GET"
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: req)
         try validate(response, data: data)
         return try decoder.decode(NextPairResponse.self, from: data)
@@ -121,11 +135,11 @@ final class APIClient: ObservableObject {
     // GET ?session_id=... → { stage, is_complete, top_photo_count, total_comparisons }
 
     func sessionStatus(sessionId: UUID) async throws -> SessionStatus {
-        var comps = URLComponents(url: functionsBase.appending(path: "session-status"), resolvingAgainstBaseURL: false)!
-        comps.queryItems = [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
-        var req = URLRequest(url: comps.url!)
+        var req = try buildRequest(
+            path: "session-status",
+            queryItems: [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
+        )
         req.httpMethod = "GET"
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: req)
         try validate(response, data: data)
         return try decoder.decode(SessionStatus.self, from: data)
@@ -135,14 +149,14 @@ final class APIClient: ObservableObject {
     // GET ?session_id=...&limit=20 → { photos: [...], session: { stage, is_complete } }
 
     func results(sessionId: UUID, limit: Int = 20) async throws -> ResultsResponse {
-        var comps = URLComponents(url: functionsBase.appending(path: "results"), resolvingAgainstBaseURL: false)!
-        comps.queryItems = [
-            URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased()),
-            URLQueryItem(name: "limit", value: "\(limit)"),
-        ]
-        var req = URLRequest(url: comps.url!)
+        var req = try buildRequest(
+            path: "results",
+            queryItems: [
+                URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased()),
+                URLQueryItem(name: "limit", value: "\(limit)"),
+            ]
+        )
         req.httpMethod = "GET"
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: req)
         try validate(response, data: data)
         return try decoder.decode(ResultsResponse.self, from: data)
@@ -169,11 +183,11 @@ final class APIClient: ObservableObject {
     // GET ?session_id=... → CullCard (done:true when empty)
 
     func nextCull(sessionId: UUID) async throws -> CullCard {
-        var comps = URLComponents(url: functionsBase.appending(path: "next-cull"), resolvingAgainstBaseURL: false)!
-        comps.queryItems = [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
-        var req = URLRequest(url: comps.url!)
+        var req = try buildRequest(
+            path: "next-cull",
+            queryItems: [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
+        )
         req.httpMethod = "GET"
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: req)
         try validate(response, data: data)
         return try decoder.decode(CullCard.self, from: data)

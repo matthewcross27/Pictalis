@@ -18,6 +18,8 @@ final class SyncService {
     private var isDraining = false
     private var monitor:   NWPathMonitor?
     private let registrationState: (UUID) -> PhotoRegistrationState
+    private var observerTasks: [Task<Void, Never>] = []
+    private var streamContinuation: AsyncStream<Void>.Continuation?
 
     init(
         sessionId: UUID,
@@ -70,26 +72,42 @@ final class SyncService {
 
     private func startObservers() {
         // Re-drain on app foreground
-        Task { @MainActor [weak self] in
+        observerTasks.append(Task { @MainActor [weak self] in
             for await _ in NotificationCenter.default.notifications(
                 named: UIApplication.didBecomeActiveNotification
             ) {
                 await self?.drain()
             }
-        }
+        })
 
         // Re-drain on connectivity restore
         let monitor = NWPathMonitor()
         self.monitor = monitor
         let (stream, continuation) = AsyncStream<Void>.makeStream()
+        self.streamContinuation = continuation
         monitor.pathUpdateHandler = { path in
             if path.status == .satisfied { continuation.yield() }
         }
         monitor.start(queue: DispatchQueue(label: "sync.monitor", qos: .background))
 
-        Task { @MainActor [weak self] in
+        observerTasks.append(Task { @MainActor [weak self] in
             for await _ in stream { await self?.drain() }
-        }
+        })
+    }
+
+    func stop() {
+        for task in observerTasks { task.cancel() }
+        observerTasks.removeAll()
+        streamContinuation?.finish()
+        streamContinuation = nil
+        monitor?.cancel()
+        monitor = nil
+    }
+
+    deinit {
+        for task in observerTasks { task.cancel() }
+        streamContinuation?.finish()
+        monitor?.cancel()
     }
 
     // Coalesced drain: skips if one is already running. The isDraining guard

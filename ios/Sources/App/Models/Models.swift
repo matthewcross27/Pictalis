@@ -62,7 +62,7 @@ struct NextPairResponse: Decodable {
     }
 }
 
-struct PairPhoto: Decodable, Identifiable {
+struct PairPhoto: Decodable, Identifiable, Equatable {
     let id: UUID
     let storagePath: String
     let thumbnailPath: String?
@@ -113,7 +113,7 @@ struct SessionInfo: Decodable {
     }
 }
 
-struct RankedPhoto: Decodable, Identifiable {
+struct RankedPhoto: Decodable, Identifiable, Equatable {
     let id:              UUID
     let storagePath:     String
     let thumbnailPath:   String?

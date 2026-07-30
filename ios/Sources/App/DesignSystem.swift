@@ -11,6 +11,7 @@ extension Color {
     static let divider       = Color(red: 0.855, green: 0.835, blue: 0.804)
     static let amber         = Color(red: 0.700, green: 0.480, blue: 0.060)
     static let photoOverlay  = Color(red: 0.098, green: 0.094, blue: 0.071).opacity(0.55)
+    static let photoBackground = Color(red: 0.059, green: 0.055, blue: 0.043)
 
     // Status badges
     static let badgeCompleteFill = Color(red: 0.200, green: 0.588, blue: 0.294).opacity(0.15)
@@ -23,12 +24,12 @@ extension Color {
 // Fraunces at every level. Weight contrast carries hierarchy — size is secondary.
 
 extension Font {
-    static let displaySerif  = Font.custom("Fraunces-SemiBold", size: 36)
-    static let headlineSerif = Font.custom("Fraunces-SemiBold", size: 22)
-    static let titleSerif    = Font.custom("Fraunces-Medium",   size: 17)
-    static let bodySerif     = Font.custom("Fraunces-Regular",  size: 16)
-    static let labelSerif    = Font.custom("Fraunces-Medium",   size: 14)
-    static let captionSerif  = Font.custom("Fraunces-Regular",  size: 11)
+    static let displaySerif  = Font.custom("Fraunces-SemiBold", size: 36, relativeTo: .largeTitle)
+    static let headlineSerif = Font.custom("Fraunces-SemiBold", size: 22, relativeTo: .headline)
+    static let titleSerif    = Font.custom("Fraunces-Medium",   size: 17, relativeTo: .body)
+    static let bodySerif     = Font.custom("Fraunces-Regular",  size: 16, relativeTo: .body)
+    static let labelSerif    = Font.custom("Fraunces-Medium",   size: 14, relativeTo: .subheadline)
+    static let captionSerif  = Font.custom("Fraunces-Regular",  size: 11, relativeTo: .caption)
 }
 
 // MARK: - Corner Radii
@@ -99,12 +100,26 @@ struct PhotoTapStyle: ButtonStyle {
 
 // MARK: - Stage Badge
 
+enum RankingStage: String {
+    case stage1 = "stage_1"
+    case stage2 = "stage_2"
+    case stage3 = "stage_3"
+
+    var label: String {
+        switch self {
+        case .stage1: return "Stage 1"
+        case .stage2: return "Stage 2"
+        case .stage3: return "Stage 3"
+        }
+    }
+}
+
 struct StageBadge: View {
-    let stage: String
+    let stage: RankingStage
     var isComplete: Bool = false
 
     var body: some View {
-        Text(label)
+        Text(isComplete ? "Complete" : stage.label)
             .font(.captionSerif)
             .foregroundStyle(isComplete ? Color.badgeCompleteText : Color.badgeActiveText)
             .padding(.horizontal, 10)
@@ -112,15 +127,5 @@ struct StageBadge: View {
             .background(
                 Capsule().fill(isComplete ? Color.badgeCompleteFill : Color.badgeActiveFill)
             )
-    }
-
-    private var label: String {
-        if isComplete { return "Complete" }
-        switch stage {
-        case "stage1": return "Broad discovery"
-        case "stage2": return "Refining top photos"
-        case "stage3": return "Final choices"
-        default:       return stage
-        }
     }
 }

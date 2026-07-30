@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct CullChoiceView: View {
-    @EnvironmentObject private var api: APIClient
+    @Environment(APIClient.self) private var api
 
     let sessionId: UUID
     var onFilterThenRank: () -> Void
@@ -79,7 +79,7 @@ struct CullChoiceView: View {
             }
             .padding(20)
             .background(Color.grainPaper)
-            .cornerRadius(.interactiveRadius)
+            .clipShape(RoundedRectangle(cornerRadius: .interactiveRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: .interactiveRadius)
                     .stroke(Color.divider, lineWidth: 1)
@@ -93,6 +93,7 @@ struct CullChoiceView: View {
         errorMessage = nil
         do {
             _ = try await api.startCull(sessionId: sessionId)
+            isStarting = false
             onFilterThenRank()
         } catch {
             errorMessage = "Couldn't start — tap to try again."

@@ -47,6 +47,7 @@ struct CachedPhotoImage<Content: View>: View {
                 phase = .failure(URLError(.cannotDecodeContentData))
                 return
             }
+            guard !Task.isCancelled else { return }
             PhotoMemoryCache.shared.store(uiImage, for: cacheKey)
             phase = .success(Image(uiImage: uiImage))
         } catch {

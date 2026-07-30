@@ -46,22 +46,38 @@ final class DecisionStore {
     deinit { continuation.finish() }
 }
 
+enum PersistenceError: Error {
+    case noAppSupportDirectory
+}
+
 actor DecisionPersistence {
     private let fileManager = FileManager.default
     private let decoder     = JSONDecoder()
     private let encoder     = JSONEncoder()
 
-    private func fileURL(sessionId: UUID) -> URL {
-        let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+    private func fileURL(sessionId: UUID) throws -> URL {
+        guard let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            throw PersistenceError.noAppSupportDirectory
+        }
         return support.appendingPathComponent("cull_\(sessionId.uuidString.lowercased()).json")
     }
 
     func load(sessionId: UUID) -> [StoredDecision] {
-        let url = fileURL(sessionId: sessionId)
-        guard let data = try? Data(contentsOf: url),
-              let file = try? decoder.decode(SessionDecisionFile.self, from: data)
-        else { return [] }
-        return file.decisions
+        let url: URL
+        do {
+            url = try fileURL(sessionId: sessionId)
+        } catch {
+            print("[DecisionStore] Could not resolve file URL for session \(sessionId): \(error)")
+            return []
+        }
+        guard let data = try? Data(contentsOf: url) else { return [] }
+        do {
+            let file = try decoder.decode(SessionDecisionFile.self, from: data)
+            return file.decisions
+        } catch {
+            print("[DecisionStore] Failed to decode session \(sessionId): \(error)")
+            return []
+        }
     }
 
     func run(stream: AsyncStream<[StoredDecision]>, sessionId: UUID) async {
@@ -71,9 +87,15 @@ actor DecisionPersistence {
     }
 
     private func save(_ decisions: [StoredDecision], sessionId: UUID) {
+        let dest: URL
+        do {
+            dest = try fileURL(sessionId: sessionId)
+        } catch {
+            print("[DecisionStore] Could not resolve file URL for save \(sessionId): \(error)")
+            return
+        }
         let file = SessionDecisionFile(sessionId: sessionId, decisions: decisions)
         guard let data = try? encoder.encode(file) else { return }
-        let dest = fileURL(sessionId: sessionId)
         let tmp  = dest.deletingLastPathComponent()
             .appendingPathComponent("cull_\(sessionId.uuidString.lowercased()).tmp.json")
         do {

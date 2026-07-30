@@ -9,9 +9,23 @@ enum AppState {
     case results(sessionId: UUID, previousComparisons: Int? = nil, initialPhotos: [RankedPhoto] = [])
 }
 
+extension AppState: Equatable {
+    static func == (lhs: AppState, rhs: AppState) -> Bool {
+        switch (lhs, rhs) {
+        case (.setup, .setup):                             return true
+        case (.choosingCullMode, .choosingCullMode):       return true
+        case (.culling, .culling):                         return true
+        case (.comparing, .comparing):                     return true
+        case (.complete(let a, _), .complete(let b, _)):   return a == b
+        case (.results(let a, _, _), .results(let b, _, _)): return a == b
+        default:                                           return false
+        }
+    }
+}
+
 struct ContentView: View {
-    @EnvironmentObject private var auth: AuthService
-    @EnvironmentObject private var api: APIClient
+    @Environment(AuthService.self) private var auth
+    @Environment(APIClient.self) private var api
 
     @State private var appState: AppState = .setup
 
@@ -79,15 +93,6 @@ struct ContentView: View {
         }
         .background(Color.filmWhite.ignoresSafeArea())
         .tint(Color.amber)
-        .animation(.screenTransition, value: {
-            switch appState {
-            case .setup:              return 0
-            case .choosingCullMode:   return 1
-            case .culling:            return 2
-            case .comparing:          return 3
-            case .complete:           return 4
-            case .results:            return 5
-            }
-        }())
+        .animation(.screenTransition, value: appState)
     }
 }

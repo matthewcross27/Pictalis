@@ -2,7 +2,7 @@ import SwiftUI
 import Photos
 
 struct CompletionView: View {
-    @EnvironmentObject private var api: APIClient
+    @Environment(APIClient.self) private var api
 
     let sessionId: UUID
     let totalComparisons: Int
@@ -68,7 +68,7 @@ struct CompletionView: View {
                                     .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
                                     .onTapGesture { expandedPhoto = photo }
                                     .accessibilityLabel("Photo ranked number \(index + 1)")
-                                    .accessibilityHint("Double-tap to view full screen")
+                                    .accessibilityHint("View full screen")
                             }
                         }
                         .padding(.horizontal, 8)
@@ -89,19 +89,19 @@ struct CompletionView: View {
                         .disabled(photos.isEmpty || isExporting)
                         .padding(.horizontal, 24)
                         .accessibilityLabel("Save to Photos library")
-                        .accessibilityHint("Double-tap to save all favorite photos to your Photos library")
+                        .accessibilityHint("Save all favorite photos to your Photos library")
 
                         Button("See Full Rankings") { onSeeFullRankings(photos) }
                             .buttonStyle(GhostButtonStyle())
                             .accessibilityLabel("See Full Rankings")
-                            .accessibilityHint("Double-tap to view the complete ranked list of your photos")
+                            .accessibilityHint("View the complete ranked list of your photos")
 
                         Button("Start Over") { onStartOver() }
                             .font(.captionSerif)
                             .foregroundStyle(Color.secondaryText)
                             .padding(.vertical, 10)
                             .accessibilityLabel("Start Over")
-                            .accessibilityHint("Double-tap to begin a new curation session")
+                            .accessibilityHint("Begin a new curation session")
                     }
                     .padding(.bottom, 40)
                 }
