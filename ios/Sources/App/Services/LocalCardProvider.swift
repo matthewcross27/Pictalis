@@ -1,3 +1,4 @@
+import Sentry
 import UIKit
 
 enum CullQueueState: Equatable {
@@ -95,7 +96,12 @@ final class LocalCardProvider {
                 queue.append(Card(photoId: id, image: image))
                 if state == .loading { state = .ready }
             } catch {
-                continue // cancelled or unreadable — skip silently
+                // Card just isn't showable (dropped elsewhere or unreadable) — the
+                // deck moves on regardless, but a materialize failure here is still
+                // silent to the user in this swipe-deck flow (unlike ComparisonView's
+                // failedIds banner), so it's worth capturing for production visibility.
+                SentrySDK.capture(error: error)
+                continue
             }
         }
         if queue.isEmpty && !hasRemaining { state = .exhausted }
