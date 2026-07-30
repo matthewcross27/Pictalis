@@ -7,14 +7,17 @@ serveAuthed(async (req, _authHeader, supabase) => {
   const parsed = await parseBody(req, BatchPreRegisterBody);
   if (parsed instanceof Response) return parsed;
 
-  const user = await requireUser(supabase);
-  if (user instanceof Response) return user;
-
   const { session_id, photo_ids } = parsed;
 
+  // requireUser and requireSession are independent reads (neither depends on
+  // the other's result), so run them concurrently to save a round trip.
   // Verify the session belongs to the authenticated user (RLS handles this,
   // but an explicit check gives a clear 404 rather than a silent empty result).
-  const session = await requireSession(supabase, session_id);
+  const [user, session] = await Promise.all([
+    requireUser(supabase),
+    requireSession(supabase, session_id),
+  ]);
+  if (user instanceof Response) return user;
   if (session instanceof Response) return session;
 
   // Insert photo identity rows. ignoreDuplicates makes this idempotent:
