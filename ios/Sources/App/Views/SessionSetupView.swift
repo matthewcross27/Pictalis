@@ -73,13 +73,8 @@ struct SessionSetupView: View {
                     .accessibilityHint("Double-tap to open your photo library and select photos to curate")
 
                     // Error state
-                    if let err = auth.authError {
-                        Text("Sign-in error: \(err)")
-                            .font(.captionSerif)
-                            .foregroundStyle(Color.amber)
-                            .padding(.horizontal, 4)
-                    } else if let err = errorMessage {
-                        Text(err)
+                    if let message = auth.authError.map({ "Sign-in error: \($0)" }) ?? errorMessage {
+                        Text(message)
                             .font(.captionSerif)
                             .foregroundStyle(Color.amber)
                             .padding(.horizontal, 4)

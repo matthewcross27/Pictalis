@@ -6,7 +6,7 @@ enum AppState {
     case culling(sessionId: UUID, pipeline: PhotoPipeline)
     case comparing(sessionId: UUID, pipeline: PhotoPipeline)
     case complete(sessionId: UUID, totalComparisons: Int)
-    case results(sessionId: UUID, previousComparisons: Int? = nil, initialPhotos: [RankedPhoto] = [])
+    case results(sessionId: UUID, previousComparisons: Int?, initialPhotos: [RankedPhoto])
 }
 
 extension AppState: Equatable {
