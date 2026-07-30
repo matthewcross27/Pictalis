@@ -63,6 +63,21 @@ final class APIClient {
         return data
     }
 
+    // Shared by every endpoint whose entire request is `POST { session_id }`.
+    private func postSessionId(_ path: String, sessionId: UUID) async throws -> Data {
+        let req = try buildRequest(path: path, method: "POST", body: ["session_id": sessionId.lowercased])
+        return try await send(req)
+    }
+
+    // Shared by every endpoint whose entire request is `GET ?session_id=...`.
+    private func getSessionId(_ path: String, sessionId: UUID) async throws -> Data {
+        let req = try buildRequest(
+            path: path,
+            queryItems: [URLQueryItem(name: "session_id", value: sessionId.lowercased)]
+        )
+        return try await send(req)
+    }
+
     // MARK: - create-session
     // POST { photo_count } → { session: { id, created_at, expires_at, status, photo_count } }
 
@@ -89,11 +104,7 @@ final class APIClient {
     // GET ?session_id=... → { comparison_id, photo_a, photo_b }
 
     func nextPair(sessionId: UUID) async throws -> NextPairResponse {
-        let req = try buildRequest(
-            path: "next-pair",
-            queryItems: [URLQueryItem(name: "session_id", value: sessionId.lowercased)]
-        )
-        let data = try await send(req)
+        let data = try await getSessionId("next-pair", sessionId: sessionId)
         return try decoder.decode(NextPairResponse.self, from: data)
     }
 
@@ -124,11 +135,7 @@ final class APIClient {
     // GET ?session_id=... → { stage, is_complete, top_photo_count, total_comparisons }
 
     func sessionStatus(sessionId: UUID) async throws -> SessionStatus {
-        let req = try buildRequest(
-            path: "session-status",
-            queryItems: [URLQueryItem(name: "session_id", value: sessionId.lowercased)]
-        )
-        let data = try await send(req)
+        let data = try await getSessionId("session-status", sessionId: sessionId)
         return try decoder.decode(SessionStatus.self, from: data)
     }
 
@@ -151,10 +158,7 @@ final class APIClient {
     // POST { session_id } → { stage }
 
     func startCull(sessionId: UUID) async throws -> StartCullResponse {
-        let req = try buildRequest(path: "start-cull", method: "POST", body: [
-            "session_id": sessionId.lowercased,
-        ])
-        let data = try await send(req)
+        let data = try await postSessionId("start-cull", sessionId: sessionId)
         return try decoder.decode(StartCullResponse.self, from: data)
     }
 
@@ -162,10 +166,7 @@ final class APIClient {
     // POST { session_id } → { stage }
 
     func finishCull(sessionId: UUID) async throws {
-        let req = try buildRequest(path: "finish-cull", method: "POST", body: [
-            "session_id": sessionId.lowercased,
-        ])
-        _ = try await send(req)
+        _ = try await postSessionId("finish-cull", sessionId: sessionId)
     }
 
     // MARK: - batch-submit-cull
@@ -186,10 +187,7 @@ final class APIClient {
     // POST { session_id } → { ok }
 
     func markUploadComplete(sessionId: UUID) async throws {
-        let req = try buildRequest(path: "mark-upload-complete", method: "POST", body: [
-            "session_id": sessionId.lowercased,
-        ])
-        _ = try await send(req)
+        _ = try await postSessionId("mark-upload-complete", sessionId: sessionId)
     }
 
     // MARK: - batch-pre-register
