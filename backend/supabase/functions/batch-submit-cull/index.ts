@@ -16,35 +16,44 @@ serveAuthed(async (req, _authHeader, supabase) => {
 
   const { session_id, decisions } = parsed;
 
-  // Apply each decision to the individual photo only.
+  const keepIds = decisions.filter((d) => d.decision === 'keep').map((d) => d.photo_id);
+  const dropIds = decisions.filter((d) => d.decision === 'drop').map((d) => d.photo_id);
+
+  // One bulk UPDATE per decision type instead of one per photo (up to 300).
   // cull_decision IS NULL guard makes this idempotent - safe to retry.
-  const results = await Promise.all(
-    decisions.map(async ({ photo_id, decision }) => {
-      try {
-        const update = decision === 'keep'
-          ? { cull_decision: 'keep' }
-          : { cull_decision: 'drop', is_suppressed: true };
+  const [keepResult, dropResult] = await Promise.all([
+    keepIds.length > 0
+      ? supabase
+        .from('photos')
+        .update({ cull_decision: 'keep' })
+        .eq('session_id', session_id)
+        .in('id', keepIds)
+        .is('cull_decision', null)
+      : { error: null },
+    dropIds.length > 0
+      ? supabase
+        .from('photos')
+        .update({ cull_decision: 'drop', is_suppressed: true })
+        .eq('session_id', session_id)
+        .in('id', dropIds)
+        .is('cull_decision', null)
+      : { error: null },
+  ]);
 
-        const { error: updateError } = await supabase
-          .from('photos')
-          .update(update)
-          .eq('id', photo_id)
-          .eq('session_id', session_id)
-          .is('cull_decision', null);
-
-        if (updateError) {
-          return { photo_id, success: false, error: updateError.message };
-        }
-
-        // Zero rows updated: decision already set - idempotent success.
-        // With pre-registration, the photo row always exists before cull
-        // starts, so zero-rows-updated means cull_decision was already written.
-        return { photo_id, success: true };
-      } catch (err) {
-        return { photo_id, success: false, error: String(err) };
-      }
-    }),
-  );
+  // Zero rows updated for a given photo: decision already set - idempotent
+  // success. With pre-registration, the photo row always exists before cull
+  // starts, so that case just means cull_decision was already written.
+  const resultFor = (ids: string[], error: { message: string } | null) => {
+    const entry = error
+      ? { success: false as const, error: error.message }
+      : { success: true as const };
+    return new Map(ids.map((photo_id) => [photo_id, entry]));
+  };
+  const resultMap = new Map([
+    ...resultFor(keepIds, keepResult.error),
+    ...resultFor(dropIds, dropResult.error),
+  ]);
+  const results = decisions.map(({ photo_id }) => ({ photo_id, ...resultMap.get(photo_id)! }));
 
   return json({ results });
 });
