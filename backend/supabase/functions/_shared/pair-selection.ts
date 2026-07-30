@@ -73,26 +73,31 @@ export function selectPhotoB(
   inCoverage: boolean,
   pendingPairs: Set<string> = new Set(),
 ): Photo {
-  const allCandidates = photos.filter((p) => p.id !== photoA.id);
+  // Precompute each candidate's pairKey once (used below for both the
+  // pending-pair exclusion and the repeat-count lookup) instead of calling
+  // pairKey twice per candidate on every next-pair request.
+  const allCandidates = photos
+    .filter((p) => p.id !== photoA.id)
+    .map((p) => ({ photo: p, key: pairKey(photoA.id, p.id) }));
   // Hard-exclude in-flight pending pairs; fall back to full pool if no eligible candidates remain.
-  const candidates = allCandidates.filter((p) => !pendingPairs.has(pairKey(photoA.id, p.id)));
+  const candidates = allCandidates.filter(({ key }) => !pendingPairs.has(key));
   const pool = candidates.length > 0 ? candidates : allCandidates;
 
   const w = inCoverage ? WEIGHTS_COVER : WEIGHTS_POST;
 
   const maxEloDiff = pool.reduce(
-    (m, c) => Math.max(m, Math.abs(c.elo_rating - photoA.elo_rating)),
+    (m, { photo: c }) => Math.max(m, Math.abs(c.elo_rating - photoA.elo_rating)),
     1,
   );
-  const maxCount = pool.reduce((m, c) => Math.max(m, c.comparison_count), 1);
+  const maxCount = pool.reduce((m, { photo: c }) => Math.max(m, c.comparison_count), 1);
 
   let best = -Infinity;
-  let bestB = pool[0]!;
-  for (const b of pool) {
+  let bestB = pool[0]!.photo;
+  for (const { photo: b, key } of pool) {
     const eloSim = 1 - Math.abs(b.elo_rating - photoA.elo_rating) / maxEloDiff;
     const overlap = (b.uncertainty + photoA.uncertainty) / 700;
     const fresh = 1 - b.comparison_count / maxCount;
-    const count = pairCounts.get(pairKey(photoA.id, b.id)) ?? 0;
+    const count = pairCounts.get(key) ?? 0;
     const repeat = Math.exp(-count);
     const cluster = !b.cluster_id || !photoA.cluster_id || b.cluster_id !== photoA.cluster_id
       ? 1
