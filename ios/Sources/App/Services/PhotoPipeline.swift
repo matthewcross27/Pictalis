@@ -283,25 +283,32 @@ final class PhotoPipeline {
         }
         let storagePath = "\(userId.lowercased)/\(sessionId.lowercased)/\(id.lowercased).jpg"
         do {
-            if items[id]?.didUpload != true {
-                try await retryWithBackoff(delays: retryDelays, jitter: 0...300) {
-                    try await self.transport.upload(storagePath: storagePath, data: data)
-                }
-                items[id]?.didUpload = true
-            }
+            try await uploadBytesIfNeeded(id, data: data, storagePath: storagePath)
             // Photo may have been dropped while bytes were in flight. Skip
             // markUploaded — the drop is already on the server (is_suppressed=true),
             // and upload_status staying 'pending' is a second exclusion from ranking.
             guard items[id]?.state == .uploading else { return }
-            try await retryWithBackoff(delays: retryDelays, jitter: 0...300) {
-                try await self.transport.markUploaded(sessionId: self.sessionId, photoId: id, storagePath: storagePath)
-            }
+            try await markUploadedOnServer(id, storagePath: storagePath)
             items[id]?.state = .uploaded
             registeredCount += 1
             updateFailedIds()
         } catch {
             if items[id]?.state == .uploading { items[id]?.state = .parked }
             updateFailedIds()
+        }
+    }
+
+    private func uploadBytesIfNeeded(_ id: UUID, data: Data, storagePath: String) async throws {
+        guard items[id]?.didUpload != true else { return }
+        try await retryWithBackoff(delays: retryDelays, jitter: 0...300) {
+            try await self.transport.upload(storagePath: storagePath, data: data)
+        }
+        items[id]?.didUpload = true
+    }
+
+    private func markUploadedOnServer(_ id: UUID, storagePath: String) async throws {
+        try await retryWithBackoff(delays: retryDelays, jitter: 0...300) {
+            try await self.transport.markUploaded(sessionId: self.sessionId, photoId: id, storagePath: storagePath)
         }
     }
 
