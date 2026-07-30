@@ -33,19 +33,19 @@ serveAuthed(async (req, _authHeader, supabase) => {
 
   const { session_id } = parsed;
 
-  // 1. Fetch session
-  const session = await requireSession(supabase, session_id, 'id, stage, photo_count, top_k');
-  if (session instanceof Response) return session;
-
-  // Already marked complete (e.g. by session-status)
-  if (session.stage === 'complete') {
-    return json({ error: 'Session already complete' }, 422);
-  }
-
-  // 2. Fetch non-suppressed, non-dropped photos, and all comparisons (pending + completed)
-  // for pair-count deduplication, concurrently - neither query depends on the other's result.
+  // 1. Fetch session, non-suppressed/non-dropped photos, and all comparisons
+  // (pending + completed) for pair-count deduplication, all concurrently -
+  // none of these three reads depends on either of the others' results (all
+  // three only need session_id). This costs an extra photos/comparisons
+  // fetch on the rare not-found/already-complete paths, but saves a full
+  // round trip on every normal request in this hot path.
   // Pending comparisons (completed_at IS NULL) are hard-excluded from re-selection.
-  const [{ data: photos, error: photosError }, { data: rawComparisons }] = await Promise.all([
+  const [
+    session,
+    { data: photos, error: photosError },
+    { data: rawComparisons },
+  ] = await Promise.all([
+    requireSession(supabase, session_id, 'id, stage, photo_count, top_k'),
     supabase
       .from('photos')
       .select(
@@ -60,6 +60,12 @@ serveAuthed(async (req, _authHeader, supabase) => {
       .select('photo_a_id, photo_b_id, completed_at')
       .eq('session_id', session_id),
   ]);
+  if (session instanceof Response) return session;
+
+  // Already marked complete (e.g. by session-status)
+  if (session.stage === 'complete') {
+    return json({ error: 'Session already complete' }, 422);
+  }
 
   if (photosError) {
     return json({ error: photosError.message }, 500);
