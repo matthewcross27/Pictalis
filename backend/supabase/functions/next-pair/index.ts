@@ -121,12 +121,24 @@ serveAuthed(async (req, _authHeader, supabase) => {
   );
 
   // 6. Generate signed URLs (single batch call instead of one round trip per photo)
-  const { data: signedUrls, error: signError } = await supabase.storage
-    .from(WORKING_COPIES_BUCKET)
-    .createSignedUrls(
-      [photoA.storage_path, photoB.storage_path],
-      SIGNED_URL_EXPIRY_SECONDS,
-    );
+  // and insert the pending comparison record concurrently - neither depends on
+  // the other's result, both only need photoA/photoB which are already selected.
+  const [
+    { data: signedUrls, error: signError },
+    { data: comparison, error: compError },
+  ] = await Promise.all([
+    supabase.storage
+      .from(WORKING_COPIES_BUCKET)
+      .createSignedUrls(
+        [photoA.storage_path, photoB.storage_path],
+        SIGNED_URL_EXPIRY_SECONDS,
+      ),
+    supabase
+      .from('comparisons')
+      .insert({ session_id, photo_a_id: photoA.id, photo_b_id: photoB.id })
+      .select('id')
+      .single(),
+  ]);
 
   if (
     signError || !signedUrls || signedUrls.length !== 2 ||
@@ -136,13 +148,6 @@ serveAuthed(async (req, _authHeader, supabase) => {
   }
 
   const [signedA, signedB] = signedUrls;
-
-  // 7. Insert pending comparison record
-  const { data: comparison, error: compError } = await supabase
-    .from('comparisons')
-    .insert({ session_id, photo_a_id: photoA.id, photo_b_id: photoB.id })
-    .select('id')
-    .single();
 
   if (compError || !comparison) {
     return json({ error: 'Failed to create comparison' }, 500);
