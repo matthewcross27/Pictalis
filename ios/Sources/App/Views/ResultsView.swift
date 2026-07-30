@@ -1,3 +1,4 @@
+import Sentry
 import SwiftUI
 
 struct ResultsView: View {
@@ -152,7 +153,7 @@ struct ResultsView: View {
             try await PhotoExporter.exportPhoto(signedUrl: photo.signedUrl)
             return true
         } catch {
-            print("Export failed: \(error)")
+            SentrySDK.capture(error: error)
             return false
         }
     }

@@ -1,3 +1,4 @@
+import Sentry
 import SwiftUI
 
 struct ComparisonView: View {
@@ -217,7 +218,7 @@ struct ComparisonView: View {
             )
             comparisonCount += 1
         } catch {
-            print("Submit failed: \(error)")
+            SentrySDK.capture(error: error)
             prefetchedPair = nil
             prefetchTask?.cancel()
             isSubmitting = false
@@ -246,7 +247,7 @@ struct ComparisonView: View {
         do {
             try await api.removePhoto(sessionId: sessionId, photoId: photo.id)
         } catch {
-            print("Remove failed: \(error)")
+            SentrySDK.capture(error: error)
             isRemoving = false
             return
         }
