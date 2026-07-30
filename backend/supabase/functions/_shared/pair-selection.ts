@@ -85,11 +85,12 @@ export function selectPhotoB(
 
   const w = inCoverage ? WEIGHTS_COVER : WEIGHTS_POST;
 
-  const maxEloDiff = pool.reduce(
-    (m, { photo: c }) => Math.max(m, Math.abs(c.elo_rating - photoA.elo_rating)),
-    1,
-  );
-  const maxCount = pool.reduce((m, { photo: c }) => Math.max(m, c.comparison_count), 1);
+  let maxEloDiff = 1;
+  let maxCount = 1;
+  for (const { photo: c } of pool) {
+    maxEloDiff = Math.max(maxEloDiff, Math.abs(c.elo_rating - photoA.elo_rating));
+    maxCount = Math.max(maxCount, c.comparison_count);
+  }
 
   let best = -Infinity;
   let bestB = pool[0]!.photo;
