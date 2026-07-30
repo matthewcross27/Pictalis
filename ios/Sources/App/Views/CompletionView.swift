@@ -1,5 +1,4 @@
 import SwiftUI
-import Photos
 
 struct CompletionView: View {
     @Environment(APIClient.self) private var api
@@ -133,20 +132,7 @@ struct CompletionView: View {
 
     private func exportAll() async {
         isExporting = true
-        var saved = 0
-        for photo in photos.prefix(10) {
-            guard let url = URL(string: photo.signedUrl) else { continue }
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                guard let image = UIImage(data: data) else { continue }
-                try await PHPhotoLibrary.shared().performChanges {
-                    PHAssetCreationRequest.creationRequestForAsset(from: image)
-                }
-                saved += 1
-            } catch {
-                print("Export failed: \(error)")
-            }
-        }
+        let saved = await PhotoExporter.exportAll(Array(photos.prefix(10)))
         isExporting = false
         if saved > 0 {
             let noun = saved == 1 ? "photo" : "photos"

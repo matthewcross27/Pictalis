@@ -1,5 +1,4 @@
 import SwiftUI
-import Photos
 
 struct ResultsView: View {
     @Environment(APIClient.self) private var api
@@ -167,15 +166,10 @@ struct ResultsView: View {
 
     @discardableResult
     private func exportPhoto(photo: RankedPhoto) async -> Bool {
-        guard let url = URL(string: photo.signedUrl) else { return false }
         exportingId = photo.id
         defer { exportingId = nil }
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            guard let image = UIImage(data: data) else { return false }
-            try await PHPhotoLibrary.shared().performChanges {
-                PHAssetCreationRequest.creationRequestForAsset(from: image)
-            }
+            try await PhotoExporter.exportPhoto(signedUrl: photo.signedUrl)
             return true
         } catch {
             print("Export failed: \(error)")
