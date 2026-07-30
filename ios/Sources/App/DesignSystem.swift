@@ -150,3 +150,20 @@ struct ExpandPhotoButton: View {
         .padding(8)
     }
 }
+
+// MARK: - Saved to Photos Alert
+
+extension View {
+    /// Presents the standard "Saved to Photos" confirmation alert whenever `message` is non-nil,
+    /// clearing it back to nil on dismissal.
+    func savedToPhotosAlert(message: Binding<String?>) -> some View {
+        alert("Saved to Photos", isPresented: Binding(
+            get: { message.wrappedValue != nil },
+            set: { if !$0 { message.wrappedValue = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(message.wrappedValue ?? "")
+        }
+    }
+}

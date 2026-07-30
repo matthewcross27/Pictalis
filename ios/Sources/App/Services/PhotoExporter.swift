@@ -30,4 +30,10 @@ enum PhotoExporter {
         }
         return saved
     }
+
+    /// A pluralized "N photo(s) saved to your library." confirmation message.
+    static func savedMessage(count: Int) -> String {
+        let noun = count == 1 ? "photo" : "photos"
+        return "\(count) \(noun) saved to your library."
+    }
 }

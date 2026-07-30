@@ -110,14 +110,7 @@ struct CompletionView: View {
         .fullScreenCover(item: $expandedPhoto) { photo in
             PhotoExpandedView(photo: photo) { expandedPhoto = nil }
         }
-        .alert("Saved to Photos", isPresented: Binding(
-            get: { exportAlertMessage != nil },
-            set: { if !$0 { exportAlertMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(exportAlertMessage ?? "")
-        }
+        .savedToPhotosAlert(message: $exportAlertMessage)
     }
 
     // MARK: - Private
@@ -135,8 +128,7 @@ struct CompletionView: View {
         let saved = await PhotoExporter.exportAll(Array(photos.prefix(10)))
         isExporting = false
         if saved > 0 {
-            let noun = saved == 1 ? "photo" : "photos"
-            exportAlertMessage = "\(saved) \(noun) saved to your library."
+            exportAlertMessage = PhotoExporter.savedMessage(count: saved)
         }
     }
 }
