@@ -18,6 +18,16 @@ export function computeMinComparisons(n: number, topK: number): number {
   return Math.max(1, Math.ceil(Math.log2(n / topK) + 1));
 }
 
+// Derives the effective top-K and per-photo comparison floor for a session,
+// respecting an explicit session.top_k override when set.
+export function resolveTopKAndMinComparisons(
+  session: { top_k: number | null; photo_count: number },
+): { topK: number; minComparisons: number } {
+  const topK = session.top_k ?? computeTopK(session.photo_count);
+  const minComparisons = computeMinComparisons(session.photo_count, topK);
+  return { topK, minComparisons };
+}
+
 export function isBoundaryStable(
   photos: Pick<Photo, 'elo_rating' | 'uncertainty' | 'comparison_count'>[],
   topK: number,

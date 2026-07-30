@@ -73,6 +73,15 @@ export async function requireSession(
   return session;
 }
 
+// Persists a session's transition to the terminal 'complete' stage. Called
+// from both next-pair and session-status, whichever detects completion first.
+export async function markSessionComplete(
+  supabase: SupabaseClient,
+  sessionId: string,
+): Promise<void> {
+  await supabase.from('sessions').update({ stage: 'complete' }).eq('id', sessionId);
+}
+
 // Wraps a handler with the boilerplate every Edge Function repeated
 // identically: OPTIONS preflight, Authorization header presence check,
 // Supabase client construction, and top-level Sentry error reporting.

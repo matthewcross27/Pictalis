@@ -5,6 +5,7 @@ import {
   hasFullCoverage,
   isBoundaryStable,
   isSessionComplete,
+  resolveTopKAndMinComparisons,
 } from './ranking-logic.ts';
 
 // --- computeTopK ---
@@ -42,6 +43,18 @@ Deno.test('computeMinComparisons — n=100, topK=25 → ceil(log2(4)+1) = 3', ()
 Deno.test('computeMinComparisons — n=200, topK=35 → correct ceil', () => {
   const expected = Math.max(1, Math.ceil(Math.log2(200 / 35) + 1));
   assertEquals(computeMinComparisons(200, 35), expected);
+});
+
+// --- resolveTopKAndMinComparisons ---
+
+Deno.test('resolveTopKAndMinComparisons — no top_k override → derives topK from photo_count', () => {
+  const result = resolveTopKAndMinComparisons({ top_k: null, photo_count: 100 });
+  assertEquals(result, { topK: computeTopK(100), minComparisons: computeMinComparisons(100, computeTopK(100)) });
+});
+
+Deno.test('resolveTopKAndMinComparisons — explicit top_k override → used as-is', () => {
+  const result = resolveTopKAndMinComparisons({ top_k: 10, photo_count: 100 });
+  assertEquals(result, { topK: 10, minComparisons: computeMinComparisons(100, 10) });
 });
 
 // --- isBoundaryStable ---

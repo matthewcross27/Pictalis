@@ -1,6 +1,6 @@
-import { computeMinComparisons, computeTopK, isSessionComplete } from '../_shared/ranking-logic.ts';
+import { isSessionComplete, resolveTopKAndMinComparisons } from '../_shared/ranking-logic.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, requireSession, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
+import { json, markSessionComplete, requireSession, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
@@ -28,8 +28,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   }
 
   const photoList = photos ?? [];
-  const topK = session.top_k ?? computeTopK(session.photo_count);
-  const minComparisons = computeMinComparisons(session.photo_count, topK);
+  const { topK, minComparisons } = resolveTopKAndMinComparisons(session);
   const totalComps = Math.round(
     photoList.reduce((s, p) => s + p.comparison_count, 0) / 2,
   );
@@ -46,10 +45,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
     );
     if (complete) {
       currentStage = 'complete';
-      await supabase.from('sessions').update({ stage: 'complete' }).eq(
-        'id',
-        session_id,
-      );
+      await markSessionComplete(supabase, session_id);
     }
   }
 

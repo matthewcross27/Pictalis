@@ -1,10 +1,9 @@
 import {
   type CompletedComparison,
-  computeMinComparisons,
-  computeTopK,
   hasFullCoverage,
   isSessionComplete,
   type Photo,
+  resolveTopKAndMinComparisons,
 } from '../_shared/ranking-logic.ts';
 import {
   buildPairCounts,
@@ -17,6 +16,7 @@ import {
 import { initSentry } from '../_shared/sentry.ts';
 import {
   json,
+  markSessionComplete,
   requireSession,
   serveAuthed,
   SessionIdSchema,
@@ -64,8 +64,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
     return json({ error: 'Not enough photos to compare' }, 422);
   }
 
-  const topK = session.top_k ?? computeTopK(session.photo_count);
-  const minComparisons = computeMinComparisons(session.photo_count, topK);
+  const { topK, minComparisons } = resolveTopKAndMinComparisons(session);
 
   // 3. Fetch all comparisons (pending + completed) for pair-count deduplication.
   // Pending comparisons (completed_at IS NULL) are hard-excluded from re-selection.
@@ -94,10 +93,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   );
 
   if (complete) {
-    await supabase.from('sessions').update({ stage: 'complete' }).eq(
-      'id',
-      session_id,
-    );
+    await markSessionComplete(supabase, session_id);
     return json({ error: 'Session complete' }, 422);
   }
 
