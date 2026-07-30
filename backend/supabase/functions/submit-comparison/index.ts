@@ -1,5 +1,4 @@
 import { z } from 'npm:zod@3';
-import { updateElo } from '../_shared/elo.ts';
 import { initSentry } from '../_shared/sentry.ts';
 import { json, parseBody, serveAuthed } from '../_shared/http.ts';
 initSentry();
@@ -36,41 +35,23 @@ serveAuthed(async (req, _authHeader, supabase) => {
     ? comparison.photo_b_id
     : comparison.photo_a_id;
 
-  const { data: photoPair, error: photoError } = await supabase
-    .from('photos')
-    .select('id, elo_rating, comparison_count')
-    .in('id', [winner_id, loser_id]);
-
-  if (photoError || !photoPair || photoPair.length !== 2) {
-    return json({ error: 'Failed to fetch photo ratings' }, 500);
-  }
-
-  const winner = photoPair.find((p) => p.id === winner_id);
-  const loser = photoPair.find((p) => p.id === loser_id);
-  if (!winner || !loser) {
-    return json({ error: 'Failed to fetch photo ratings' }, 500);
-  }
-  const { winnerNew, loserNew } = updateElo(
-    winner.elo_rating,
-    loser.elo_rating,
-  );
-
-  // Single atomic transaction: claim comparison + update both Elo ratings.
-  // The RPC raises 'already_submitted' if completed_at was already set,
-  // preventing the TOCTOU race from the previous multi-step write approach.
-  const { error: submitError } = await supabase.rpc(
+  // Single atomic transaction: claim comparison + compute and write both new
+  // Elo ratings. The RPC computes the Elo update itself (no need to fetch
+  // photo ratings here first) and raises 'UE001' if completed_at was already
+  // set, preventing the TOCTOU race from the previous multi-step write
+  // approach.
+  const { data, error: submitError } = await supabase.rpc(
     'submit_comparison_atomic',
     {
       p_comparison_id: comparison_id,
       p_winner_id: winner_id,
       p_loser_id: loser_id,
-      p_winner_new_rating: winnerNew,
-      p_loser_new_rating: loserNew,
     },
   );
 
-  if (submitError) {
-    const isAlreadyDone = submitError.code === 'UE001';
+  const result = data?.[0];
+  if (submitError || !result) {
+    const isAlreadyDone = submitError?.code === 'UE001';
     return json(
       {
         error: isAlreadyDone
@@ -84,7 +65,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   return json({
     winner_id,
     loser_id,
-    winner_new_rating: winnerNew,
-    loser_new_rating: loserNew,
+    winner_new_rating: result.winner_new_rating,
+    loser_new_rating: result.loser_new_rating,
   });
 });
