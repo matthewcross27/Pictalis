@@ -13,8 +13,8 @@ Monorepo with four subsystems:
 | Directory | Stack | Purpose |
 |-----------|-------|---------|
 | `ios/` | SwiftUI, PhotosUI | iPhone app — photo selection, comparison UI, results |
-| `backend/` | Supabase (Postgres + Edge Functions + Storage) | Session management, ranking API, temporary storage |
-| `ranking-engine/` | TypeScript, Jest | Elo rating engine, pair selection, uncertainty scoring |
+| `backend/` | Supabase (Postgres + Edge Functions + Storage) | Session management, ranking API, pair selection, uncertainty scoring, temporary storage |
+| `ranking-engine/` | TypeScript, Jest | Elo rating engine |
 | `worker/` | Python 3.11, uv | Image embeddings, duplicate clustering, blur detection |
 
 **Key design decisions:**
