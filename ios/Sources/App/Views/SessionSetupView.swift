@@ -73,10 +73,10 @@ struct SessionSetupView: View {
                         )
                     }
                     .accessibilityLabel(selectionCount > 0 ? "\(selectionCount) photos selected" : "Choose photos")
-                    .accessibilityHint("Double-tap to open your photo library and select photos to curate")
+                    .accessibilityHint("Open your photo library and select photos to curate")
 
                     // Error state
-                    if let message = auth.authError.map({ "Sign-in error: \($0)" }) ?? errorMessage {
+                    if let message = auth.authError.map({ "Sign-in error: \($0.localizedDescription)" }) ?? errorMessage {
                         Text(message)
                             .font(.captionSerif)
                             .foregroundStyle(Color.amber)
@@ -94,7 +94,7 @@ struct SessionSetupView: View {
                     .buttonStyle(PrimaryButtonStyle())
                     .disabled(!canStart)
                     .accessibilityLabel("Start Curating")
-                    .accessibilityHint("Double-tap to begin curating your selected photos")
+                    .accessibilityHint("Begin curating your selected photos")
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 40)

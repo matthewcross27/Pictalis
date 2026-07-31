@@ -50,11 +50,11 @@ struct PictalisApp: App {
         appearance.shadowColor = dividerColor
 
         // Font.titleSerif equivalent: Fraunces-Medium 17
-        let titleFont = UIFont(name: "Fraunces-Medium", size: 17) ?? UIFont.boldSystemFont(ofSize: 17)
+        let titleFont = UIFont(name: FraunceFamily.medium, size: 17) ?? UIFont.boldSystemFont(ofSize: 17)
         appearance.titleTextAttributes = [.font: titleFont, .foregroundColor: inkColor]
 
         // Font.displaySerif equivalent: Fraunces-SemiBold 36
-        let largeTitleFont = UIFont(name: "Fraunces-SemiBold", size: 36) ?? UIFont.boldSystemFont(ofSize: 36)
+        let largeTitleFont = UIFont(name: FraunceFamily.semiBold, size: 36) ?? UIFont.boldSystemFont(ofSize: 36)
         appearance.largeTitleTextAttributes = [.font: largeTitleFont, .foregroundColor: inkColor]
 
         UINavigationBar.appearance().standardAppearance   = appearance

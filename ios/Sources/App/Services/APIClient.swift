@@ -11,7 +11,11 @@ enum APIError: Error {
 @MainActor
 final class APIClient {
     private let supabase: SupabaseClient
-    private let decoder = JSONDecoder()
+    private let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
 
     init(supabase: SupabaseClient) {
         self.supabase = supabase

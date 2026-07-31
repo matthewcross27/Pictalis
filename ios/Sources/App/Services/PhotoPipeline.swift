@@ -253,7 +253,7 @@ final class PhotoPipeline {
         while activeUploads < uploadConcurrency, let id = dequeueNextUpload() {
             activeUploads += 1
             items[id]?.state = .uploading
-            Task { await self.uploadAndMarkUploaded(id) }
+            backgroundTasks.append(Task { await self.uploadAndMarkUploaded(id) })
         }
     }
 
@@ -334,13 +334,13 @@ final class PhotoPipeline {
         didMarkComplete = true
         // Mark the session complete only once the server has been told, so
         // observers waiting on `isComplete` see a settled state.
-        Task {
+        backgroundTasks.append(Task {
             do {
                 try await self.transport.markUploadComplete(sessionId: self.sessionId)
             } catch {
                 ErrorReporter.capture(error)
             }
             self.isComplete = true
-        }
+        })
     }
 }
