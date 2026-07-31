@@ -46,7 +46,7 @@ final class PhotoMemoryCache: @unchecked Sendable {
 struct CachedPhotoImage<Content: View>: View {
     let url: URL
     let cacheKey: UUID
-    var thumbnailMaxPixelSize: CGFloat? = nil
+    var thumbnailMaxPixelSize: CGFloat?
     @ViewBuilder var content: (AsyncImagePhase) -> Content
 
     @State private var phase: AsyncImagePhase = .empty
@@ -94,7 +94,7 @@ struct CachedPhotoImage<Content: View>: View {
         let thumbnailOptions = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
         ] as CFDictionary
         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else { return nil }
         return UIImage(cgImage: cgImage)

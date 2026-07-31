@@ -26,10 +26,10 @@ extension Color {
 extension Font {
     static let displaySerif  = Font.custom("Fraunces-SemiBold", size: 36, relativeTo: .largeTitle)
     static let headlineSerif = Font.custom("Fraunces-SemiBold", size: 22, relativeTo: .headline)
-    static let titleSerif    = Font.custom("Fraunces-Medium",   size: 17, relativeTo: .body)
-    static let bodySerif     = Font.custom("Fraunces-Regular",  size: 16, relativeTo: .body)
-    static let labelSerif    = Font.custom("Fraunces-Medium",   size: 14, relativeTo: .subheadline)
-    static let captionSerif  = Font.custom("Fraunces-Regular",  size: 11, relativeTo: .caption)
+    static let titleSerif    = Font.custom("Fraunces-Medium", size: 17, relativeTo: .body)
+    static let bodySerif     = Font.custom("Fraunces-Regular", size: 16, relativeTo: .body)
+    static let labelSerif    = Font.custom("Fraunces-Medium", size: 14, relativeTo: .subheadline)
+    static let captionSerif  = Font.custom("Fraunces-Regular", size: 11, relativeTo: .caption)
 }
 
 // MARK: - Corner Radii

@@ -13,7 +13,7 @@ final class LocalCardProvider {
 
     struct Card: Sendable, Identifiable {
         let photoId: UUID
-        let image:   UIImage
+        let image: UIImage
         var id: UUID { photoId }
     }
 

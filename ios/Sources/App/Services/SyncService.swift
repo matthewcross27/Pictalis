@@ -12,11 +12,11 @@ extension APIClient: CullDecisionSubmitting {}
 
 @MainActor
 final class SyncService {
-    private let api:       any CullDecisionSubmitting
+    private let api: any CullDecisionSubmitting
     private let sessionId: UUID
-    private var store:     DecisionStore?
+    private var store: DecisionStore?
     private var isDraining = false
-    private var monitor:   NWPathMonitor?
+    private var monitor: NWPathMonitor?
     private let registrationState: (UUID) -> PhotoRegistrationState
     private var observerTasks: [Task<Void, Never>] = []
     // nil in production (a real NWPathMonitor is started in startObservers()); tests

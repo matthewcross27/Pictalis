@@ -4,7 +4,7 @@ struct ResultsView: View {
     @Environment(APIClient.self) private var api
 
     let sessionId: UUID
-    var onBack: (() -> Void)? = nil
+    var onBack: (() -> Void)?
     /// Photos already fetched by a previous screen — rendered immediately
     /// while the full list loads.
     var initialPhotos: [RankedPhoto] = []

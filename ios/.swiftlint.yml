@@ -1,0 +1,42 @@
+# Only lint production source; Tests/ has its own conventions (long
+# base64 fixtures, terse comparator locals) that don't benefit from
+# these rules.
+included:
+  - Sources
+
+# Button(action: {...}) { ... } is the standard SwiftUI initializer
+# pattern used throughout the view layer, not an accidental double
+# trailing closure.
+disabled_rules:
+  - multiple_closures_with_trailing_closure
+
+identifier_name:
+  min_length:
+    warning: 3
+    error: 1
+  excluded:
+    - id
+    - i
+    - j
+    - a
+    - b
+    - x
+    - y
+
+# A couple of genuinely long (but readable) lines already exist -
+# tuned to fit the existing codebase rather than force line-wrapping
+# that hurts readability.
+line_length:
+  warning: 150
+  error: 250
+
+# ComparisonView/PhotoPipeline are a little over the defaults already
+# after prior complexity-reduction passes (see gnhf run notes); tuned
+# rather than forcing further extraction for its own sake.
+function_body_length:
+  warning: 80
+  error: 120
+
+type_body_length:
+  warning: 300
+  error: 400

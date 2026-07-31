@@ -20,7 +20,7 @@ enum ImageCompressor {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxDimension,
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension
         ]
         guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
             throw CompressionError.noImageData

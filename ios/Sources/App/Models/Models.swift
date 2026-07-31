@@ -69,10 +69,10 @@ struct SessionInfo: Decodable {
 }
 
 struct RankedPhoto: Decodable, Identifiable, Equatable {
-    let id:              UUID
-    let eloRating:       Double
-    let isSuppressed:    Bool
-    let signedUrl:       URL
+    let id: UUID
+    let eloRating: Double
+    let isSuppressed: Bool
+    let signedUrl: URL
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -132,8 +132,8 @@ struct SessionDecisionFile: Codable {
 // MARK: - batch-submit-cull
 
 struct BatchDecisionResult: Decodable {
-    let photoId:  UUID
-    let success:  Bool
+    let photoId: UUID
+    let success: Bool
 
     enum CodingKeys: String, CodingKey {
         case photoId = "photo_id"

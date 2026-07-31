@@ -8,15 +8,15 @@ struct CullView: View {
     var onComplete: () -> Void
 
     @State private var decisionStore  = DecisionStore()
-    @State private var cardProvider:    LocalCardProvider?
-    @State private var syncService:     SyncService?
-    @State private var currentCard:     LocalCardProvider.Card?
-    @State private var dragOffset:      CGFloat = 0
+    @State private var cardProvider: LocalCardProvider?
+    @State private var syncService: SyncService?
+    @State private var currentCard: LocalCardProvider.Card?
+    @State private var dragOffset: CGFloat = 0
     @State private var isFinishing      = false
     @State private var finishFailed     = false
     @State private var isInitialized    = false
-    @State private var expandedCard:     LocalCardProvider.Card?
-    @State private var screenWidth:      CGFloat = 390
+    @State private var expandedCard: LocalCardProvider.Card?
+    @State private var screenWidth: CGFloat = 390
 
     private var dragProgress: CGFloat { dragOffset / (screenWidth * 0.4) }
 

@@ -39,6 +39,7 @@ Monorepo with four subsystems:
 cd ios
 xcodegen generate
 open Pictalis.xcodeproj
+swiftlint lint   # requires `brew install swiftlint`
 ```
 
 ### Ranking engine
@@ -72,7 +73,7 @@ supabase db reset # applies migrations
 ## CI
 
 GitHub Actions runs on every push and PR to `main` (path-filtered per subsystem):
-- **iOS** - `xcodebuild test` on an iPhone simulator
+- **iOS** - `swiftlint lint --strict` + `xcodebuild test` on an iPhone simulator
 - **Edge Functions** - `deno fmt --check` + `deno lint` + `deno check` across all entry points + `deno test`
 - **Migrations** - applies all migrations to a fresh local Supabase database
 - **Ranking engine** - `npm test` + `npm run typecheck`

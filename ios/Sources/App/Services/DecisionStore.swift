@@ -10,7 +10,7 @@ final class DecisionStore {
     )
     private let persistence = DecisionPersistence()
 
-    var allDecidedIds: [UUID]              { decisions.map(\.photoId) }
+    var allDecidedIds: [UUID] { decisions.map(\.photoId) }
     var pendingDecisions: [StoredDecision] { decisions.filter { !$0.synced } }
 
     // Loads decisions from disk and starts the persistence write loop.

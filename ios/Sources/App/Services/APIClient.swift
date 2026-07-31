@@ -94,7 +94,7 @@ final class APIClient {
         let req = try buildRequest(path: "register-photo", method: "POST", body: [
             "session_id": sessionId.lowercased,
             "photo_id": photoId.lowercased,
-            "storage_path": storagePath,
+            "storage_path": storagePath
         ])
         _ = try await send(req)
     }
@@ -113,7 +113,7 @@ final class APIClient {
     func submitComparison(comparisonId: UUID, winnerId: UUID) async throws {
         let req = try buildRequest(path: "submit-comparison", method: "POST", body: [
             "comparison_id": comparisonId.lowercased,
-            "winner_id": winnerId.lowercased,
+            "winner_id": winnerId.lowercased
         ])
         _ = try await send(req)
     }
@@ -124,7 +124,7 @@ final class APIClient {
     func removePhoto(sessionId: UUID, photoId: UUID) async throws {
         let req = try buildRequest(path: "remove-photo", method: "POST", body: [
             "session_id": sessionId.lowercased,
-            "photo_id":   photoId.lowercased,
+            "photo_id": photoId.lowercased
         ])
         _ = try await send(req)
     }
@@ -145,7 +145,7 @@ final class APIClient {
             path: "results",
             queryItems: [
                 URLQueryItem(name: "session_id", value: sessionId.lowercased),
-                URLQueryItem(name: "limit", value: "\(limit)"),
+                URLQueryItem(name: "limit", value: "\(limit)")
             ]
         )
         let data = try await send(req)
@@ -172,9 +172,9 @@ final class APIClient {
     func batchSubmitCull(sessionId: UUID, decisions: [StoredDecision]) async throws -> BatchSubmitResponse {
         let req = try buildRequest(path: "batch-submit-cull", method: "POST", body: [
             "session_id": sessionId.lowercased,
-            "decisions":  decisions.map { item in
+            "decisions": decisions.map { item in
                 ["photo_id": item.photoId.lowercased, "decision": item.decision.rawValue]
-            },
+            }
         ])
         let data = try await send(req)
         return try decoder.decode(BatchSubmitResponse.self, from: data)
@@ -193,7 +193,7 @@ final class APIClient {
     func batchPreRegister(sessionId: UUID, photoIds: [UUID]) async throws {
         let req = try buildRequest(path: "batch-pre-register", method: "POST", body: [
             "session_id": sessionId.lowercased,
-            "photo_ids": photoIds.map { $0.lowercased },
+            "photo_ids": photoIds.map { $0.lowercased }
         ])
         _ = try await send(req)
     }
