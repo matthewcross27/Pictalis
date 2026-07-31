@@ -149,14 +149,10 @@ Backend processing:
 
 * thumbnail generation
 * image embedding generation
-* duplicate clustering
-* blur/invalid image detection
 
-The system may suppress:
-
-* accidental black images
-* severe blur
-* obvious duplicates
+Duplicate clustering and blur/invalid image detection are planned for v2
+(see "Future Opportunities") and are not implemented in v1 - no photo is
+automatically suppressed today.
 
 The system will NOT automatically determine “best” photos using AI.
 
@@ -227,7 +223,7 @@ Behavior:
 * compare similarly ranked photos
 * improve confidence near top set
 
-### Stage 3 — Alternate Selection
+### Stage 3 — Alternate Selection (v2, not active in v1)
 
 Goal:
 
@@ -236,6 +232,10 @@ Goal:
 Behavior:
 
 * revisit duplicate clusters attached to top-ranked photos
+
+This stage depends on duplicate clustering, which is not implemented in v1
+(see "Duplicate Handling" below) - photos are never clustered today, so this
+stage does not currently trigger.
 
 ---
 
@@ -274,11 +274,14 @@ User can:
 * Real-time ranking updates
 * Dynamic comparison generation
 
-## Duplicate Handling
+## Duplicate Handling (v2 - not implemented in v1)
 
-* Near-duplicate clustering required
-* Duplicate suppression only during early ranking stages
-* Alternates must remain accessible
+Not implemented in v1: no photo is ever clustered or suppressed as a
+duplicate today. Planned for v2 (see "Future Opportunities"): detect
+duplicate/near-duplicate photos and let users review each detected set
+together, rather than encountering the same photo repeatedly during the
+cull or ranking phases, then pick the best photo from that set to use as
+the primary representative.
 
 ## Session Persistence
 
@@ -380,7 +383,7 @@ Handles:
 
 ### Processing Worker
 
-Generates:
+Generates (v2 - not implemented in v1; `worker/` is currently an empty scaffold):
 
 * embeddings
 * duplicate clusters
@@ -401,7 +404,7 @@ Maintains:
 ## Inputs
 
 * pairwise user choices
-* duplicate cluster information
+* duplicate cluster information (v2 - not populated in v1)
 
 ## Outputs
 
@@ -414,7 +417,8 @@ The system should:
 
 * minimize required comparisons
 * maximize confidence in top-ranked images
-* avoid over-surfacing duplicate compositions
+* avoid over-surfacing duplicate compositions (v2 - not active in v1, since
+  photos are never clustered today)
 
 ---
 
@@ -443,7 +447,7 @@ Too many comparisons will reduce completion rates.
 Mitigation:
 
 * intelligent pair selection
-* duplicate suppression
+* duplicate suppression (v2 - not implemented in v1)
 * early convergence detection
 
 ## Trust
@@ -468,6 +472,10 @@ Mitigation:
 
 # Future Opportunities (Post-MVP)
 
+* Duplicate/near-duplicate review (v2): detect duplicate or near-duplicate
+  photos and let users review each detected set together, rather than
+  encountering the same photo repeatedly during the cull or ranking phases,
+  then pick the best photo from that set to use as the primary representative.
 * collaborative ranking
 * friend voting
 * personalized aesthetic models

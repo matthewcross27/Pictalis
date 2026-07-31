@@ -2,6 +2,7 @@ import { isSessionComplete, resolveTopKAndMinComparisons } from '../_shared/rank
 import { totalComparisons } from '../_shared/pair-selection.ts';
 import { initSentry } from '../_shared/sentry.ts';
 import {
+  CORS,
   json,
   markSessionComplete,
   parseQuery,
@@ -11,9 +12,14 @@ import {
   SessionIdSchema,
   type SessionRow,
 } from '../_shared/http.ts';
+import { isRateLimited, RATE_LIMIT_READ, rateLimitResponse } from '../_shared/rate-limit.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
+  if (await isRateLimited('session-status', req, RATE_LIMIT_READ)) {
+    return rateLimitResponse(CORS);
+  }
+
   const parsed = parseQuery(req, SessionIdSchema);
   if (parsed instanceof Response) return parsed;
 

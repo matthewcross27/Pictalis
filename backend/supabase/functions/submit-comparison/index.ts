@@ -1,6 +1,7 @@
 import { z } from 'npm:zod@3';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseBody, serveAuthed, serverError } from '../_shared/http.ts';
+import { CORS, json, parseBody, serveAuthed, serverError } from '../_shared/http.ts';
+import { isRateLimited, RATE_LIMIT_WRITE, rateLimitResponse } from '../_shared/rate-limit.ts';
 initSentry();
 
 const SubmitBody = z.object({
@@ -9,6 +10,10 @@ const SubmitBody = z.object({
 });
 
 serveAuthed(async (req, _authHeader, supabase) => {
+  if (await isRateLimited('submit-comparison', req, RATE_LIMIT_WRITE)) {
+    return rateLimitResponse(CORS);
+  }
+
   const parsed = await parseBody(req, SubmitBody);
   if (parsed instanceof Response) return parsed;
 

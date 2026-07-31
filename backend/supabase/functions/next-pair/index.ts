@@ -16,6 +16,7 @@ import {
 } from '../_shared/pair-selection.ts';
 import { initSentry } from '../_shared/sentry.ts';
 import {
+  CORS,
   json,
   markSessionComplete,
   parseQuery,
@@ -27,9 +28,16 @@ import {
   SIGNED_URL_EXPIRY_SECONDS,
   WORKING_COPIES_BUCKET,
 } from '../_shared/http.ts';
+import { isRateLimited, RATE_LIMIT_WRITE, rateLimitResponse } from '../_shared/rate-limit.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
+  // WRITE despite the "next" name: this inserts a pending comparison row
+  // (below) on every call, unlike other read/polling endpoints.
+  if (await isRateLimited('next-pair', req, RATE_LIMIT_WRITE)) {
+    return rateLimitResponse(CORS);
+  }
+
   const parsed = parseQuery(req, SessionIdSchema);
   if (parsed instanceof Response) return parsed;
 
