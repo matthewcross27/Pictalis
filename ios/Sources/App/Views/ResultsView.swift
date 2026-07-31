@@ -120,12 +120,7 @@ struct ResultsView: View {
                 .padding(8)
                 .disabled(exportingId != nil)
             }
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
-            .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
-            .onTapGesture { expandedPhoto = photo }
-            .accessibilityLabel("Photo ranked number \(rank)")
-            .accessibilityHint("View full screen")
+            .rankedPhotoCellStyle(rank: rank) { expandedPhoto = photo }
     }
 
     private func fetchResults() async {

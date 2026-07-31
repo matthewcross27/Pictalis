@@ -179,3 +179,20 @@ extension View {
         }
     }
 }
+
+// MARK: - Ranked Photo Grid Cell
+
+extension View {
+    /// Applies the shared clip/tap/accessibility styling for a ranked-photo grid cell
+    /// (used by ResultsView and CompletionView). Callers are responsible for the cell's
+    /// base content (background + sizing + image overlay), which differs between them.
+    func rankedPhotoCellStyle(rank: Int, onTap: @escaping () -> Void) -> some View {
+        self
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+            .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
+            .onTapGesture(perform: onTap)
+            .accessibilityLabel("Photo ranked number \(rank)")
+            .accessibilityHint("View full screen")
+    }
+}

@@ -51,12 +51,7 @@ struct CompletionView: View {
                                     .overlay {
                                         ThumbnailPhotoImage(url: photo.signedUrl, cacheKey: photo.id)
                                     }
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
-                                    .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
-                                    .onTapGesture { expandedPhoto = photo }
-                                    .accessibilityLabel("Photo ranked number \(index + 1)")
-                                    .accessibilityHint("View full screen")
+                                    .rankedPhotoCellStyle(rank: index + 1) { expandedPhoto = photo }
                             }
                         }
                         .padding(.horizontal, 8)
