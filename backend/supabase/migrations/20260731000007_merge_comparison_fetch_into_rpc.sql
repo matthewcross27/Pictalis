@@ -84,7 +84,7 @@ BEGIN
           )
         WHEN p.id = v_loser_id THEN
           p.elo_rating - 32 * (
-            1 - 1 / (1 + power(
+            1 / (1 + power(
               10,
               ((SELECT elo_rating FROM public.photos WHERE id = p_winner_id) - p.elo_rating) / 400.0
             ))
