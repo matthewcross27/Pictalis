@@ -73,6 +73,12 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
 - After adding a new Source file, `xcodegen generate` must be re-run before `xcodebuild` will see it
   (the generated `Pictalis.xcodeproj` is gitignored and rebuilt from `project.yml` + folder contents).
 
+## Ranking engine build gotchas
+- `ranking-engine/jest.config.ts` is a TypeScript config file, so Jest requires `ts-node` to parse it.
+  `ts-jest` used to pull `ts-node` in transitively; as of `ts-jest@29.4.x` it no longer does, so `ts-node`
+  is now an explicit devDependency in `ranking-engine/package.json`. Don't drop it when bumping `ts-jest`
+  or `jest` without first confirming `npm test` still runs.
+
 ## Maintaining this file
 
 Keep this file for knowledge useful to almost every future agent session in this project.
