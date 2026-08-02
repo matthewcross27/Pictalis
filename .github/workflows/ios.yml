@@ -44,7 +44,7 @@ jobs:
         run: xcodegen generate
 
       - name: Cache Swift packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ios/SourcePackages
           key: spm-${{ runner.os }}-${{ hashFiles('ios/project.yml') }}
