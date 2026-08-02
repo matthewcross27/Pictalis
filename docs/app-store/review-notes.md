@@ -9,13 +9,18 @@ password, or Apple ID is needed.
 ## Step-by-Step Demo for Reviewers
 
 1. Open the app
-2. Tap "Choose Photos" and grant photo library access when prompted
+2. Tap "Choose photos" — this opens the system photo picker directly, with no
+   permission prompt (the picker runs out-of-process and only shares the
+   photos you select)
 3. Select 5–20 photos from your library (at least 5 for a meaningful session)
 4. Tap "Start Curating"
 5. On the next screen, tap "Filter then rank" to do a quick cull pass (optional),
    or tap to proceed directly to comparisons
 6. Tap through a few head-to-head comparisons — tap the photo you prefer
 7. Tap "See Full Rankings" at any time to view the results
+8. On the results screen, tap "Export All" (or save an individual photo) to
+   save favorites back to your library — this is the only point in the app
+   that triggers a permission prompt, requesting add-only access
 
 The full flow takes about 2 minutes with 10 photos.
 
@@ -78,8 +83,10 @@ Build
 
 Final Smoke Test (on device or simulator, Release build)
 [ ] App launches without crash
-[ ] Photo permission prompt appears with correct string:
-    "Pictalis needs access to your photos to help you curate your favorites."
+[ ] Choosing photos opens the system picker with no permission prompt
 [ ] Session can be created and first comparison displayed within 10 seconds
 [ ] Tapping a comparison photo advances to the next pair
-[ ] "See My Rankings" shows a ranked list of photos
+[ ] "See Full Rankings" shows a ranked list of photos
+[ ] Tapping "Export All" on the results screen shows an add-only photo
+    permission prompt with the correct string:
+    "Pictalis saves your favorite photos back to your library."

@@ -92,10 +92,11 @@ struct CullChoiceView: View {
         isStarting = true
         errorMessage = nil
         do {
-            _ = try await api.startCull(sessionId: sessionId)
+            try await api.startCull(sessionId: sessionId)
             isStarting = false
             onFilterThenRank()
         } catch {
+            ErrorReporter.capture(error)
             errorMessage = "Couldn't start — tap to try again."
             isStarting = false
         }

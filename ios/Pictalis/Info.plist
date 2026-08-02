@@ -20,10 +20,10 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Pictalis saves your favorite photos back to your library.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Pictalis needs access to your photos to help you curate your favorites.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Fraunces-Regular.ttf</string>

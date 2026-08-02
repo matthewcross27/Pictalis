@@ -10,7 +10,7 @@ final class DecisionStore {
     )
     private let persistence = DecisionPersistence()
 
-    var allDecidedIds: [UUID]              { decisions.map(\.photoId) }
+    var allDecidedIds: [UUID] { decisions.map(\.photoId) }
     var pendingDecisions: [StoredDecision] { decisions.filter { !$0.synced } }
 
     // Loads decisions from disk and starts the persistence write loop.
@@ -19,9 +19,9 @@ final class DecisionStore {
         decisions = await persistence.load(sessionId: sessionId)
         // Capture stream and persistence by value to avoid retaining self in the Task.
         // The stream terminates when deinit calls continuation.finish().
-        let s = stream
-        let p = persistence
-        Task { await p.run(stream: s, sessionId: sessionId) }
+        let capturedStream = stream
+        let capturedPersistence = persistence
+        Task { await capturedPersistence.run(stream: capturedStream, sessionId: sessionId) }
         return allDecidedIds
     }
 
@@ -29,7 +29,6 @@ final class DecisionStore {
         decisions.append(StoredDecision(
             photoId: photoId,
             decision: decision,
-            timestamp: .now,
             synced: false
         ))
         continuation.yield(decisions)
@@ -59,7 +58,7 @@ actor DecisionPersistence {
         guard let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             throw PersistenceError.noAppSupportDirectory
         }
-        return support.appendingPathComponent("cull_\(sessionId.uuidString.lowercased()).json")
+        return support.appendingPathComponent("cull_\(sessionId.lowercased).json")
     }
 
     func load(sessionId: UUID) -> [StoredDecision] {
@@ -67,7 +66,7 @@ actor DecisionPersistence {
         do {
             url = try fileURL(sessionId: sessionId)
         } catch {
-            print("[DecisionStore] Could not resolve file URL for session \(sessionId): \(error)")
+            ErrorReporter.capture(error)
             return []
         }
         guard let data = try? Data(contentsOf: url) else { return [] }
@@ -75,7 +74,7 @@ actor DecisionPersistence {
             let file = try decoder.decode(SessionDecisionFile.self, from: data)
             return file.decisions
         } catch {
-            print("[DecisionStore] Failed to decode session \(sessionId): \(error)")
+            ErrorReporter.capture(error)
             return []
         }
     }
@@ -91,13 +90,13 @@ actor DecisionPersistence {
         do {
             dest = try fileURL(sessionId: sessionId)
         } catch {
-            print("[DecisionStore] Could not resolve file URL for save \(sessionId): \(error)")
+            ErrorReporter.capture(error)
             return
         }
-        let file = SessionDecisionFile(sessionId: sessionId, decisions: decisions)
+        let file = SessionDecisionFile(decisions: decisions)
         guard let data = try? encoder.encode(file) else { return }
         let tmp  = dest.deletingLastPathComponent()
-            .appendingPathComponent("cull_\(sessionId.uuidString.lowercased()).tmp.json")
+            .appendingPathComponent("cull_\(sessionId.lowercased).tmp.json")
         do {
             try data.write(to: tmp)
             _ = try fileManager.replaceItem(
@@ -105,6 +104,7 @@ actor DecisionPersistence {
                 backupItemName: nil, options: [], resultingItemURL: nil
             )
         } catch {
+            ErrorReporter.capture(error)
             try? fileManager.removeItem(at: tmp)
         }
     }

@@ -3,17 +3,17 @@
 ## Title (30 chars max)
 Pictalis: Photo Curation
 
-Char count: 25 ✓
+Char count: 24 ✓
 
 ## Subtitle (30 chars max)
 Pick your favorites, fast
 
-Char count: 24 ✓
+Char count: 25 ✓
 
 ## Promotional Text (170 chars max)
 Stop scrolling through hundreds of photos. Pictalis uses head-to-head matchups to find the shots you'll actually keep — in minutes, not hours.
 
-Char count: 141 ✓
+Char count: 142 ✓
 
 ## Keywords (100 chars max, comma-separated, NO spaces after commas)
 cull,curate,favorite,compare,select,organize,gallery,batch,review,keeper,trip,event,party

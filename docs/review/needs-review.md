@@ -108,3 +108,10 @@ tests can drive path updates deterministically instead of depending on the real 
 **Not caused by the `@Observable` migration** — the monitor already existed on `main`; the migration
 only added `stop()`/`deinit` cancellation of the observer tasks, which can only reduce cross-test
 bleed, not cause it.
+
+**Status: fixed.** `PhotoPipeline` already accepted an injectable `connectivityEvents: AsyncStream<Void>?`
+init parameter (defaulting to a real `NWPathMonitor`-backed stream). `SyncService` gained the same seam:
+an `connectivityEvents: AsyncStream<Void>?` init parameter, defaulting to `nil` (real monitor) in
+production. `SyncPartitionTests.makeService` now injects a stream that never yields, so
+`SyncServiceFlushTests` no longer starts a real `NWPathMonitor` and can't race on a genuine OS path
+change mid-test.

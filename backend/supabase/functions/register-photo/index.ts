@@ -1,153 +1,73 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { initSentry, Sentry } from '../_shared/sentry.ts';
+import { initSentry } from '../_shared/sentry.ts';
 import { RegisterPhotoBody } from '../_shared/photo-registration.ts';
+import {
+  json,
+  parseBody,
+  requireSession,
+  requireUser,
+  serveAuthed,
+  WORKING_COPIES_BUCKET,
+} from '../_shared/http.ts';
 initSentry();
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+serveAuthed(async (req, _authHeader, supabase) => {
+  // requireUser (an auth-server round trip) and parseBody (no network call,
+  // just reading the request body) are independent - run them concurrently.
+  const [user, parsed] = await Promise.all([
+    requireUser(supabase),
+    parseBody(req, RegisterPhotoBody),
+  ]);
+  if (user instanceof Response) return user;
+  if (parsed instanceof Response) return parsed;
 
-Deno.serve(async (req) => {
-  try {
-    if (req.method === 'OPTIONS') {
-      return new Response('ok', { headers: CORS });
-    }
+  const { session_id, storage_path, photo_id } = parsed;
+  const [pathUid, pathSessionId, filename] = storage_path.split('/');
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing Authorization header' }),
-        {
-          status: 401,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } },
+  if (pathUid !== user.id) {
+    return json(
+      { error: 'storage_path UID segment must match the authenticated user' },
+      400,
     );
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    let body: unknown;
-    try {
-      body = await req.json();
-    } catch {
-      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-        status: 400,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const parsed = RegisterPhotoBody.safeParse(body);
-    if (!parsed.success) {
-      return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
-        status: 400,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const { session_id, storage_path, photo_id } = parsed.data;
-    const [pathUid, pathSessionId] = storage_path.split('/');
-
-    if (pathUid !== user.id) {
-      return new Response(
-        JSON.stringify({
-          error: 'storage_path UID segment must match the authenticated user',
-        }),
-        {
-          status: 400,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-    if (pathSessionId !== session_id) {
-      return new Response(
-        JSON.stringify({
-          error: 'storage_path session_id segment must match session_id field',
-        }),
-        {
-          status: 400,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    const filename = storage_path.split('/')[2];
-    const { data: objects, error: listError } = await supabase.storage
-      .from('working-copies')
-      .list(`${pathUid}/${pathSessionId}`, { search: filename });
-
-    if (listError || !objects || !objects.some((o) => o.name === filename)) {
-      return new Response(
-        JSON.stringify({ error: 'Storage object not found' }),
-        {
-          status: 404,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    const { data: session, error: sessionError } = await supabase
-      .from('sessions')
-      .select('id')
-      .eq('id', session_id)
-      .single();
-
-    if (sessionError || !session) {
-      return new Response(JSON.stringify({ error: 'Session not found' }), {
-        status: 404,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const PHOTO_COLUMNS =
-      'id, session_id, storage_path, elo_rating, comparison_count, created_at, is_suppressed';
-
-    // Row was pre-registered at session start. UPDATE sets the bytes location
-    // and marks upload complete. Idempotent: a retry on an already-uploaded row
-    // returns the existing data unchanged.
-    const { data: photo, error: updateError } = await supabase
-      .from('photos')
-      .update({ storage_path, upload_status: 'uploaded' })
-      .eq('id', photo_id)
-      .eq('session_id', session_id)
-      .select(PHOTO_COLUMNS)
-      .single();
-
-    if (updateError || !photo) {
-      // Row missing: batch-pre-register wasn't called, or session/id mismatch.
-      return new Response(
-        JSON.stringify({
-          error: 'Photo not pre-registered or session mismatch',
-        }),
-        {
-          status: 404,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    return new Response(JSON.stringify({ photo }), {
-      status: 200,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
-    Sentry.captureException(err);
-    await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
   }
+  if (pathSessionId !== session_id) {
+    return json(
+      { error: 'storage_path session_id segment must match session_id field' },
+      400,
+    );
+  }
+
+  // Storage existence check and session lookup are independent reads - run
+  // them concurrently to save a round trip on the upload hot path.
+  const [{ data: objects, error: listError }, session] = await Promise.all([
+    supabase.storage
+      .from(WORKING_COPIES_BUCKET)
+      .list(`${pathUid}/${pathSessionId}`, { search: filename }),
+    requireSession(supabase, session_id),
+  ]);
+
+  if (listError || !objects || !objects.some((o) => o.name === filename)) {
+    return json({ error: 'Storage object not found' }, 404);
+  }
+  if (session instanceof Response) return session;
+
+  const PHOTO_COLUMNS =
+    'id, session_id, storage_path, elo_rating, comparison_count, created_at, is_suppressed';
+
+  // Row was pre-registered at session start. UPDATE sets the bytes location
+  // and marks upload complete. Idempotent: a retry on an already-uploaded row
+  // returns the existing data unchanged.
+  const { data: photo, error: updateError } = await supabase
+    .from('photos')
+    .update({ storage_path, upload_status: 'uploaded' })
+    .eq('id', photo_id)
+    .eq('session_id', session_id)
+    .select(PHOTO_COLUMNS)
+    .single();
+
+  if (updateError || !photo) {
+    // Row missing: batch-pre-register wasn't called, or session/id mismatch.
+    return json({ error: 'Photo not pre-registered or session mismatch' }, 404);
+  }
+
+  return json({ photo });
 });

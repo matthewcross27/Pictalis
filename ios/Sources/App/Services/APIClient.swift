@@ -30,15 +30,24 @@ final class APIClient {
         return "Bearer \(token)"
     }
 
-    private func buildRequest(path: String, queryItems: [URLQueryItem] = []) throws -> URLRequest {
+    private func buildRequest(
+        path: String,
+        method: String = "GET",
+        queryItems: [URLQueryItem] = [],
+        body: [String: Any]? = nil
+    ) throws -> URLRequest {
         guard var comps = URLComponents(url: functionsBase.appending(path: path), resolvingAgainstBaseURL: false) else {
             throw URLError(.badURL)
         }
         if !queryItems.isEmpty { comps.queryItems = queryItems }
         guard let url = comps.url else { throw URLError(.badURL) }
         var req = URLRequest(url: url)
-        req.setValue("Bearer \(supabase.auth.currentSession?.accessToken ?? "")", forHTTPHeaderField: "Authorization")
+        req.httpMethod = method
+        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let body {
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
         return req
     }
 
@@ -48,100 +57,83 @@ final class APIClient {
         throw APIError.httpError(statusCode: http.statusCode, body: data)
     }
 
+    private func send(_ req: URLRequest) async throws -> Data {
+        let (data, response) = try await URLSession.shared.data(for: req)
+        try validate(response, data: data)
+        return data
+    }
+
+    // Shared by every endpoint whose entire request is `POST { session_id }`.
+    private func postSessionId(_ path: String, sessionId: UUID) async throws -> Data {
+        let req = try buildRequest(path: path, method: "POST", body: ["session_id": sessionId.lowercased])
+        return try await send(req)
+    }
+
+    // Shared by every endpoint whose entire request is `GET ?session_id=...`.
+    private func getSessionId(_ path: String, sessionId: UUID) async throws -> Data {
+        let req = try buildRequest(
+            path: path,
+            queryItems: [URLQueryItem(name: "session_id", value: sessionId.lowercased)]
+        )
+        return try await send(req)
+    }
+
     // MARK: - create-session
     // POST { photo_count } → { session: { id, created_at, expires_at, status, photo_count } }
 
     func createSession(photoCount: Int) async throws -> APISession {
-        let url = functionsBase.appending(path: "create-session")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: ["photo_count": photoCount])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
+        let req = try buildRequest(path: "create-session", method: "POST", body: ["photo_count": photoCount])
+        let data = try await send(req)
         return try decoder.decode(CreateSessionResponse.self, from: data).session
     }
 
     // MARK: - register-photo
     // POST { session_id, photo_id, storage_path } → { photo: { id, ... } }
 
-    func registerPhoto(sessionId: UUID, photoId: UUID, storagePath: String) async throws -> RegisteredPhoto {
-        let url = functionsBase.appending(path: "register-photo")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id": sessionId.uuidString.lowercased(),
-            "photo_id": photoId.uuidString.lowercased(),
-            "storage_path": storagePath,
+    func registerPhoto(sessionId: UUID, photoId: UUID, storagePath: String) async throws {
+        let req = try buildRequest(path: "register-photo", method: "POST", body: [
+            "session_id": sessionId.lowercased,
+            "photo_id": photoId.lowercased,
+            "storage_path": storagePath
         ])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
-        return try decoder.decode(RegisterPhotoResponse.self, from: data).photo
+        _ = try await send(req)
     }
 
     // MARK: - next-pair
     // GET ?session_id=... → { comparison_id, photo_a, photo_b }
 
     func nextPair(sessionId: UUID) async throws -> NextPairResponse {
-        var req = try buildRequest(
-            path: "next-pair",
-            queryItems: [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
-        )
-        req.httpMethod = "GET"
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
+        let data = try await getSessionId("next-pair", sessionId: sessionId)
         return try decoder.decode(NextPairResponse.self, from: data)
     }
 
     // MARK: - submit-comparison
     // POST { comparison_id, winner_id } → { winner_id, loser_id, winner_new_rating, loser_new_rating }
 
-    func submitComparison(comparisonId: UUID, winnerId: UUID) async throws -> SubmitComparisonResponse {
-        let url = functionsBase.appending(path: "submit-comparison")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "comparison_id": comparisonId.uuidString.lowercased(),
-            "winner_id": winnerId.uuidString.lowercased(),
+    func submitComparison(comparisonId: UUID, winnerId: UUID) async throws {
+        let req = try buildRequest(path: "submit-comparison", method: "POST", body: [
+            "comparison_id": comparisonId.lowercased,
+            "winner_id": winnerId.lowercased
         ])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
-        return try decoder.decode(SubmitComparisonResponse.self, from: data)
+        _ = try await send(req)
     }
 
     // MARK: - remove-photo
     // POST { session_id, photo_id } → { photo_id }
 
     func removePhoto(sessionId: UUID, photoId: UUID) async throws {
-        let url = functionsBase.appending(path: "remove-photo")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id": sessionId.uuidString.lowercased(),
-            "photo_id":   photoId.uuidString.lowercased(),
+        let req = try buildRequest(path: "remove-photo", method: "POST", body: [
+            "session_id": sessionId.lowercased,
+            "photo_id": photoId.lowercased
         ])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
+        _ = try await send(req)
     }
 
     // MARK: - session-status
     // GET ?session_id=... → { stage, is_complete, top_photo_count, total_comparisons }
 
     func sessionStatus(sessionId: UUID) async throws -> SessionStatus {
-        var req = try buildRequest(
-            path: "session-status",
-            queryItems: [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
-        )
-        req.httpMethod = "GET"
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
+        let data = try await getSessionId("session-status", sessionId: sessionId)
         return try decoder.decode(SessionStatus.self, from: data)
     }
 
@@ -149,102 +141,42 @@ final class APIClient {
     // GET ?session_id=...&limit=20 → { photos: [...], session: { stage, is_complete } }
 
     func results(sessionId: UUID, limit: Int = 20) async throws -> ResultsResponse {
-        var req = try buildRequest(
+        let req = try buildRequest(
             path: "results",
             queryItems: [
-                URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased()),
-                URLQueryItem(name: "limit", value: "\(limit)"),
+                URLQueryItem(name: "session_id", value: sessionId.lowercased),
+                URLQueryItem(name: "limit", value: "\(limit)")
             ]
         )
-        req.httpMethod = "GET"
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
+        let data = try await send(req)
         return try decoder.decode(ResultsResponse.self, from: data)
     }
 
     // MARK: - start-cull
     // POST { session_id } → { stage }
 
-    func startCull(sessionId: UUID) async throws -> StartCullResponse {
-        let url = functionsBase.appending(path: "start-cull")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id": sessionId.uuidString.lowercased(),
-        ])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
-        return try decoder.decode(StartCullResponse.self, from: data)
-    }
-
-    // MARK: - next-cull
-    // GET ?session_id=... → CullCard (done:true when empty)
-
-    func nextCull(sessionId: UUID) async throws -> CullCard {
-        var req = try buildRequest(
-            path: "next-cull",
-            queryItems: [URLQueryItem(name: "session_id", value: sessionId.uuidString.lowercased())]
-        )
-        req.httpMethod = "GET"
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
-        return try decoder.decode(CullCard.self, from: data)
-    }
-
-    // MARK: - submit-cull
-    // POST { session_id, photo_id, decision } → { done }
-
-    func submitCull(sessionId: UUID, photoId: UUID, decision: String) async throws -> CullActionResponse {
-        let url = functionsBase.appending(path: "submit-cull")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id": sessionId.uuidString.lowercased(),
-            "photo_id":   photoId.uuidString.lowercased(),
-            "decision":   decision,
-        ])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
-        return try decoder.decode(CullActionResponse.self, from: data)
+    func startCull(sessionId: UUID) async throws {
+        _ = try await postSessionId("start-cull", sessionId: sessionId)
     }
 
     // MARK: - finish-cull
     // POST { session_id } → { stage }
 
     func finishCull(sessionId: UUID) async throws {
-        let url = functionsBase.appending(path: "finish-cull")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id": sessionId.uuidString.lowercased(),
-        ])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
+        _ = try await postSessionId("finish-cull", sessionId: sessionId)
     }
 
     // MARK: - batch-submit-cull
     // POST { session_id, decisions } → { results }
 
     func batchSubmitCull(sessionId: UUID, decisions: [StoredDecision]) async throws -> BatchSubmitResponse {
-        let url = functionsBase.appending(path: "batch-submit-cull")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id": sessionId.uuidString.lowercased(),
-            "decisions":  decisions.map { d in
-                ["photo_id": d.photoId.uuidString.lowercased(), "decision": d.decision.rawValue]
-            },
+        let req = try buildRequest(path: "batch-submit-cull", method: "POST", body: [
+            "session_id": sessionId.lowercased,
+            "decisions": decisions.map { item in
+                ["photo_id": item.photoId.lowercased, "decision": item.decision.rawValue]
+            }
         ])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
+        let data = try await send(req)
         return try decoder.decode(BatchSubmitResponse.self, from: data)
     }
 
@@ -252,32 +184,17 @@ final class APIClient {
     // POST { session_id } → { ok }
 
     func markUploadComplete(sessionId: UUID) async throws {
-        let url = functionsBase.appending(path: "mark-upload-complete")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id": sessionId.uuidString.lowercased(),
-        ])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
+        _ = try await postSessionId("mark-upload-complete", sessionId: sessionId)
     }
 
     // MARK: - batch-pre-register
     // POST { session_id, photo_ids } → { ok }
 
     func batchPreRegister(sessionId: UUID, photoIds: [UUID]) async throws {
-        let url = functionsBase.appending(path: "batch-pre-register")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: [
-            "session_id": sessionId.uuidString.lowercased(),
-            "photo_ids": photoIds.map { $0.uuidString.lowercased() },
+        let req = try buildRequest(path: "batch-pre-register", method: "POST", body: [
+            "session_id": sessionId.lowercased,
+            "photo_ids": photoIds.map { $0.lowercased }
         ])
-        let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
+        _ = try await send(req)
     }
 }

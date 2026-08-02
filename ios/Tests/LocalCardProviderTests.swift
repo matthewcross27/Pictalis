@@ -5,15 +5,7 @@ import XCTest
 final class LocalCardProviderTests: XCTestCase {
 
     private func makePipeline(photos: [PendingPhoto]) -> PhotoPipeline {
-        let pipeline = PhotoPipeline(
-            transport: MockTransport(),
-            sessionId: UUID(),
-            userId: UUID(),
-            retryDelays: [],
-            materializeConcurrency: 1,
-            uploadConcurrency: 1,
-            connectivityEvents: AsyncStream { $0.finish() }
-        )
+        let pipeline = makeTestPipeline()
         pipeline.start(photos: photos)
         return pipeline
     }

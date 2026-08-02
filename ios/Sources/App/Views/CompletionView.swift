@@ -1,11 +1,9 @@
 import SwiftUI
-import Photos
 
 struct CompletionView: View {
     @Environment(APIClient.self) private var api
 
     let sessionId: UUID
-    let totalComparisons: Int
     var onSeeFullRankings: ([RankedPhoto]) -> Void
     var onStartOver: () -> Void
 
@@ -51,24 +49,9 @@ struct CompletionView: View {
                                 Color.grainPaper
                                     .aspectRatio(1, contentMode: .fit)
                                     .overlay {
-                                        CachedPhotoImage(url: photo.signedUrl, cacheKey: photo.id) { phase in
-                                            switch phase {
-                                            case .success(let image):
-                                                image.resizable().scaledToFill()
-                                            case .failure:
-                                                Image(systemName: "photo")
-                                                    .foregroundStyle(Color.secondaryText)
-                                            default:
-                                                EmptyView()
-                                            }
-                                        }
+                                        ThumbnailPhotoImage(url: photo.signedUrl, cacheKey: photo.id)
                                     }
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
-                                    .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
-                                    .onTapGesture { expandedPhoto = photo }
-                                    .accessibilityLabel("Photo ranked number \(index + 1)")
-                                    .accessibilityHint("View full screen")
+                                    .rankedPhotoCellStyle(rank: index + 1) { expandedPhoto = photo }
                             }
                         }
                         .padding(.horizontal, 8)
@@ -108,17 +91,8 @@ struct CompletionView: View {
             }
         }
         .task { await fetchTopPhotos() }
-        .fullScreenCover(item: $expandedPhoto) { photo in
-            PhotoExpandedView(photo: photo) { expandedPhoto = nil }
-        }
-        .alert("Saved to Photos", isPresented: Binding(
-            get: { exportAlertMessage != nil },
-            set: { if !$0 { exportAlertMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(exportAlertMessage ?? "")
-        }
+        .expandedPhotoCover($expandedPhoto)
+        .savedToPhotosAlert(message: $exportAlertMessage)
     }
 
     // MARK: - Private
@@ -133,24 +107,10 @@ struct CompletionView: View {
 
     private func exportAll() async {
         isExporting = true
-        var saved = 0
-        for photo in photos.prefix(10) {
-            guard let url = URL(string: photo.signedUrl) else { continue }
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                guard let image = UIImage(data: data) else { continue }
-                try await PHPhotoLibrary.shared().performChanges {
-                    PHAssetCreationRequest.creationRequestForAsset(from: image)
-                }
-                saved += 1
-            } catch {
-                print("Export failed: \(error)")
-            }
-        }
+        let saved = await PhotoExporter.exportAll(Array(photos.prefix(10)))
         isExporting = false
         if saved > 0 {
-            let noun = saved == 1 ? "photo" : "photos"
-            exportAlertMessage = "\(saved) \(noun) saved to your library."
+            exportAlertMessage = PhotoExporter.savedMessage(count: saved)
         }
     }
 }

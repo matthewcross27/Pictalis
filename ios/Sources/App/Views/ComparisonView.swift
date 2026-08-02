@@ -40,17 +40,15 @@ struct ComparisonView: View {
                     .padding(.vertical, 6)
                 }
 
+                Spacer()
                 if isLoading {
-                    Spacer()
                     VStack(spacing: 12) {
                         ProgressView().tint(Color.amber)
                         Text(waitingForUploads ? "Waiting for photos to finish uploading…" : "Loading photos…")
                             .font(.captionSerif)
                             .foregroundStyle(Color.secondaryText)
                     }
-                    Spacer()
                 } else if let errorMessage {
-                    Spacer()
                     VStack(spacing: 16) {
                         Text(errorMessage)
                             .font(.bodySerif)
@@ -63,9 +61,7 @@ struct ComparisonView: View {
                         .font(.labelSerif)
                         .foregroundStyle(Color.ink)
                     }
-                    Spacer()
                 } else if let pair {
-                    Spacer()
                     VStack(spacing: 8) {
                         photoCard(photo: pair.photoA, dragOffset: $dragOffsetA, hasDragged: $hasDraggedA)
                         photoCard(photo: pair.photoB, dragOffset: $dragOffsetB, hasDragged: $hasDraggedB)
@@ -74,8 +70,8 @@ struct ComparisonView: View {
                     .opacity((isSubmitting || isRemoving) ? 0.7 : 1.0)
                     .disabled(isSubmitting || isRemoving)
                     .animation(.buttonPress, value: isSubmitting)
-                    Spacer()
                 }
+                Spacer()
 
                 bottomBar
             }
@@ -93,18 +89,9 @@ struct ComparisonView: View {
             prefetchedPair = nil
         }
         .fullScreenCover(item: $fullscreenPhoto) { photo in
-            ZStack {
-                Color.photoBackground.ignoresSafeArea()
-                AsyncImage(url: URL(string: photo.signedUrl)) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFit()
-                    default:
-                        ProgressView().tint(Color.filmWhite)
-                    }
-                }
+            PhotoExpandedView(id: photo.id, signedUrl: photo.signedUrl, background: .photoBackground) {
+                fullscreenPhoto = nil
             }
-            .onTapGesture { fullscreenPhoto = nil }
         }
     }
 
@@ -149,7 +136,7 @@ struct ComparisonView: View {
                         .frame(maxWidth: .infinity)
                         .aspectRatio(4 / 3, contentMode: .fit)
                         .overlay {
-                            AsyncImage(url: URL(string: photo.signedUrl)) { phase in
+                            CachedPhotoImage(url: photo.signedUrl, cacheKey: photo.id) { phase in
                                 switch phase {
                                 case .empty:
                                     ProgressView().tint(Color.secondaryText)
@@ -173,18 +160,7 @@ struct ComparisonView: View {
                 VStack {
                     HStack {
                         Spacer()
-                        Button { fullscreenPhoto = photo } label: {
-                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .padding(8)
-                                .background(Color.photoOverlay)
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("View full screen")
-                        .accessibilityHint("Expand this photo")
-                        .padding(8)
+                        ExpandPhotoButton { fullscreenPhoto = photo }
                     }
                     Spacer()
                 }
@@ -235,13 +211,13 @@ struct ComparisonView: View {
         guard let pair else { return }
         isSubmitting = true
         do {
-            _ = try await api.submitComparison(
+            try await api.submitComparison(
                 comparisonId: pair.comparisonId,
                 winnerId: winner.id
             )
             comparisonCount += 1
         } catch {
-            print("Submit failed: \(error)")
+            ErrorReporter.capture(error)
             prefetchedPair = nil
             prefetchTask?.cancel()
             isSubmitting = false
@@ -270,17 +246,15 @@ struct ComparisonView: View {
         do {
             try await api.removePhoto(sessionId: sessionId, photoId: photo.id)
         } catch {
-            print("Remove failed: \(error)")
+            ErrorReporter.capture(error)
             isRemoving = false
             return
         }
         isRemoving = false
         self.pair = nil
-        if let status = try? await api.sessionStatus(sessionId: sessionId), status.isComplete {
-            onComplete(status.totalComparisons)
-        } else {
-            await fetchNextPair()
-        }
+        // fetchNextPair() already detects and handles session completion via
+        // its own 422-triggered sessionStatus check - no need to check here too.
+        await fetchNextPair()
     }
 
     private func fetchNextPair() async {
@@ -329,6 +303,7 @@ struct ComparisonView: View {
                 try? await Task.sleep(for: delay)
                 delay = min(delay * 2, .seconds(4))
             } catch {
+                ErrorReporter.capture(error)
                 errorMessage = "Failed to load next pair: \(error.localizedDescription)"
                 isLoading = false
                 return

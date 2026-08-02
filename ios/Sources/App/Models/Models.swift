@@ -1,5 +1,10 @@
 import Foundation
 
+extension UUID {
+    // Backend zod schemas validate session/photo ids as lowercase UUID strings.
+    var lowercased: String { uuidString.lowercased() }
+}
+
 // MARK: - create-session
 
 struct CreateSessionResponse: Decodable {
@@ -8,41 +13,13 @@ struct CreateSessionResponse: Decodable {
 
 struct APISession: Decodable {
     let id: UUID
-    let createdAt: String
-    let expiresAt: String
     let status: String
     let photoCount: Int
 
     enum CodingKeys: String, CodingKey {
         case id
-        case createdAt = "created_at"
-        case expiresAt = "expires_at"
         case status
         case photoCount = "photo_count"
-    }
-}
-
-// MARK: - register-photo
-
-struct RegisterPhotoResponse: Decodable {
-    let photo: RegisteredPhoto
-}
-
-struct RegisteredPhoto: Decodable {
-    let id: UUID
-    let sessionId: UUID
-    let storagePath: String
-    let eloRating: Double
-    let comparisonCount: Int
-    let createdAt: String
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case sessionId = "session_id"
-        case storagePath = "storage_path"
-        case eloRating = "elo_rating"
-        case comparisonCount = "comparison_count"
-        case createdAt = "created_at"
     }
 }
 
@@ -64,35 +41,13 @@ struct NextPairResponse: Decodable {
 
 struct PairPhoto: Decodable, Identifiable, Equatable {
     let id: UUID
-    let storagePath: String
-    let thumbnailPath: String?
-    let eloRating: Double
     let comparisonCount: Int
-    let signedUrl: String
+    let signedUrl: URL
 
     enum CodingKeys: String, CodingKey {
         case id
-        case storagePath = "storage_path"
-        case thumbnailPath = "thumbnail_path"
-        case eloRating = "elo_rating"
         case comparisonCount = "comparison_count"
         case signedUrl = "signed_url"
-    }
-}
-
-// MARK: - submit-comparison
-
-struct SubmitComparisonResponse: Decodable {
-    let winnerId: UUID
-    let loserId: UUID
-    let winnerNewRating: Double
-    let loserNewRating: Double
-
-    enum CodingKeys: String, CodingKey {
-        case winnerId = "winner_id"
-        case loserId = "loser_id"
-        case winnerNewRating = "winner_new_rating"
-        case loserNewRating = "loser_new_rating"
     }
 }
 
@@ -114,22 +69,14 @@ struct SessionInfo: Decodable {
 }
 
 struct RankedPhoto: Decodable, Identifiable, Equatable {
-    let id:              UUID
-    let storagePath:     String
-    let thumbnailPath:   String?
-    let eloRating:       Double
-    let uncertainty:     Double?
-    let comparisonCount: Int
-    let isSuppressed:    Bool
-    let signedUrl:       String
+    let id: UUID
+    let eloRating: Double
+    let isSuppressed: Bool
+    let signedUrl: URL
 
     enum CodingKeys: String, CodingKey {
         case id
-        case storagePath     = "storage_path"
-        case thumbnailPath   = "thumbnail_path"
         case eloRating       = "elo_rating"
-        case uncertainty
-        case comparisonCount = "comparison_count"
         case isSuppressed    = "is_suppressed"
         case signedUrl       = "signed_url"
     }
@@ -151,34 +98,6 @@ struct SessionStatus: Decodable {
     }
 }
 
-// MARK: - start-cull
-
-struct StartCullResponse: Decodable {
-    let stage: String
-}
-
-// MARK: - next-cull
-
-struct CullCard: Decodable {
-    let done:           Bool
-    let photoId:        UUID?
-    let photoUrl:       String?
-    let cardsRemaining: Int?
-
-    enum CodingKeys: String, CodingKey {
-        case done
-        case photoId        = "photo_id"
-        case photoUrl       = "photo_url"
-        case cardsRemaining = "cards_remaining"
-    }
-}
-
-// MARK: - submit-cull / finish-cull
-
-struct CullActionResponse: Decodable {
-    let done: Bool
-}
-
 // MARK: - Errors
 
 struct APIErrorResponse: Decodable {
@@ -197,45 +116,29 @@ enum CullDecision: String, Codable, Sendable {
 struct StoredDecision: Codable, Sendable {
     let photoId: UUID
     let decision: CullDecision
-    let timestamp: Date
     var synced: Bool
 
     enum CodingKeys: String, CodingKey {
         case photoId    = "photo_id"
         case decision
-        case timestamp
         case synced
     }
 }
 
 struct SessionDecisionFile: Codable {
-    let sessionId: UUID
     var decisions: [StoredDecision]
-
-    enum CodingKeys: String, CodingKey {
-        case sessionId = "session_id"
-        case decisions
-    }
 }
 
 // MARK: - batch-submit-cull
 
 struct BatchDecisionResult: Decodable {
-    let photoId:  UUID
-    let success:  Bool
-    let error:    String?
+    let photoId: UUID
+    let success: Bool
 
     enum CodingKeys: String, CodingKey {
         case photoId = "photo_id"
         case success
-        case error
     }
-}
-
-// MARK: - batch-pre-register
-
-struct BatchPreRegisterResponse: Decodable {
-    let ok: Bool
 }
 
 struct BatchSubmitResponse: Decodable {

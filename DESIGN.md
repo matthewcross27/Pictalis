@@ -215,7 +215,7 @@ The navigation bar should appear translucent over Film White — not opaque. On 
 A thin strip above the comparison cells, visible only while upload is in progress. Quiet.
 
 - **Background:** Grain Paper (one step warmer than Film White, creates a contained strip without a visible border)
-- **Progress indicator:** Thin fill bar, Terracotta fill on Divider track
+- **Progress indicator:** Thin fill bar, Amber Dim fill on Divider track
 - **Caption:** `{typography.caption}` — "{n}/{total}" — right-aligned, Secondary Text
 
 ## 6. Do's and Don'ts

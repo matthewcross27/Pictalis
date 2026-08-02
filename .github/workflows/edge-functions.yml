@@ -31,15 +31,18 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Cache Deno dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/deno
+          key: deno-${{ runner.os }}-${{ hashFiles('backend/supabase/functions/deno.lock') }}
+          restore-keys: |
+            deno-${{ runner.os }}-
       - name: Format check
         run: deno fmt --check .
       - name: Lint
         run: deno lint .
       - name: Type-check function entry points
-        run: |
-          for f in */index.ts; do
-            echo "deno check $f"
-            deno check "$f"
-          done
+        run: deno check */index.ts
       - name: Test shared logic
         run: deno test --allow-env _shared/

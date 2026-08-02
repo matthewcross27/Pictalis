@@ -30,7 +30,6 @@ final class PhotoPipeline {
     }
 
     private struct Item {
-        let photoId: UUID
         let loader: any PhotoDataLoading
         var state: ItemState = .pending
         var isKept = false
@@ -51,7 +50,7 @@ final class PhotoPipeline {
     private var activeUploads = 0
     private var waiters: [UUID: [CheckedContinuation<URL, Error>]] = [:]
     private var didMarkComplete = false
-    nonisolated(unsafe) private var backgroundTasks: [Task<Void, Never>] = []
+    @ObservationIgnored nonisolated(unsafe) private var backgroundTasks: [Task<Void, Never>] = []
 
     private let transport: any PhotoUploadTransport
     private let sessionId: UUID
@@ -80,12 +79,7 @@ final class PhotoPipeline {
         if let connectivityEvents {
             self.connectivityEvents = connectivityEvents
         } else {
-            let monitor = NWPathMonitor()
-            let (stream, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
-            monitor.pathUpdateHandler = { path in
-                if path.status == .satisfied { continuation.yield() }
-            }
-            monitor.start(queue: DispatchQueue(label: "pipeline.connectivity", qos: .background))
+            let (stream, monitor) = ConnectivityMonitor.makeStream(label: "pipeline.connectivity")
             self.connectivityEvents = stream
             self.monitor = monitor
         }
@@ -94,7 +88,7 @@ final class PhotoPipeline {
     func start(photos: [PendingPhoto]) {
         order = photos.map(\.id)
         for photo in photos {
-            items[photo.id] = Item(photoId: photo.id, loader: photo.loader)
+            items[photo.id] = Item(loader: photo.loader)
         }
         prepareSessionDirectory()
         backgroundTasks.append(Task { await self.materializeAll() })
@@ -102,11 +96,6 @@ final class PhotoPipeline {
             guard let events = self?.connectivityEvents else { return }
             for await _ in events { self?.retryParked() }
         })
-    }
-
-    func cancel() {
-        for task in backgroundTasks { task.cancel() }
-        backgroundTasks.removeAll()
     }
 
     deinit { for task in backgroundTasks { task.cancel() } }
@@ -190,7 +179,7 @@ final class PhotoPipeline {
     private var sessionDirectory: URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("PictalisUploads")
-            .appendingPathComponent(sessionId.uuidString.lowercased())
+            .appendingPathComponent(sessionId.lowercased)
     }
 
     private func prepareSessionDirectory() {
@@ -203,7 +192,7 @@ final class PhotoPipeline {
             var iterator = order.makeIterator()
             func addNext() {
                 guard let id = iterator.next() else { return }
-                group.addTask { @MainActor in await self.materialize(id) }
+                group.addTask { await self.materialize(id) }
             }
             for _ in 0..<materializeConcurrency { addNext() }
             for await _ in group { addNext() }
@@ -216,12 +205,11 @@ final class PhotoPipeline {
         do {
             let raw = try await loader.loadData()
             let jpeg = try await Task.detached(priority: .userInitiated) {
-                guard let image = UIImage(data: raw) else { throw CompressionError.noImageData }
-                return try ImageCompressor.compressImage(image)
+                try ImageCompressor.compressData(raw)
             }.value
             // The photo may have been dropped while we were decoding.
             guard items[id]?.state == .pending else { return }
-            let url = sessionDirectory.appendingPathComponent("\(id.uuidString.lowercased()).jpg")
+            let url = sessionDirectory.appendingPathComponent("\(id.lowercased).jpg")
             try jpeg.write(to: url)
             items[id]?.fileURL = url
             items[id]?.state = .materialized
@@ -231,6 +219,7 @@ final class PhotoPipeline {
             if items[id]?.materializeAttempts == 1 {
                 await materialize(id) // one immediate retry
             } else {
+                ErrorReporter.capture(error)
                 items[id]?.state = .failed
                 updateFailedIds()
                 resumeWaiters(for: id, with: .failure(PipelineError.photoUnavailable))
@@ -292,42 +281,35 @@ final class PhotoPipeline {
             updateFailedIds()
             return
         }
-        let storagePath = "\(userId.uuidString.lowercased())/\(sessionId.uuidString.lowercased())/\(id.uuidString.lowercased()).jpg"
+        let storagePath = "\(userId.lowercased)/\(sessionId.lowercased)/\(id.lowercased).jpg"
         do {
-            if items[id]?.didUpload != true {
-                try await withRetries { try await self.transport.upload(storagePath: storagePath, data: data) }
-                items[id]?.didUpload = true
-            }
+            try await uploadBytesIfNeeded(id, data: data, storagePath: storagePath)
             // Photo may have been dropped while bytes were in flight. Skip
             // markUploaded — the drop is already on the server (is_suppressed=true),
             // and upload_status staying 'pending' is a second exclusion from ranking.
             guard items[id]?.state == .uploading else { return }
-            try await withRetries {
-                try await self.transport.markUploaded(sessionId: self.sessionId, photoId: id, storagePath: storagePath)
-            }
+            try await markUploadedOnServer(id, storagePath: storagePath)
             items[id]?.state = .uploaded
             registeredCount += 1
             updateFailedIds()
         } catch {
+            ErrorReporter.capture(error)
             if items[id]?.state == .uploading { items[id]?.state = .parked }
             updateFailedIds()
         }
     }
 
-    private func withRetries(_ operation: () async throws -> Void) async throws {
-        var attempt = 0
-        while true {
-            do {
-                try await operation()
-                return
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                guard attempt < retryDelays.count else { throw error }
-                let jitter = Duration.milliseconds(Int.random(in: 0...300))
-                try await Task.sleep(for: retryDelays[attempt] + jitter)
-                attempt += 1
-            }
+    private func uploadBytesIfNeeded(_ id: UUID, data: Data, storagePath: String) async throws {
+        guard items[id]?.didUpload != true else { return }
+        try await retryWithBackoff(delays: retryDelays, jitter: 0...300) {
+            try await self.transport.upload(storagePath: storagePath, data: data)
+        }
+        items[id]?.didUpload = true
+    }
+
+    private func markUploadedOnServer(_ id: UUID, storagePath: String) async throws {
+        try await retryWithBackoff(delays: retryDelays, jitter: 0...300) {
+            try await self.transport.markUploaded(sessionId: self.sessionId, photoId: id, storagePath: storagePath)
         }
     }
 
@@ -353,7 +335,11 @@ final class PhotoPipeline {
         // Mark the session complete only once the server has been told, so
         // observers waiting on `isComplete` see a settled state.
         Task {
-            try? await self.transport.markUploadComplete(sessionId: self.sessionId)
+            do {
+                try await self.transport.markUploadComplete(sessionId: self.sessionId)
+            } catch {
+                ErrorReporter.capture(error)
+            }
             self.isComplete = true
         }
     }

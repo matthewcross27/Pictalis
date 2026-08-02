@@ -28,14 +28,14 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
 - Swift: SwiftUI only (no UIKit), async/await (no Combine), strict concurrency
 - TypeScript: strict mode, Zod for all API boundary validation
 - Python: type hints required, black formatter
-- All new Supabase tables require a migration file in backend/migrations/
+- All new Supabase tables require a migration file in backend/supabase/migrations/
 - Write tests for the ranking engine; UI tests are optional in MVP
 
 ## Key Business Rules (from PRD)
 - Elo updates must happen in < 200ms (real-time feel)
-- Duplicate suppression only in Stage 1 — alternates remain accessible
+- Duplicate suppression only in the `dedup` stage (currently scaffolded, not yet wired - see README) - alternates remain accessible
 - Users can always override/pin/remove any ranking result
-- Session state persists for 24–72 hours server-side
+- Session state persists for up to 72 hours server-side (fixed TTL, reaped hourly)
 
 ## Never Do
 - Never recommend permanent cloud storage of original photos
@@ -46,5 +46,5 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
 ## Workflow
 - Default branch is `main` — all feature branches and PRs target `main`
 - Branch per feature, PR for review
-- Run `npm test` in backend/ before pushing ranking engine changes
+- Run `npm test` in ranking-engine/ before pushing ranking engine changes
 - Use /clear between unrelated tasks to manage context

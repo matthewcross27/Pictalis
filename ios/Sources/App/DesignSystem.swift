@@ -26,10 +26,10 @@ extension Color {
 extension Font {
     static let displaySerif  = Font.custom("Fraunces-SemiBold", size: 36, relativeTo: .largeTitle)
     static let headlineSerif = Font.custom("Fraunces-SemiBold", size: 22, relativeTo: .headline)
-    static let titleSerif    = Font.custom("Fraunces-Medium",   size: 17, relativeTo: .body)
-    static let bodySerif     = Font.custom("Fraunces-Regular",  size: 16, relativeTo: .body)
-    static let labelSerif    = Font.custom("Fraunces-Medium",   size: 14, relativeTo: .subheadline)
-    static let captionSerif  = Font.custom("Fraunces-Regular",  size: 11, relativeTo: .caption)
+    static let titleSerif    = Font.custom("Fraunces-Medium", size: 17, relativeTo: .body)
+    static let bodySerif     = Font.custom("Fraunces-Regular", size: 16, relativeTo: .body)
+    static let labelSerif    = Font.custom("Fraunces-Medium", size: 14, relativeTo: .subheadline)
+    static let captionSerif  = Font.custom("Fraunces-Regular", size: 11, relativeTo: .caption)
 }
 
 // MARK: - Corner Radii
@@ -101,15 +101,15 @@ struct PhotoTapStyle: ButtonStyle {
 // MARK: - Stage Badge
 
 enum RankingStage: String {
-    case stage1 = "stage_1"
-    case stage2 = "stage_2"
-    case stage3 = "stage_3"
+    case cull
+    case ranking
+    case complete
 
     var label: String {
         switch self {
-        case .stage1: return "Stage 1"
-        case .stage2: return "Stage 2"
-        case .stage3: return "Stage 3"
+        case .cull: return "Cull"
+        case .ranking: return "Ranking"
+        case .complete: return "Complete"
         }
     }
 }
@@ -127,5 +127,72 @@ struct StageBadge: View {
             .background(
                 Capsule().fill(isComplete ? Color.badgeCompleteFill : Color.badgeActiveFill)
             )
+    }
+}
+
+// MARK: - Expand Photo Button
+
+struct ExpandPhotoButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(8)
+                .background(Color.photoOverlay)
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("View full screen")
+        .accessibilityHint("Expand this photo")
+        .padding(8)
+    }
+}
+
+// MARK: - Saved to Photos Alert
+
+extension View {
+    /// Presents the standard "Saved to Photos" confirmation alert whenever `message` is non-nil,
+    /// clearing it back to nil on dismissal.
+    func savedToPhotosAlert(message: Binding<String?>) -> some View {
+        alert("Saved to Photos", isPresented: Binding(
+            get: { message.wrappedValue != nil },
+            set: { if !$0 { message.wrappedValue = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(message.wrappedValue ?? "")
+        }
+    }
+}
+
+// MARK: - Expanded Photo Cover
+
+extension View {
+    /// Presents `PhotoExpandedView` full-screen for `expandedPhoto` whenever it's non-nil,
+    /// clearing it back to nil on dismissal.
+    func expandedPhotoCover(_ expandedPhoto: Binding<RankedPhoto?>) -> some View {
+        fullScreenCover(item: expandedPhoto) { photo in
+            PhotoExpandedView(id: photo.id, signedUrl: photo.signedUrl) { expandedPhoto.wrappedValue = nil }
+        }
+    }
+}
+
+// MARK: - Ranked Photo Grid Cell
+
+extension View {
+    /// Applies the shared clip/tap/accessibility styling for a ranked-photo grid cell
+    /// (used by ResultsView and CompletionView). Callers are responsible for the cell's
+    /// base content (background + sizing + image overlay), which differs between them.
+    func rankedPhotoCellStyle(rank: Int, onTap: @escaping () -> Void) -> some View {
+        self
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+            .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
+            .onTapGesture(perform: onTap)
+            .accessibilityLabel("Photo ranked number \(rank)")
+            .accessibilityHint("View full screen")
     }
 }

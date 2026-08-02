@@ -1,11 +1,10 @@
 import SwiftUI
-import Photos
 
 struct ResultsView: View {
     @Environment(APIClient.self) private var api
 
     let sessionId: UUID
-    var onBack: (() -> Void)? = nil
+    var onBack: (() -> Void)?
     /// Photos already fetched by a previous screen — rendered immediately
     /// while the full list loads.
     var initialPhotos: [RankedPhoto] = []
@@ -15,6 +14,7 @@ struct ResultsView: View {
     @State private var expandedPhoto: RankedPhoto?
     @State private var errorMessage: String?
     @State private var exportingId: UUID?
+    @State private var isExportingAll = false
     @State private var exportAlertMessage: String?
     @State private var sessionStage: RankingStage?
     @State private var isSessionComplete = false
@@ -26,32 +26,30 @@ struct ResultsView: View {
             ZStack {
                 Color.filmWhite.ignoresSafeArea()
 
-                Group {
-                    if isLoading {
-                        VStack(spacing: 12) {
-                            ProgressView().tint(Color.amber)
-                            Text("Loading results…")
-                                .font(.captionSerif)
-                                .foregroundStyle(Color.secondaryText)
-                        }
-                    } else if let errorMessage {
-                        Text(errorMessage)
-                            .font(.bodySerif)
-                            .foregroundStyle(Color.amber)
-                            .padding(.horizontal, 32)
-                    } else if photos.isEmpty {
-                        Text("No photos ranked yet.")
-                            .font(.bodySerif)
+                if isLoading {
+                    VStack(spacing: 12) {
+                        ProgressView().tint(Color.amber)
+                        Text("Loading results…")
+                            .font(.captionSerif)
                             .foregroundStyle(Color.secondaryText)
-                    } else {
-                        ScrollView {
-                            LazyVGrid(columns: columns, spacing: 4) {
-                                ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
-                                    photoCell(photo: photo, rank: index + 1)
-                                }
+                    }
+                } else if let errorMessage {
+                    Text(errorMessage)
+                        .font(.bodySerif)
+                        .foregroundStyle(Color.amber)
+                        .padding(.horizontal, 32)
+                } else if photos.isEmpty {
+                    Text("No photos ranked yet.")
+                        .font(.bodySerif)
+                        .foregroundStyle(Color.secondaryText)
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 4) {
+                            ForEach(Array(photos.enumerated()), id: \.element.id) { index, photo in
+                                photoCell(photo: photo, rank: index + 1)
                             }
-                            .padding(4)
                         }
+                        .padding(4)
                     }
                 }
             }
@@ -69,10 +67,10 @@ struct ResultsView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Export All") { exportAll() }
+                    Button("Export All") { Task { @MainActor in await exportAll() } }
                         .font(.labelSerif)
                         .foregroundStyle(Color.amber)
-                        .disabled(photos.isEmpty)
+                        .disabled(photos.isEmpty || isExportingAll)
                         .accessibilityLabel("Save to Photos library")
                         .accessibilityHint("Save all ranked photos to your Photos library")
                 }
@@ -85,17 +83,8 @@ struct ResultsView: View {
             }
             await fetchResults()
         }
-        .fullScreenCover(item: $expandedPhoto) { photo in
-            PhotoExpandedView(photo: photo) { expandedPhoto = nil }
-        }
-        .alert("Saved to Photos", isPresented: Binding(
-            get: { exportAlertMessage != nil },
-            set: { if !$0 { exportAlertMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(exportAlertMessage ?? "")
-        }
+        .expandedPhotoCover($expandedPhoto)
+        .savedToPhotosAlert(message: $exportAlertMessage)
     }
 
     // MARK: - Private
@@ -105,17 +94,7 @@ struct ResultsView: View {
         Color.grainPaper
             .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 180)
             .overlay {
-                CachedPhotoImage(url: photo.signedUrl, cacheKey: photo.id) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    case .failure:
-                        Image(systemName: "photo")
-                            .foregroundStyle(Color.secondaryText)
-                    default:
-                        EmptyView()
-                    }
-                }
+                ThumbnailPhotoImage(url: photo.signedUrl, cacheKey: photo.id)
             }
             .overlay(alignment: .bottomTrailing) {
                 Button {
@@ -141,12 +120,7 @@ struct ResultsView: View {
                 .padding(8)
                 .disabled(exportingId != nil)
             }
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
-            .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
-            .onTapGesture { expandedPhoto = photo }
-            .accessibilityLabel("Photo ranked number \(rank)")
-            .accessibilityHint("View full screen")
+            .rankedPhotoCellStyle(rank: rank) { expandedPhoto = photo }
     }
 
     private func fetchResults() async {
@@ -157,6 +131,7 @@ struct ResultsView: View {
             sessionStage = (response.session?.stage).flatMap { RankingStage(rawValue: $0) }
             isSessionComplete = response.session?.isComplete ?? false
         } catch {
+            ErrorReporter.capture(error)
             // Keep showing initial photos if the full fetch fails.
             if photos.isEmpty {
                 errorMessage = "Failed to load results: \(error.localizedDescription)"
@@ -167,32 +142,23 @@ struct ResultsView: View {
 
     @discardableResult
     private func exportPhoto(photo: RankedPhoto) async -> Bool {
-        guard let url = URL(string: photo.signedUrl) else { return false }
         exportingId = photo.id
         defer { exportingId = nil }
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            guard let image = UIImage(data: data) else { return false }
-            try await PHPhotoLibrary.shared().performChanges {
-                PHAssetCreationRequest.creationRequestForAsset(from: image)
-            }
+            try await PhotoExporter.exportPhoto(signedUrl: photo.signedUrl)
             return true
         } catch {
-            print("Export failed: \(error)")
+            ErrorReporter.capture(error)
             return false
         }
     }
 
-    private func exportAll() {
-        Task { @MainActor in
-            var saved = 0
-            for photo in photos {
-                if await exportPhoto(photo: photo) { saved += 1 }
-            }
-            if saved > 0 {
-                let noun = saved == 1 ? "photo" : "photos"
-                exportAlertMessage = "\(saved) \(noun) saved to your library."
-            }
+    private func exportAll() async {
+        isExportingAll = true
+        let saved = await PhotoExporter.exportAll(photos)
+        isExportingAll = false
+        if saved > 0 {
+            exportAlertMessage = PhotoExporter.savedMessage(count: saved)
         }
     }
 }

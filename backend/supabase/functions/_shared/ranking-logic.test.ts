@@ -1,5 +1,13 @@
 import { assertEquals } from 'jsr:@std/assert@1';
-import { computeMinComparisons, computeTopK, isBoundaryStable } from './ranking-logic.ts';
+import {
+  computeMinComparisons,
+  computeTopK,
+  hasFullCoverage,
+  isBoundaryStable,
+  isSessionComplete,
+  resolveTopKAndMinComparisons,
+} from './ranking-logic.ts';
+import { makePhoto } from './test-helpers.ts';
 
 // --- computeTopK ---
 
@@ -38,24 +46,22 @@ Deno.test('computeMinComparisons — n=200, topK=35 → correct ceil', () => {
   assertEquals(computeMinComparisons(200, 35), expected);
 });
 
-// --- isBoundaryStable ---
+// --- resolveTopKAndMinComparisons ---
 
-function makePhoto(
-  id: string,
-  elo: number,
-  uncertainty: number,
-  comparisons = 0,
-) {
-  return {
-    id,
-    storage_path: '',
-    thumbnail_path: null,
-    elo_rating: elo,
-    uncertainty,
-    comparison_count: comparisons,
-    cluster_id: null,
-  };
-}
+Deno.test('resolveTopKAndMinComparisons — no top_k override → derives topK from photo_count', () => {
+  const result = resolveTopKAndMinComparisons({ top_k: null, photo_count: 100 });
+  assertEquals(result, {
+    topK: computeTopK(100),
+    minComparisons: computeMinComparisons(100, computeTopK(100)),
+  });
+});
+
+Deno.test('resolveTopKAndMinComparisons — explicit top_k override → used as-is', () => {
+  const result = resolveTopKAndMinComparisons({ top_k: 10, photo_count: 100 });
+  assertEquals(result, { topK: 10, minComparisons: computeMinComparisons(100, 10) });
+});
+
+// --- isBoundaryStable ---
 
 Deno.test('isBoundaryStable — empty array returns true (vacuous truth guard)', () => {
   assertEquals(isBoundaryStable([], 5), true);
@@ -99,4 +105,59 @@ Deno.test('isBoundaryStable — only checks up to 3 contenders beyond boundary',
     makePhoto('e', 800, 50),
   ];
   assertEquals(isBoundaryStable(photos, 1), false);
+});
+
+// --- isSessionComplete ---
+
+Deno.test('isSessionComplete — empty photos → not complete (vacuous truth guard)', () => {
+  assertEquals(isSessionComplete([], 5, 1, 0, 10), false);
+});
+
+Deno.test('isSessionComplete — coverage met and boundary stable → complete', () => {
+  const photos = [
+    makePhoto('a', 1600, 50, 3),
+    makePhoto('b', 1000, 50, 3),
+  ];
+  assertEquals(isSessionComplete(photos, 2, 1, 3, 2), true);
+});
+
+Deno.test('isSessionComplete — coverage met but boundary unstable → not complete', () => {
+  const photos = [
+    makePhoto('a', 1600, 50, 3),
+    makePhoto('b', 1490, 200, 3),
+    makePhoto('c', 1480, 200, 3),
+  ];
+  assertEquals(isSessionComplete(photos, 2, 1, 9, 3), false);
+});
+
+Deno.test('isSessionComplete — coverage not met but comparison budget exhausted → complete', () => {
+  const photos = [
+    makePhoto('a', 1600, 50, 0),
+    makePhoto('b', 1000, 50, 0),
+  ];
+  assertEquals(isSessionComplete(photos, 2, 5, 8, 2), true);
+});
+
+Deno.test('isSessionComplete — coverage not met and budget not exhausted → not complete', () => {
+  const photos = [
+    makePhoto('a', 1600, 50, 0),
+    makePhoto('b', 1000, 50, 0),
+  ];
+  assertEquals(isSessionComplete(photos, 2, 5, 0, 2), false);
+});
+
+// --- hasFullCoverage ---
+
+Deno.test('hasFullCoverage — empty photos → false (vacuous truth guard)', () => {
+  assertEquals(hasFullCoverage([], 1), false);
+});
+
+Deno.test('hasFullCoverage — every photo meets the floor → true', () => {
+  const photos = [makePhoto('a', 1600, 50, 3), makePhoto('b', 1000, 50, 3)];
+  assertEquals(hasFullCoverage(photos, 3), true);
+});
+
+Deno.test('hasFullCoverage — one photo below the floor → false', () => {
+  const photos = [makePhoto('a', 1600, 50, 3), makePhoto('b', 1000, 50, 2)];
+  assertEquals(hasFullCoverage(photos, 3), false);
 });

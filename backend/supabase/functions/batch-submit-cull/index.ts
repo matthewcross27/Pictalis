@@ -1,102 +1,40 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
-import { initSentry, Sentry } from '../_shared/sentry.ts';
+import { initSentry } from '../_shared/sentry.ts';
+import { json, parseBody, serveAuthed, SessionIdSchema } from '../_shared/http.ts';
 initSentry();
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-const BodySchema = z.object({
-  session_id: z.string().uuid(),
+const BodySchema = SessionIdSchema.extend({
   decisions: z.array(z.object({
     photo_id: z.string().uuid(),
     decision: z.enum(['keep', 'drop']),
   })).min(1).max(300),
 });
 
-Deno.serve(async (req) => {
-  try {
-    if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+serveAuthed(async (req, _authHeader, supabase) => {
+  const parsed = await parseBody(req, BodySchema);
+  if (parsed instanceof Response) return parsed;
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing Authorization header' }),
-        {
-          status: 401,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        },
-      );
-    }
+  const { session_id, decisions } = parsed;
 
-    let body: unknown;
-    try {
-      body = await req.json();
-    } catch {
-      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
-        status: 400,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
+  const keepIds = decisions.filter((d) => d.decision === 'keep').map((d) => d.photo_id);
+  const dropIds = decisions.filter((d) => d.decision === 'drop').map((d) => d.photo_id);
 
-    const parsed = BodySchema.safeParse(body);
-    if (!parsed.success) {
-      return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
-        status: 400,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
+  // Single RPC call replaces the two concurrent bulk UPDATEs this used to
+  // issue - the DB function merges them into one CASE-based UPDATE.
+  // cull_decision IS NULL guard makes this idempotent - safe to retry.
+  const { error } = await supabase.rpc('batch_submit_cull', {
+    p_session_id: session_id,
+    p_keep_ids: keepIds,
+    p_drop_ids: dropIds,
+  });
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } },
-    );
+  // Zero rows updated for a given photo: decision already set - idempotent
+  // success. With pre-registration, the photo row always exists before cull
+  // starts, so that case just means cull_decision was already written.
+  const entry = error
+    ? { success: false as const, error: error.message }
+    : { success: true as const };
+  const results = decisions.map(({ photo_id }) => ({ photo_id, ...entry }));
 
-    const { session_id, decisions } = parsed.data;
-
-    // Apply each decision to the individual photo only.
-    // cull_decision IS NULL guard makes this idempotent — safe to retry.
-    const results = await Promise.all(
-      decisions.map(async ({ photo_id, decision }) => {
-        try {
-          const update = decision === 'keep'
-            ? { cull_decision: 'keep' }
-            : { cull_decision: 'drop', is_suppressed: true };
-
-          const { error: updateError } = await supabase
-            .from('photos')
-            .update(update)
-            .eq('id', photo_id)
-            .eq('session_id', session_id)
-            .is('cull_decision', null);
-
-          if (updateError) {
-            return { photo_id, success: false, error: updateError.message };
-          }
-
-          // Zero rows updated: decision already set — idempotent success.
-          // With pre-registration, the photo row always exists before cull
-          // starts, so zero-rows-updated means cull_decision was already written.
-          return { photo_id, success: true };
-        } catch (err) {
-          return { photo_id, success: false, error: String(err) };
-        }
-      }),
-    );
-
-    return new Response(JSON.stringify({ results }), {
-      status: 200,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
-  } catch (err) {
-    Sentry.captureException(err);
-    await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
-  }
+  return json({ results });
 });

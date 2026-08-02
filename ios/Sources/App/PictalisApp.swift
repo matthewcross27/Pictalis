@@ -37,23 +37,24 @@ struct PictalisApp: App {
     }
 
     private func configureNavigationBar() {
-        // UIColor values sourced from DesignSystem.swift color tokens (same RGB).
-        let inkColor = UIColor(red: 0.157, green: 0.141, blue: 0.098, alpha: 1)   // Color.ink
-        let bgColor  = UIColor(red: 0.976, green: 0.961, blue: 0.945, alpha: 0.97) // Color.filmWhite @ 97%
-        let dividerColor = UIColor(red: 0.855, green: 0.835, blue: 0.804, alpha: 0.6) // Color.divider @ 60%
-        let amberColor   = UIColor(red: 0.700, green: 0.480, blue: 0.060, alpha: 1)   // Color.amber
+        // Bridge DesignSystem's SwiftUI tokens instead of duplicating raw RGB/font values,
+        // so this stays in sync if the palette or type scale ever changes.
+        let inkColor     = UIColor(Color.ink)
+        let bgColor      = UIColor(Color.filmWhite.opacity(0.97))
+        let dividerColor = UIColor(Color.divider.opacity(0.6))
+        let amberColor   = UIColor(Color.amber)
 
         let appearance = UINavigationBarAppearance()
         appearance.configureWithDefaultBackground()
         appearance.backgroundColor = bgColor
         appearance.shadowColor = dividerColor
 
-        // Font.titleSerif equivalent: Fraunces-SemiBold 17
-        let titleFont = UIFont(name: "Fraunces-SemiBold", size: 17) ?? UIFont.boldSystemFont(ofSize: 17)
+        // Font.titleSerif equivalent: Fraunces-Medium 17
+        let titleFont = UIFont(name: "Fraunces-Medium", size: 17) ?? UIFont.boldSystemFont(ofSize: 17)
         appearance.titleTextAttributes = [.font: titleFont, .foregroundColor: inkColor]
 
-        // Font.displaySerif equivalent: Fraunces-SemiBold 34
-        let largeTitleFont = UIFont(name: "Fraunces-SemiBold", size: 34) ?? UIFont.boldSystemFont(ofSize: 34)
+        // Font.displaySerif equivalent: Fraunces-SemiBold 36
+        let largeTitleFont = UIFont(name: "Fraunces-SemiBold", size: 36) ?? UIFont.boldSystemFont(ofSize: 36)
         appearance.largeTitleTextAttributes = [.font: largeTitleFont, .foregroundColor: inkColor]
 
         UINavigationBar.appearance().standardAppearance   = appearance

@@ -6,7 +6,7 @@ enum AppState {
     case culling(sessionId: UUID, pipeline: PhotoPipeline)
     case comparing(sessionId: UUID, pipeline: PhotoPipeline)
     case complete(sessionId: UUID, totalComparisons: Int)
-    case results(sessionId: UUID, previousComparisons: Int? = nil, initialPhotos: [RankedPhoto] = [])
+    case results(sessionId: UUID, previousComparisons: Int?, initialPhotos: [RankedPhoto])
 }
 
 extension AppState: Equatable {
@@ -24,9 +24,6 @@ extension AppState: Equatable {
 }
 
 struct ContentView: View {
-    @Environment(AuthService.self) private var auth
-    @Environment(APIClient.self) private var api
-
     @State private var appState: AppState = .setup
 
     var body: some View {
@@ -72,7 +69,6 @@ struct ContentView: View {
             case .complete(let sessionId, let totalComparisons):
                 CompletionView(
                     sessionId: sessionId,
-                    totalComparisons: totalComparisons,
                     onSeeFullRankings: { photos in
                         appState = .results(sessionId: sessionId, previousComparisons: totalComparisons, initialPhotos: photos)
                     },

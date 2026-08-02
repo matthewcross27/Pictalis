@@ -29,13 +29,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install SwiftLint & XcodeGen
+        run: brew install swiftlint xcodegen
+
+      - name: Lint (SwiftLint)
+        run: swiftlint lint --strict
+
       # The real config is gitignored; placeholder values compile fine
       # and unit tests never hit the network.
       - name: Create Supabase config stub
         run: cp Sources/App/SupabaseConfig.swift.example Sources/App/SupabaseConfig.swift
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
 
       - name: Generate Xcode project
         run: xcodegen generate

@@ -5,13 +5,16 @@ import XCTest
 // MARK: - Test fixtures
 
 enum TestImage {
-    static func jpegData(width: CGFloat = 64, height: CGFloat = 48) -> Data {
+    static func make(width: CGFloat = 64, height: CGFloat = 48, color: UIColor = .systemTeal) -> UIImage {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height))
-        let image = renderer.image { ctx in
-            UIColor.systemTeal.setFill()
+        return renderer.image { ctx in
+            color.setFill()
             ctx.fill(CGRect(x: 0, y: 0, width: width, height: height))
         }
-        return image.jpegData(compressionQuality: 0.8)!
+    }
+
+    static func jpegData(width: CGFloat = 64, height: CGFloat = 48) -> Data {
+        make(width: width, height: height).jpegData(compressionQuality: 0.8)!
     }
 }
 
@@ -86,31 +89,32 @@ func waitUntil(
     }
 }
 
+@MainActor
+func makeTestPipeline(
+    transport: MockTransport? = nil,
+    retryDelays: [Duration] = [],
+    materializeConcurrency: Int = 1,
+    uploadConcurrency: Int = 1,
+    connectivity: AsyncStream<Void> = AsyncStream { $0.finish() }
+) -> PhotoPipeline {
+    PhotoPipeline(
+        transport: transport ?? MockTransport(),
+        sessionId: UUID(),
+        userId: UUID(),
+        retryDelays: retryDelays,
+        materializeConcurrency: materializeConcurrency,
+        uploadConcurrency: uploadConcurrency,
+        connectivityEvents: connectivity
+    )
+}
+
 // MARK: - Tests
 
 @MainActor
 final class PhotoPipelineTests: XCTestCase {
 
-    private func makePipeline(
-        transport: MockTransport,
-        retryDelays: [Duration] = [],
-        materializeConcurrency: Int = 1,
-        uploadConcurrency: Int = 1,
-        connectivity: AsyncStream<Void> = AsyncStream { $0.finish() }
-    ) -> PhotoPipeline {
-        PhotoPipeline(
-            transport: transport,
-            sessionId: UUID(),
-            userId: UUID(),
-            retryDelays: retryDelays,
-            materializeConcurrency: materializeConcurrency,
-            uploadConcurrency: uploadConcurrency,
-            connectivityEvents: connectivity
-        )
-    }
-
     func testMaterializesPhotoToDisk() async throws {
-        let pipeline = makePipeline(transport: MockTransport())
+        let pipeline = makeTestPipeline(transport: MockTransport())
         let photo = PendingPhoto(loader: MockLoader())
         pipeline.start(photos: [photo])
 
@@ -121,7 +125,7 @@ final class PhotoPipelineTests: XCTestCase {
     }
 
     func testDisplayImageDecodesMaterializedPhoto() async throws {
-        let pipeline = makePipeline(transport: MockTransport())
+        let pipeline = makeTestPipeline(transport: MockTransport())
         let photo = PendingPhoto(loader: MockLoader())
         pipeline.start(photos: [photo])
 
@@ -130,7 +134,7 @@ final class PhotoPipelineTests: XCTestCase {
     }
 
     func testMaterializeFailureMarksFailed() async throws {
-        let pipeline = makePipeline(transport: MockTransport())
+        let pipeline = makeTestPipeline(transport: MockTransport())
         let bad = PendingPhoto(loader: MockLoader(data: nil))
         let good = PendingPhoto(loader: MockLoader())
         pipeline.start(photos: [bad, good])
@@ -144,7 +148,7 @@ final class PhotoPipelineTests: XCTestCase {
 
     func testUploadsAndRegistersAllPhotos() async throws {
         let transport = MockTransport()
-        let pipeline = makePipeline(transport: transport, uploadConcurrency: 4)
+        let pipeline = makeTestPipeline(transport: transport, uploadConcurrency: 4)
         let photos = (0..<5).map { _ in PendingPhoto(loader: MockLoader()) }
         pipeline.start(photos: photos)
 
@@ -158,7 +162,7 @@ final class PhotoPipelineTests: XCTestCase {
     func testKeptPhotoJumpsQueue() async throws {
         let transport = MockTransport()
         transport.uploadDelay = .milliseconds(50)
-        let pipeline = makePipeline(transport: transport)
+        let pipeline = makeTestPipeline(transport: transport)
         let photos = (0..<5).map { _ in PendingPhoto(loader: MockLoader()) }
         pipeline.start(photos: photos)
 
@@ -181,7 +185,7 @@ final class PhotoPipelineTests: XCTestCase {
         let transport = MockTransport()
         let photos = (0..<3).map { _ in PendingPhoto(loader: MockLoader()) }
         transport.markUploadedFailures[photos[1].id] = 2
-        let pipeline = makePipeline(transport: transport, retryDelays: [.zero, .zero, .zero])
+        let pipeline = makeTestPipeline(transport: transport, retryDelays: [.zero, .zero, .zero])
         pipeline.start(photos: photos)
 
         try await waitUntil { pipeline.isComplete }
@@ -193,7 +197,7 @@ final class PhotoPipelineTests: XCTestCase {
         let transport = MockTransport()
         let photos = (0..<3).map { _ in PendingPhoto(loader: MockLoader()) }
         transport.uploadFailures[photos[1].id] = 99
-        let pipeline = makePipeline(transport: transport, retryDelays: [.zero])
+        let pipeline = makeTestPipeline(transport: transport, retryDelays: [.zero])
         pipeline.start(photos: photos)
 
         try await waitUntil { pipeline.isComplete }
@@ -205,7 +209,7 @@ final class PhotoPipelineTests: XCTestCase {
     func testDropCancelsQueuedUpload() async throws {
         let transport = MockTransport()
         transport.uploadDelay = .milliseconds(50)
-        let pipeline = makePipeline(transport: transport)
+        let pipeline = makeTestPipeline(transport: transport)
         let photos = (0..<3).map { _ in PendingPhoto(loader: MockLoader()) }
         pipeline.start(photos: photos)
 
@@ -226,7 +230,7 @@ final class PhotoPipelineTests: XCTestCase {
         let transport = MockTransport()
         let photo = PendingPhoto(loader: MockLoader())
         transport.gatedIds = [photo.id]
-        let pipeline = makePipeline(transport: transport)
+        let pipeline = makeTestPipeline(transport: transport)
         pipeline.start(photos: [photo])
 
         // Block until the upload is in-flight, so the drop lands while the
@@ -247,7 +251,7 @@ final class PhotoPipelineTests: XCTestCase {
 
     func testDropAfterRegisteredIsNoop() async throws {
         let transport = MockTransport()
-        let pipeline = makePipeline(transport: transport)
+        let pipeline = makeTestPipeline(transport: transport)
         let photo = PendingPhoto(loader: MockLoader())
         pipeline.start(photos: [photo])
 
@@ -261,7 +265,7 @@ final class PhotoPipelineTests: XCTestCase {
         let (stream, continuation) = AsyncStream<Void>.makeStream()
         let photos = (0..<2).map { _ in PendingPhoto(loader: MockLoader()) }
         transport.uploadFailures[photos[1].id] = 1
-        let pipeline = makePipeline(transport: transport, connectivity: stream)
+        let pipeline = makeTestPipeline(transport: transport, connectivity: stream)
         pipeline.start(photos: photos)
 
         try await waitUntil { pipeline.isComplete }
@@ -276,7 +280,7 @@ final class PhotoPipelineTests: XCTestCase {
         let transport = MockTransport()
         let photos = (0..<2).map { _ in PendingPhoto(loader: MockLoader()) }
         transport.markUploadedFailures[photos[0].id] = 1
-        let pipeline = makePipeline(transport: transport)
+        let pipeline = makeTestPipeline(transport: transport)
         pipeline.start(photos: photos)
 
         try await waitUntil { pipeline.isComplete }

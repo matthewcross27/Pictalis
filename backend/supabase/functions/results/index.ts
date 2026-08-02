@@ -1,117 +1,79 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { z } from 'npm:zod@3';
-import { initSentry, Sentry } from '../_shared/sentry.ts';
+import { initSentry } from '../_shared/sentry.ts';
+import {
+  json,
+  parseQuery,
+  serveAuthed,
+  serverError,
+  SessionIdSchema,
+  SIGNED_URL_EXPIRY_SECONDS,
+  WORKING_COPIES_BUCKET,
+} from '../_shared/http.ts';
 initSentry();
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-const QuerySchema = z.object({
-  session_id: z.string().uuid(),
+const QuerySchema = SessionIdSchema.extend({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
-Deno.serve(async (req) => {
-  try {
-    if (req.method === 'OPTIONS') {
-      return new Response('ok', { headers: CORS });
-    }
+serveAuthed(async (req, _authHeader, supabase) => {
+  const parsed = parseQuery(req, QuerySchema);
+  if (parsed instanceof Response) return parsed;
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: 'Missing Authorization header' }),
-        {
-          status: 401,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        },
-      );
-    }
-
-    const url = new URL(req.url);
-    const parsed = QuerySchema.safeParse({
-      session_id: url.searchParams.get('session_id'),
-      limit: url.searchParams.get('limit') ?? 20,
-    });
-    if (!parsed.success) {
-      return new Response(JSON.stringify({ error: parsed.error.flatten() }), {
-        status: 400,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } },
-    );
-
-    // Fetch session stage so iOS can show "Complete" / "In Progress" badge.
-    const { data: session } = await supabase
+  // Session stage (for the iOS "Complete" / "In Progress" badge) and the
+  // ranked photo list are fetched concurrently - neither depends on the
+  // other's result.
+  const [{ data: session }, { data: photos, error }] = await Promise.all([
+    supabase
       .from('sessions')
       .select('stage')
-      .eq('id', parsed.data.session_id)
-      .single();
-
-    const { data: photos, error } = await supabase
+      .eq('id', parsed.session_id)
+      .single(),
+    supabase
       .from('photos')
       .select(
         'id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, is_suppressed, cluster_id, quality_flags',
       )
-      .eq('session_id', parsed.data.session_id)
+      .eq('session_id', parsed.session_id)
       .eq('is_suppressed', false)
       .eq('upload_status', 'uploaded')
       .order('elo_rating', { ascending: false })
-      .limit(parsed.data.limit);
+      .limit(parsed.limit),
+  ]);
 
-    if (error) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch photos' }), {
-        status: 500,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
+  if (error) {
+    return await serverError(error, 'Failed to fetch photos');
+  }
 
-    const photosWithUrls = await Promise.all(
-      (photos ?? []).map(async (photo) => {
-        const { data: signed, error: signedError } = await supabase.storage
-          .from('working-copies')
-          .createSignedUrl(photo.storage_path, 3600);
-        if (signedError) throw signedError;
-        return { ...photo, signed_url: signed?.signedUrl ?? null };
-      }),
-    ).catch(() => null);
-
-    if (!photosWithUrls) {
-      return new Response(
-        JSON.stringify({ error: 'Failed to generate photo URLs' }),
-        {
-          status: 500,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-        },
+  const photoList = photos ?? [];
+  let photosWithUrls: (typeof photoList[number] & { signed_url: string | null })[];
+  if (photoList.length === 0) {
+    photosWithUrls = [];
+  } else {
+    // Single batch call instead of one createSignedUrl round trip per photo
+    // (up to `limit`, i.e. 100, photos per request).
+    const { data: signedUrls, error: signError } = await supabase.storage
+      .from(WORKING_COPIES_BUCKET)
+      .createSignedUrls(
+        photoList.map((photo) => photo.storage_path),
+        SIGNED_URL_EXPIRY_SECONDS,
+      );
+    if (signError || !signedUrls || signedUrls.some((s) => s.error)) {
+      return await serverError(
+        signError ?? new Error('createSignedUrls returned no data'),
+        'Failed to generate photo URLs',
       );
     }
-
-    return new Response(
-      JSON.stringify({
-        photos: photosWithUrls,
-        session: {
-          stage: session?.stage ?? 'ranking',
-          is_complete: session?.stage === 'complete',
-        },
-      }),
-      {
-        status: 200,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      },
-    );
-  } catch (err) {
-    Sentry.captureException(err);
-    await Sentry.flush(2000);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    });
+    photosWithUrls = photoList.map((photo, i) => ({
+      ...photo,
+      signed_url: signedUrls[i]!.signedUrl,
+    }));
   }
+
+  return json({
+    photos: photosWithUrls,
+    session: {
+      stage: session?.stage ?? 'ranking',
+      is_complete: session?.stage === 'complete',
+    },
+  });
 });

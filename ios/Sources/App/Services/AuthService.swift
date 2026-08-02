@@ -28,12 +28,8 @@ final class AuthService {
                 isAuthenticated = true
             }
         } catch {
-            print("Auth error: \(error)")
+            ErrorReporter.capture(error)
             authError = error
         }
-    }
-
-    var accessToken: String? {
-        client.auth.currentSession?.accessToken
     }
 }

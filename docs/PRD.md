@@ -162,7 +162,22 @@ The system will NOT automatically determine “best” photos using AI.
 
 ---
 
-## 3. Ranking Experience
+## 3. Optional Cull Stage
+
+Before ranking begins, the user chooses how to start:
+
+* **Filter then rank** — a lightweight swipe-style pass where the user quickly keeps or drops each photo before any pairwise comparisons happen
+* **Rank only** — skip straight to the Ranking Experience with all uploaded photos
+
+Behavior:
+
+* dropped photos are excluded from all pairwise comparisons and the final ranked results
+* this stage is local-first and fast: decisions are batched and submitted without blocking the user's swiping pace
+* skipping this stage has no effect on ranking behavior — it is purely an optional pre-filter
+
+---
+
+## 4. Ranking Experience
 
 ### Interaction Model
 
@@ -187,7 +202,7 @@ The system dynamically chooses future comparisons to maximize ranking confidence
 
 ---
 
-## 4. Multi-Stage Ranking Flow
+## 5. Multi-Stage Ranking Flow
 
 ### Stage 1 — Broad Discovery
 
@@ -224,7 +239,7 @@ Behavior:
 
 ---
 
-## 5. Completion State
+## 6. Completion State
 
 The ranking session ends when:
 

@@ -8,15 +8,15 @@ struct CullView: View {
     var onComplete: () -> Void
 
     @State private var decisionStore  = DecisionStore()
-    @State private var cardProvider:    LocalCardProvider?
-    @State private var syncService:     SyncService?
-    @State private var currentCard:     LocalCardProvider.Card?
-    @State private var dragOffset:      CGFloat = 0
+    @State private var cardProvider: LocalCardProvider?
+    @State private var syncService: SyncService?
+    @State private var currentCard: LocalCardProvider.Card?
+    @State private var dragOffset: CGFloat = 0
     @State private var isFinishing      = false
     @State private var finishFailed     = false
     @State private var isInitialized    = false
-    @State private var expandedCard:     LocalCardProvider.Card?
-    @State private var screenWidth:      CGFloat = 390
+    @State private var expandedCard: LocalCardProvider.Card?
+    @State private var screenWidth: CGFloat = 390
 
     private var dragProgress: CGFloat { dragOffset / (screenWidth * 0.4) }
 
@@ -44,24 +44,6 @@ struct CullView: View {
 
                     case .exhausted:
                         Color.clear
-
-                    case .error(let message):
-                        Spacer()
-                        VStack(spacing: 12) {
-                            Text(message)
-                                .font(.bodySerif)
-                                .foregroundStyle(Color.amber)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
-                            Button("Retry") { cardProvider?.retry() }
-                                .font(.labelSerif)
-                                .foregroundStyle(Color.filmWhite)
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 12)
-                                .background(Color.amber)
-                                .clipShape(RoundedRectangle(cornerRadius: .interactiveRadius))
-                        }
-                        Spacer()
                     }
                 }
             }
@@ -97,16 +79,15 @@ struct CullView: View {
 
     private func initialize() async {
         let provider = LocalCardProvider(pipeline: pipeline)
-        let p = pipeline
-        let ss = SyncService(
+        let sync = SyncService(
             sessionId: sessionId,
             api: api,
-            registrationState: { p.registrationState(for: $0) }
+            registrationState: { pipeline.registrationState(for: $0) }
         )
         cardProvider = provider
-        syncService  = ss
+        syncService  = sync
 
-        async let syncReady: Void = ss.start(store: decisionStore)
+        async let syncReady: Void = sync.start(store: decisionStore)
         let decidedIds = await decisionStore.load(sessionId: sessionId)
         await provider.start(excluding: decidedIds)
         await syncReady
@@ -167,18 +148,7 @@ struct CullView: View {
                 }
             }
             .overlay(alignment: .topTrailing) {
-                Button { expandedCard = card } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(8)
-                        .background(Color.photoOverlay)
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("View full screen")
-                .accessibilityHint("Expand this photo")
-                .padding(8)
+                ExpandPhotoButton { expandedCard = card }
             }
             .offset(x: dragOffset)
             .gesture(
@@ -262,6 +232,7 @@ struct CullView: View {
             try await api.finishCull(sessionId: sessionId)
             onComplete()
         } catch {
+            ErrorReporter.capture(error)
             finishFailed = true
         }
         isFinishing = false

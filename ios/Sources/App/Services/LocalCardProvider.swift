@@ -4,7 +4,6 @@ enum CullQueueState: Equatable {
     case loading
     case ready
     case exhausted
-    case error(String)
 }
 
 // Serves cull cards from PhotoPipeline's on-disk compressed copies.
@@ -14,7 +13,7 @@ final class LocalCardProvider {
 
     struct Card: Sendable, Identifiable {
         let photoId: UUID
-        let image:   UIImage
+        let image: UIImage
         var id: UUID { photoId }
     }
 
@@ -26,10 +25,12 @@ final class LocalCardProvider {
 
     private let pipeline: PhotoPipeline
     private var remaining: [UUID] = []   // undecided ids, selection order, not yet queued
+    private var remainingCursor = 0      // index of the next id in `remaining` to queue
+    private var hasRemaining: Bool { remainingCursor < remaining.count }
     private var isFilling = false
     private var currentMaxQueueSize = LocalCardProvider.normalQueueSize
-    nonisolated(unsafe) private var fillTask: Task<Void, Never>?
-    nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
+    @ObservationIgnored nonisolated(unsafe) private var fillTask: Task<Void, Never>?
+    @ObservationIgnored nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
 
     init(pipeline: PhotoPipeline) {
         self.pipeline = pipeline
@@ -53,8 +54,9 @@ final class LocalCardProvider {
     func start(excluding decidedIds: [UUID]) async {
         let decided = Set(decidedIds)
         remaining = pipeline.order.filter { !decided.contains($0) }
+        remainingCursor = 0
         await fill(target: 1)
-        if queue.isEmpty && remaining.isEmpty {
+        if queue.isEmpty && !hasRemaining {
             state = .exhausted
         } else if !queue.isEmpty {
             state = .ready
@@ -65,26 +67,17 @@ final class LocalCardProvider {
 
     func advance() -> Card? {
         guard !queue.isEmpty else {
-            if remaining.isEmpty { state = .exhausted }
+            if !hasRemaining { state = .exhausted }
             return nil
         }
         let card = queue.removeFirst()
-        if queue.isEmpty && remaining.isEmpty {
+        if queue.isEmpty && !hasRemaining {
             state = .exhausted
         } else {
             fillTask?.cancel()
             fillTask = Task { await self.fill() }
         }
         return card
-    }
-
-    // Kept for CullView's error-state button; local loads rarely need it.
-    func retry() {
-        fillTask?.cancel()
-        fillTask = Task {
-            await self.fill()
-            if !self.queue.isEmpty { self.state = .ready }
-        }
     }
 
     // MARK: - Private
@@ -94,27 +87,33 @@ final class LocalCardProvider {
         isFilling = true
         defer { isFilling = false }
 
-        while queue.count < (target ?? currentMaxQueueSize), !remaining.isEmpty {
-            let id = remaining.removeFirst()
+        while queue.count < (target ?? currentMaxQueueSize), hasRemaining {
+            let id = remaining[remainingCursor]
+            remainingCursor += 1
             do {
                 let image = try await pipeline.displayImage(for: id)
                 queue.append(Card(photoId: id, image: image))
                 if state == .loading { state = .ready }
             } catch {
-                continue // cancelled or unreadable — skip silently
+                // Card just isn't showable (dropped elsewhere or unreadable) — the
+                // deck moves on regardless, but a materialize failure here is still
+                // silent to the user in this swipe-deck flow (unlike ComparisonView's
+                // failedIds banner), so it's worth capturing for production visibility.
+                ErrorReporter.capture(error)
+                continue
             }
         }
-        if queue.isEmpty && remaining.isEmpty { state = .exhausted }
+        if queue.isEmpty && !hasRemaining { state = .exhausted }
     }
 
     private func handleMemoryWarning() {
         currentMaxQueueSize = Self.minQueueSize
         if queue.count > currentMaxQueueSize {
-            // Evict from the tail (furthest from display); ids go back to the
-            // head of `remaining` so they re-decode later in order.
+            // Evict from the tail (furthest from display); ids go back in front
+            // of the remaining cursor so they re-decode next, in order.
             let evicted = queue.suffix(queue.count - currentMaxQueueSize).map(\.photoId)
             queue.removeLast(queue.count - currentMaxQueueSize)
-            remaining.insert(contentsOf: evicted, at: 0)
+            remaining.insert(contentsOf: evicted, at: remainingCursor)
         }
     }
 }
