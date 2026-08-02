@@ -32,7 +32,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Cache Deno dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/deno
           key: deno-${{ runner.os }}-${{ hashFiles('backend/supabase/functions/deno.lock') }}
