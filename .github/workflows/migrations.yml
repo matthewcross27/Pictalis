@@ -30,7 +30,7 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: latest
       - name: Start local database and apply all migrations
