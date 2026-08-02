@@ -23,6 +23,7 @@ import {
   serveAuthed,
   serverError,
   SessionIdSchema,
+  type SessionRow,
   SIGNED_URL_EXPIRY_SECONDS,
   WORKING_COPIES_BUCKET,
 } from '../_shared/http.ts';
@@ -46,7 +47,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
     { data: photos, error: photosError },
     { data: rawComparisons },
   ] = await Promise.all([
-    requireSession(supabase, session_id, 'id, stage, photo_count, top_k'),
+    requireSession<SessionRow>(supabase, session_id, 'id, stage, photo_count, top_k'),
     supabase
       .from('photos')
       .select(

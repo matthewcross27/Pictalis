@@ -9,6 +9,7 @@ import {
   serveAuthed,
   serverError,
   SessionIdSchema,
+  type SessionRow,
 } from '../_shared/http.ts';
 initSentry();
 
@@ -22,7 +23,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   // depends on session_id (already known from the parsed request), not on
   // any field of the session row.
   const [session, { data: photos, error: photosError }] = await Promise.all([
-    requireSession(supabase, session_id, 'id, stage, photo_count, top_k'),
+    requireSession<SessionRow>(supabase, session_id, 'id, stage, photo_count, top_k'),
     supabase
       .from('photos')
       .select('comparison_count, elo_rating, uncertainty')

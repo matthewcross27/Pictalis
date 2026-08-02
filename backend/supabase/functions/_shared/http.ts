@@ -99,15 +99,24 @@ export async function requireUser(supabase: SupabaseClient): Promise<User | Resp
   return user;
 }
 
+// Shape returned by requireSession(supabase, sessionId, 'id, stage, photo_count, top_k'),
+// used by both next-pair and session-status.
+export interface SessionRow {
+  id: string;
+  stage: string;
+  photo_count: number;
+  top_k: number | null;
+}
+
 // Fetches a session row by id, or returns a 404 Response if it doesn't
 // exist - check `instanceof Response` at the call site before using the
 // result. `columns` defaults to just 'id' for call sites that only need to
 // verify the session exists.
-export async function requireSession(
+export async function requireSession<Row = { id: string }>(
   supabase: SupabaseClient,
   sessionId: string,
   columns = 'id',
-) {
+): Promise<Row | Response> {
   const { data: session, error } = await supabase
     .from('sessions')
     .select(columns)
@@ -116,7 +125,12 @@ export async function requireSession(
   if (error || !session) {
     return json({ error: 'Session not found' }, 404);
   }
-  return session;
+  // `columns` is a plain runtime string, not a literal type, so Supabase's
+  // select() can't infer a row shape from it - callers assert the shape they
+  // asked for via the `Row` type parameter instead. Passing the columns
+  // string as a literal generic here blows up `deno check` with a runaway
+  // recursive-type OOM (supabase-js's select<Query> parser).
+  return session as unknown as Row;
 }
 
 // Persists a session's transition to the terminal 'complete' stage. Called
