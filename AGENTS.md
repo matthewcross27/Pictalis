@@ -78,6 +78,15 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
   `ts-jest` used to pull `ts-node` in transitively; as of `ts-jest@29.4.x` it no longer does, so `ts-node`
   is now an explicit devDependency in `ranking-engine/package.json`. Don't drop it when bumping `ts-jest`
   or `jest` without first confirming `npm test` still runs.
+- `typescript` is pinned to `~6.0.3` (tilde, not caret) in `ranking-engine/package.json`.
+  `typescript-eslint@8.65.0`'s peer requirement caps compatible `typescript` at `<6.1.0`, so a caret range
+  would let a routine `npm install` drift to `6.1.0+` and break `npm ci`/lint. Don't bump past `6.0.x`
+  without first re-checking `typescript-eslint`'s peer range, and don't loosen the pin to a caret.
+- As of `typescript@6.0.3`, `tsc` no longer implicitly type-checks against every package under
+  `node_modules/@types` the way `5.9.x` did - `ranking-engine/tsconfig.json` sets
+  `compilerOptions.types: ["jest", "node"]` explicitly to keep jest globals (`describe`, `it`, `expect`)
+  and Node globals (`performance`, etc.) resolving in `src/__tests__/**`. If a future `@types/*` package
+  is added and its globals silently stop resolving, add it to that `types` array rather than removing it.
 
 ## Maintaining this file
 
