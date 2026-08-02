@@ -56,6 +56,23 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
 - Run `npm test` in backend/ before pushing ranking engine changes
 - Use /clear between unrelated tasks to manage context
 
+## iOS build gotchas
+- The Swift compiler's own fix-it on `'nonisolated(unsafe)' has no effect ... consider using 'nonisolated'`
+  is wrong for `@Observable`-tracked mutable `var` properties (and for mutable stored properties in
+  general, macro or not): `nonisolated` cannot apply to a mutable stored property, only to `let`s,
+  computed properties, or functions. Applying it produces a hard compile error
+  ("'nonisolated' cannot be applied to mutable stored properties"), not a silent fix. Verified against
+  Xcode 26.6 / this project's toolchain. Leave `nonisolated(unsafe)` in place on these properties
+  (e.g. `LocalCardProvider.fillTask`/`memoryWarningObserver`, `PhotoPipeline.backgroundTasks`) despite
+  the warning.
+- `TaskGroup.addTask { @MainActor in await self.foo() }` inside a `@MainActor`-isolated type can trip
+  the region-based isolation checker ("this is an error in the Swift 6 language mode"). Dropping the
+  explicit `@MainActor in` and just writing `group.addTask { await self.foo() }` resolves it — the
+  `await` call to an actor-isolated method already performs the hop, so the extra annotation is both
+  unnecessary and what confuses the checker.
+- After adding a new Source file, `xcodegen generate` must be re-run before `xcodebuild` will see it
+  (the generated `Pictalis.xcodeproj` is gitignored and rebuilt from `project.yml` + folder contents).
+
 ## Maintaining this file
 
 Keep this file for knowledge useful to almost every future agent session in this project.

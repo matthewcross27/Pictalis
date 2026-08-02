@@ -61,7 +61,7 @@ final class SyncService {
     // Fire-and-forget drain; safe to call after every decision — isDraining guard prevents pile-up.
     func syncIfNeeded() {
         guard !isDraining else { return }
-        Task { await drain() }
+        observerTasks.append(Task { await drain() })
     }
 
     // Backstop before entering ranking: sends all pending decisions before the

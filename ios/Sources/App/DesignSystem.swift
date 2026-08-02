@@ -23,13 +23,19 @@ extension Color {
 // MARK: - Typography
 // Fraunces at every level. Weight contrast carries hierarchy — size is secondary.
 
+enum FraunceFamily {
+    static let semiBold = "Fraunces-SemiBold"
+    static let medium   = "Fraunces-Medium"
+    static let regular  = "Fraunces-Regular"
+}
+
 extension Font {
-    static let displaySerif  = Font.custom("Fraunces-SemiBold", size: 36, relativeTo: .largeTitle)
-    static let headlineSerif = Font.custom("Fraunces-SemiBold", size: 22, relativeTo: .headline)
-    static let titleSerif    = Font.custom("Fraunces-Medium", size: 17, relativeTo: .body)
-    static let bodySerif     = Font.custom("Fraunces-Regular", size: 16, relativeTo: .body)
-    static let labelSerif    = Font.custom("Fraunces-Medium", size: 14, relativeTo: .subheadline)
-    static let captionSerif  = Font.custom("Fraunces-Regular", size: 11, relativeTo: .caption)
+    static let displaySerif  = Font.custom(FraunceFamily.semiBold, size: 36, relativeTo: .largeTitle)
+    static let headlineSerif = Font.custom(FraunceFamily.semiBold, size: 22, relativeTo: .headline)
+    static let titleSerif    = Font.custom(FraunceFamily.medium, size: 17, relativeTo: .body)
+    static let bodySerif     = Font.custom(FraunceFamily.regular, size: 16, relativeTo: .body)
+    static let labelSerif    = Font.custom(FraunceFamily.medium, size: 14, relativeTo: .subheadline)
+    static let captionSerif  = Font.custom(FraunceFamily.regular, size: 11, relativeTo: .caption)
 }
 
 // MARK: - Corner Radii
