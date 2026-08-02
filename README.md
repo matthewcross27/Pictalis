@@ -80,6 +80,10 @@ GitHub Actions runs on every push and PR to `main` (path-filtered per subsystem)
 - **Processing worker** - `ruff` + `black --check` + `mypy` (strict) + `pytest`
 - **Secret scan** - `gitleaks`, on every push and PR (not path-filtered)
 
+On push to `main`, the Migrations and Edge Functions workflows also run a `deploy` job
+that pushes to the real Supabase project, gated behind required-reviewer approval on the
+`production` GitHub Environment; PRs never deploy. See `AGENTS.md` for details.
+
 ## Project status
 
 MVP feature-complete. Core flow is end-to-end functional:
