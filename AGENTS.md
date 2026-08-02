@@ -73,6 +73,22 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
 - After adding a new Source file, `xcodegen generate` must be re-run before `xcodebuild` will see it
   (the generated `Pictalis.xcodeproj` is gitignored and rebuilt from `project.yml` + folder contents).
 
+## Supabase deploy pipeline
+- `.github/workflows/migrations.yml` and `.github/workflows/edge-functions.yml` each have a `deploy`
+  job (in addition to the existing `validate`/`test` job that runs on every push and PR). `deploy`
+  only runs on push to `main`, only after its validation job passes, and is gated behind the
+  `production` GitHub Environment - a run pauses for required-reviewer approval before
+  `supabase db push` / `supabase functions deploy` touches the real project. PRs never deploy.
+- Real deploys require three secrets on the `production` environment: `SUPABASE_ACCESS_TOKEN`,
+  `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF`. The Supabase CLI reads the first two from env
+  automatically (no explicit login/password flag needed); `SUPABASE_PROJECT_REF` is passed via
+  `--project-ref`. `SUPABASE_SERVICE_ROLE_KEY` is intentionally never used anywhere in CI or the
+  edge functions themselves - all functions rely on RLS + the caller's forwarded JWT.
+- `backend/supabase/config.toml` currently has no `[functions.*]` blocks, so there are no per-function
+  `verify_jwt` overrides. The Supabase CLI's default (`verify_jwt = true` for every function) is what's
+  deployed, which matches the RLS + forwarded-JWT model - don't add a `[functions.*]` override to
+  disable JWT verification on any function without a specific reason.
+
 ## Ranking engine build gotchas
 - `ranking-engine/jest.config.ts` is a TypeScript config file, so Jest requires `ts-node` to parse it.
   `ts-jest` used to pull `ts-node` in transitively; as of `ts-jest@29.4.x` it no longer does, so `ts-node`
