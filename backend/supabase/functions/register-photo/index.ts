@@ -1,6 +1,7 @@
 import { initSentry } from '../_shared/sentry.ts';
 import { RegisterPhotoBody } from '../_shared/photo-registration.ts';
 import {
+  CORS,
   json,
   parseBody,
   requireSession,
@@ -8,9 +9,14 @@ import {
   serveAuthed,
   WORKING_COPIES_BUCKET,
 } from '../_shared/http.ts';
+import { isRateLimited, RATE_LIMIT_WRITE, rateLimitResponse } from '../_shared/rate-limit.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
+  if (await isRateLimited('register-photo', req, RATE_LIMIT_WRITE)) {
+    return rateLimitResponse(CORS);
+  }
+
   // requireUser (an auth-server round trip) and parseBody (no network call,
   // just reading the request body) are independent - run them concurrently.
   const [user, parsed] = await Promise.all([
@@ -56,6 +62,12 @@ serveAuthed(async (req, _authHeader, supabase) => {
   // Row was pre-registered at session start. UPDATE sets the bytes location
   // and marks upload complete. Idempotent: a retry on an already-uploaded row
   // returns the existing data unchanged.
+  //
+  // This UPDATE can only touch a row that already exists (matched by
+  // photo_id + session_id below) - it never inserts one. The session's
+  // photo_count cap is enforced where rows actually get created, in
+  // batch-pre-register's pre_register_photos_atomic RPC, so there's
+  // nothing to re-check here.
   const { data: photo, error: updateError } = await supabase
     .from('photos')
     .update({ storage_path, upload_status: 'uploaded' })

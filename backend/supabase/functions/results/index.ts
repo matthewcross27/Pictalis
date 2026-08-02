@@ -1,6 +1,7 @@
 import { z } from 'npm:zod@3';
 import { initSentry } from '../_shared/sentry.ts';
 import {
+  CORS,
   json,
   parseQuery,
   serveAuthed,
@@ -9,6 +10,7 @@ import {
   SIGNED_URL_EXPIRY_SECONDS,
   WORKING_COPIES_BUCKET,
 } from '../_shared/http.ts';
+import { isRateLimited, RATE_LIMIT_READ, rateLimitResponse } from '../_shared/rate-limit.ts';
 initSentry();
 
 const QuerySchema = SessionIdSchema.extend({
@@ -16,6 +18,10 @@ const QuerySchema = SessionIdSchema.extend({
 });
 
 serveAuthed(async (req, _authHeader, supabase) => {
+  if (await isRateLimited('results', req, RATE_LIMIT_READ)) {
+    return rateLimitResponse(CORS);
+  }
+
   const parsed = parseQuery(req, QuerySchema);
   if (parsed instanceof Response) return parsed;
 

@@ -1,6 +1,7 @@
 import { BatchPreRegisterBody } from '../_shared/batch-pre-register.ts';
 import { initSentry } from '../_shared/sentry.ts';
 import {
+  CORS,
   json,
   parseBody,
   requireSession,
@@ -8,9 +9,14 @@ import {
   serveAuthed,
   serverError,
 } from '../_shared/http.ts';
+import { isRateLimited, RATE_LIMIT_WRITE, rateLimitResponse } from '../_shared/rate-limit.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
+  if (await isRateLimited('batch-pre-register', req, RATE_LIMIT_WRITE)) {
+    return rateLimitResponse(CORS);
+  }
+
   const parsed = await parseBody(req, BatchPreRegisterBody);
   if (parsed instanceof Response) return parsed;
 
@@ -27,19 +33,22 @@ serveAuthed(async (req, _authHeader, supabase) => {
   if (user instanceof Response) return user;
   if (session instanceof Response) return session;
 
-  // Insert photo identity rows. ignoreDuplicates makes this idempotent:
-  // a network retry after partial success won't double-insert existing rows.
-  const rows = photo_ids.map((id) => ({
-    id,
-    session_id,
-    upload_status: 'pending',
-  }));
-
-  const { error: insertError } = await supabase
-    .from('photos')
-    .upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
+  // Insert photo identity rows and enforce the session's photo_count cap
+  // atomically. ON CONFLICT DO NOTHING (inside the RPC) makes this
+  // idempotent: a network retry after partial success won't double-insert
+  // existing rows or double-count them against the cap.
+  const { error: insertError } = await supabase.rpc(
+    'pre_register_photos_atomic',
+    { p_session_id: session_id, p_photo_ids: photo_ids },
+  );
 
   if (insertError) {
+    if (insertError.code === 'UE002') {
+      return json(
+        { error: "Registering these photos would exceed this session's declared photo count" },
+        409,
+      );
+    }
     return await serverError(insertError, 'Failed to pre-register photos');
   }
 

@@ -1,7 +1,8 @@
 import { z } from 'npm:zod@3';
 import { computeTopK } from '../_shared/ranking-logic.ts';
 import { initSentry } from '../_shared/sentry.ts';
-import { json, parseBody, requireUser, serveAuthed, serverError } from '../_shared/http.ts';
+import { CORS, json, parseBody, requireUser, serveAuthed, serverError } from '../_shared/http.ts';
+import { isRateLimited, RATE_LIMIT_WRITE, rateLimitResponse } from '../_shared/rate-limit.ts';
 initSentry();
 
 const CreateSessionBody = z.object({
@@ -9,6 +10,10 @@ const CreateSessionBody = z.object({
 });
 
 serveAuthed(async (req, _authHeader, supabase) => {
+  if (await isRateLimited('create-session', req, RATE_LIMIT_WRITE)) {
+    return rateLimitResponse(CORS);
+  }
+
   // requireUser (an auth-server round trip) and parseBody (no network call,
   // just reading the request body) are independent - run them concurrently.
   const [user, parsed] = await Promise.all([
