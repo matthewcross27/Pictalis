@@ -32,10 +32,10 @@ enum FraunceFamily {
 extension Font {
     static let displaySerif  = Font.custom(FraunceFamily.semiBold, size: 36, relativeTo: .largeTitle)
     static let headlineSerif = Font.custom(FraunceFamily.semiBold, size: 22, relativeTo: .headline)
-    static let titleSerif    = Font.custom(FraunceFamily.medium,   size: 17, relativeTo: .body)
-    static let bodySerif     = Font.custom(FraunceFamily.regular,  size: 16, relativeTo: .body)
-    static let labelSerif    = Font.custom(FraunceFamily.medium,   size: 14, relativeTo: .subheadline)
-    static let captionSerif  = Font.custom(FraunceFamily.regular,  size: 11, relativeTo: .caption)
+    static let titleSerif    = Font.custom(FraunceFamily.medium, size: 17, relativeTo: .body)
+    static let bodySerif     = Font.custom(FraunceFamily.regular, size: 16, relativeTo: .body)
+    static let labelSerif    = Font.custom(FraunceFamily.medium, size: 14, relativeTo: .subheadline)
+    static let captionSerif  = Font.custom(FraunceFamily.regular, size: 11, relativeTo: .caption)
 }
 
 // MARK: - Corner Radii
