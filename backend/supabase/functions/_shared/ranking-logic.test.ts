@@ -50,7 +50,10 @@ Deno.test('computeMinComparisons — n=200, topK=35 → correct ceil', () => {
 
 Deno.test('resolveTopKAndMinComparisons — no top_k override → derives topK from photo_count', () => {
   const result = resolveTopKAndMinComparisons({ top_k: null, photo_count: 100 });
-  assertEquals(result, { topK: computeTopK(100), minComparisons: computeMinComparisons(100, computeTopK(100)) });
+  assertEquals(result, {
+    topK: computeTopK(100),
+    minComparisons: computeMinComparisons(100, computeTopK(100)),
+  });
 });
 
 Deno.test('resolveTopKAndMinComparisons — explicit top_k override → used as-is', () => {
