@@ -45,7 +45,7 @@ None required. The app is fully functional without any account.
 
 App Identity
 [ ] Bundle ID registered in Apple Developer Portal: com.matthewcross.Pictalis
-[ ] DEVELOPMENT_TEAM set in ios/project.yml (Task 5)
+[x] DEVELOPMENT_TEAM set in ios/project.yml (Task 5)
 [ ] CFBundleShortVersionString: "1.0" in ios/project.yml (Task 5)
 [ ] CFBundleVersion: "1" in ios/project.yml (Task 5)
 

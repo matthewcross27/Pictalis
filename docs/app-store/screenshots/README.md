@@ -1,7 +1,11 @@
-# App Store Screenshots — Manual Capture Required
+# App Store Screenshots
 
 Apple requires at least one set of screenshots for iPhone 6.9" (used by iPhone 16 Pro Max).
 Screenshots must come from a running simulator — not Figma or mocked images.
+
+The 5 required screenshots below are already captured and committed to this
+directory. Re-run the capture steps only when the UI changes enough to make
+them stale.
 
 ## Required Screenshots (5 total)
 
