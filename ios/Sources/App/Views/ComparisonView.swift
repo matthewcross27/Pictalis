@@ -304,7 +304,7 @@ struct ComparisonView: View {
                 delay = min(delay * 2, .seconds(4))
             } catch {
                 ErrorReporter.capture(error)
-                errorMessage = "Failed to load next pair: \(error.localizedDescription)"
+                errorMessage = ErrorPresentation.message(for: error)
                 isLoading = false
                 return
             }
