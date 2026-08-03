@@ -54,7 +54,7 @@ final class ErrorPresentationTests: XCTestCase {
     }
 
     func testHttpErrorBodyNeverAppearsInAnyMessage() {
-        let sensitiveBody = "internal-diagnostic-detail-should-never-leak".data(using: .utf8)!
+        let sensitiveBody = Data("internal-diagnostic-detail-should-never-leak".utf8)
         let error = APIError.httpError(statusCode: 500, body: sensitiveBody)
 
         let message = ErrorPresentation.message(for: error)
