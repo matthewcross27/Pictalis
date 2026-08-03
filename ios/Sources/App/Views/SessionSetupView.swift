@@ -76,7 +76,7 @@ struct SessionSetupView: View {
                     .accessibilityHint("Open your photo library and select photos to curate")
 
                     // Error state
-                    if let message = auth.authError.map({ "Sign-in error: \($0.localizedDescription)" }) ?? errorMessage {
+                    if let message = auth.authError.map({ ErrorPresentation.message(for: $0) }) ?? errorMessage {
                         Text(message)
                             .font(.captionSerif)
                             .foregroundStyle(Color.amber)
@@ -129,7 +129,7 @@ struct SessionSetupView: View {
                 onStart(session.id, pipeline)
             } catch {
                 ErrorReporter.capture(error)
-                errorMessage = "Could not start: \(error.localizedDescription)"
+                errorMessage = ErrorPresentation.message(for: error)
                 isStarting = false
             }
         }

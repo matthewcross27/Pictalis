@@ -72,6 +72,18 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
   unnecessary and what confuses the checker.
 - After adding a new Source file, `xcodegen generate` must be re-run before `xcodebuild` will see it
   (the generated `Pictalis.xcodeproj` is gitignored and rebuilt from `project.yml` + folder contents).
+- `ios/Sources/App/SupabaseConfig.swift` is gitignored (holds the real project URL/anon key) and has
+  no automated provisioning - a fresh checkout/worktree only has the placeholder template
+  (`YOUR_PROJECT_REF`/`YOUR_ANON_KEY_HERE`). There's no env var, keychain, or xcconfig injection for
+  it; running the app against a real backend requires manually filling in real values (never commit
+  them). Anonymous sign-in errors surface as `AuthError` from `supabase-swift`, not `APIError`; see
+  `ErrorPresentation.swift` for how both get mapped to user-facing text.
+- `Package.resolved` currently pins `Sentry` to `9.24.0`, but `project.yml`'s `from: 8.0.0` only
+  permits `<9.0.0`. Any `xcodegen generate` + fresh package resolution downgrades it to the latest
+  8.x (`8.58.4` as of writing) and dirties `Package.resolved` in the diff - this is pre-existing
+  drift, not something a given change caused. Don't fold an incidental revert/bump of this file into
+  an unrelated commit; if it needs a real fix, either bump `project.yml`'s Sentry constraint to allow
+  9.x or intentionally re-pin `Package.resolved` to 8.x in its own change.
 
 ## Supabase deploy pipeline
 - `.github/workflows/migrations.yml` and `.github/workflows/edge-functions.yml` each have a `deploy`
