@@ -94,8 +94,38 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
 - Real deploys require three secrets on the `production` environment: `SUPABASE_ACCESS_TOKEN`,
   `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF`. The Supabase CLI reads the first two from env
   automatically (no explicit login/password flag needed); `SUPABASE_PROJECT_REF` is passed via
-  `--project-ref`. `SUPABASE_SERVICE_ROLE_KEY` is intentionally never used anywhere in CI or the
-  edge functions themselves - all functions rely on RLS + the caller's forwarded JWT.
+  `--project-ref`. `SUPABASE_SERVICE_ROLE_KEY` is not used in CI, and no user-facing edge function
+  uses it - all of those rely on RLS + the caller's forwarded JWT. The one exception is the
+  `cleanup-expired-sessions` admin function below, which by necessity bypasses RLS; don't follow its
+  pattern for anything a normal client calls.
+
+## Storage retention cleanup (pg_cron -> pg_net -> Edge Function)
+- `cleanup_expired_sessions()` (`backend/supabase/migrations/20260517000001_storage_bucket.sql`,
+  amended by `20260803000001_cleanup_via_storage_api.sql`) now only purges abandoned pending
+  comparisons. Deleting expired sessions' storage objects and then the session rows themselves
+  happens in the `cleanup-expired-sessions` Edge Function
+  (`backend/supabase/functions/cleanup-expired-sessions/`), invoked hourly by a separate `pg_cron` +
+  `pg_net.http_post` job. A raw SQL `DELETE FROM storage.objects` is rejected by the platform's
+  `protect_delete()` trigger (not defined in this repo - it's a Supabase-managed guard); deletion
+  must go through the Storage API, which is why this can't live in the SQL function.
+- `pg_net.http_post` is fire-and-forget from Postgres's side (queued, executes post-commit, no
+  synchronous response available to the calling SQL) - so the "delete storage, confirm it worked,
+  then delete the DB rows" ordering is enforced inside the Edge Function itself, not by the cron
+  job. If storage removal fails, the function returns an error without touching `sessions`, and the
+  next hourly tick retries the same rows (the expiry query has no lower bound, and Storage `remove()`
+  is a no-op for paths already gone).
+- The cron job reads two Supabase Vault secrets that must be created by hand (dashboard SQL editor
+  or Vault UI) after this ships - they are not, and must never be, embedded in a migration:
+  `select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');` and
+  `select vault.create_secret('<the project''s service_role key>', 'service_role_key');`. Until both
+  exist, the cron job's HTTP calls fail (visible in `cron.job_run_details` / `net._http_response`,
+  not as a migration failure). Verify a real run in `cron.job_run_details` (or storage usage
+  dropping) after setting them - don't assume success from the migration alone.
+- The Edge Function authorizes callers by comparing the request's `Authorization: Bearer` token to
+  its own `SUPABASE_SERVICE_ROLE_KEY` env var (see `isAuthorizedCronCaller` in
+  `backend/supabase/functions/_shared/cleanup-expired-sessions.ts`) - `verify_jwt = true` alone only
+  proves *some* valid Supabase-signed JWT, not that the caller is the scheduled job, since any
+  logged-in user's JWT would also pass it.
 - `backend/supabase/config.toml` currently has no `[functions.*]` blocks, so there are no per-function
   `verify_jwt` overrides. The Supabase CLI's default (`verify_jwt = true` for every function) is what's
   deployed, which matches the RLS + forwarded-JWT model - don't add a `[functions.*]` override to
