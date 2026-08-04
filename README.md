@@ -91,8 +91,8 @@ MVP feature-complete. Core flow is end-to-end functional:
 | Subsystem | Status |
 |-----------|--------|
 | iOS app | Full flow: session setup → photo selection → pairwise comparison → results/completion |
-| Backend edge functions | 12 deployed: `create-session`, `register-photo`, `batch-pre-register`, `next-pair`, `submit-comparison`, `session-status`, `results`, `remove-photo`, `mark-upload-complete`, `start-cull`, `batch-submit-cull`, `finish-cull` |
-| Database | 25 migrations applied: schema, storage, RLS (+ perf hardening), atomic comparison (Elo + comparison fetch computed in-RPC), phash, session stages, adaptive ranking, dedup stage, upload pipeline, local-first cull stage, comparisons FK indexes, abuse protection (rate limiting + photo caps) |
+| Backend edge functions | 13 deployed: `create-session`, `register-photo`, `batch-pre-register`, `next-pair`, `submit-comparison`, `session-status`, `results`, `remove-photo`, `mark-upload-complete`, `start-cull`, `batch-submit-cull`, `finish-cull`, `cleanup-expired-sessions` |
+| Database | 26 migrations applied: schema, storage, RLS (+ perf hardening), atomic comparison (Elo + comparison fetch computed in-RPC), phash, session stages, adaptive ranking, dedup stage, upload pipeline, local-first cull stage, comparisons FK indexes, abuse protection (rate limiting + photo caps), storage-object cleanup via Storage API |
 | Ranking engine | Elo + adaptive pair selection (9 tests passing) |
 | Processing worker | Scaffolded — embeddings/clustering not yet wired |
 

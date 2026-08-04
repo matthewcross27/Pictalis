@@ -38,11 +38,14 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
   `quality_flags` on `photos` are unused columns; do not assume they're populated.
 - Users can always override/pin/remove any ranking result
 - Session state persists for 24-72 hours server-side
-- Every edge function enforces per-endpoint request throttling and
+- Every user-facing edge function enforces per-endpoint request throttling and
   `batch-pre-register` enforces the session's `photo_count` cap; both are a
   Postgres-backed token bucket / atomic RPC, not Supabase's built-in Auth
   rate limits. See `backend/supabase/functions/_shared/rate-limit.ts` and
-  `backend/supabase/migrations/20260731000001_abuse_protection.sql`.
+  `backend/supabase/migrations/20260731000001_abuse_protection.sql`. The one
+  exception is `cleanup-expired-sessions`, a cron-only admin job gated by an
+  exact service-role bearer match instead - see "Storage retention cleanup"
+  below.
 
 ## Never Do
 - Never recommend permanent cloud storage of original photos
