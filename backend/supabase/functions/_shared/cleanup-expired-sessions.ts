@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'jsr:@std/crypto@1/timing-safe-equal';
+
 // Keeps each Storage API `remove()` call to a bounded batch size rather than
 // sending the whole (potentially large, e.g. after a backlog) path list in
 // one request.
@@ -20,5 +22,12 @@ export function chunk<T>(items: T[], size: number): T[][] {
 // closes that gap.
 export function isAuthorizedCronCaller(req: Request, serviceRoleKey: string | undefined): boolean {
   if (!serviceRoleKey) return false;
-  return req.headers.get('Authorization') === `Bearer ${serviceRoleKey}`;
+  const authorization = req.headers.get('Authorization');
+  if (!authorization) return false;
+
+  const enc = new TextEncoder();
+  const expected = enc.encode(`Bearer ${serviceRoleKey}`);
+  const actual = enc.encode(authorization);
+  if (actual.length !== expected.length) return false;
+  return timingSafeEqual(actual, expected);
 }
