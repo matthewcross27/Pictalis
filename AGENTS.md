@@ -87,6 +87,14 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
   drift, not something a given change caused. Don't fold an incidental revert/bump of this file into
   an unrelated commit; if it needs a real fix, either bump `project.yml`'s Sentry constraint to allow
   9.x or intentionally re-pin `Package.resolved` to 8.x in its own change.
+- `ios/Tests/` has no SwiftUI rendering/snapshot test framework (no ViewInspector, no XCUITest, no
+  snapshot library) - `.github/workflows/ios.yml` runs `xcodebuild test` (unit tests only) against a
+  gitignored Supabase config stub, network-free. A `View`'s `body` switch driven by `@Observable`
+  state therefore has no way to be asserted against directly. The working pattern (see
+  `CullView.displayState(for:currentCard:)` and `CullViewDisplayStateTests.swift`) is to pull the
+  branching decision out into a `static func` returning a plain `Equatable` enum, call it from
+  `body`, and unit-test the pure function - that's real regression coverage for view-rendering logic
+  without adding test infra.
 
 ## Supabase deploy pipeline
 - `.github/workflows/migrations.yml` and `.github/workflows/edge-functions.yml` each have a `deploy`

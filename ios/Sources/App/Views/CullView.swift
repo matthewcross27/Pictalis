@@ -1,5 +1,15 @@
 import SwiftUI
 
+// What CullView's body should render, derived from cardProvider.state + currentCard.
+// Pulled out as pure state so the .ready/currentCard==nil case (LocalCardProvider.start(excluding:)
+// sets state = .ready before initialize() finishes awaiting syncReady and setting currentCard) has
+// a defined, testable outcome instead of silently falling through to a blank frame.
+enum CullDisplayState: Equatable {
+    case loading
+    case card
+    case exhausted
+}
+
 struct CullView: View {
     @Environment(APIClient.self) private var api
 
@@ -28,13 +38,13 @@ struct CullView: View {
                 VStack(spacing: 0) {
                     topBar
 
-                    switch cardProvider?.state ?? .loading {
+                    switch Self.displayState(for: cardProvider?.state, currentCard: currentCard) {
                     case .loading:
                         Spacer()
                         ProgressView().tint(Color.amber)
                         Spacer()
 
-                    case .ready:
+                    case .card:
                         if let card = currentCard {
                             Spacer()
                             cardStack(card: card)
@@ -72,6 +82,20 @@ struct CullView: View {
             .onAppear {
                 screenWidth = geo.size.width
             }
+        }
+    }
+
+    static func displayState(
+        for queueState: CullQueueState?,
+        currentCard: LocalCardProvider.Card?
+    ) -> CullDisplayState {
+        switch queueState ?? .loading {
+        case .loading:
+            return .loading
+        case .ready:
+            return currentCard != nil ? .card : .loading
+        case .exhausted:
+            return .exhausted
         }
     }
 
