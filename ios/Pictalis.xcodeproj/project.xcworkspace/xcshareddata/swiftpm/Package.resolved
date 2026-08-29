@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/getsentry/sentry-cocoa",
       "state" : {
-        "revision" : "d82bb1c5eb353a593573a5624bb370f5a1f500ce",
-        "version" : "9.24.0"
+        "revision" : "a00a9784fff7193cbb0f9fae509fec8107e07744",
+        "version" : "9.26.1"
       }
     },
     {
@@ -15,8 +15,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/supabase/supabase-swift",
       "state" : {
-        "revision" : "b118484ae0eb4a6b6ce1b216711d660baf6ec1aa",
-        "version" : "2.54.1"
+        "revision" : "21d3aaf21ee98f41611f9f75070489fc8b23d882",
+        "version" : "2.55.1"
       }
     },
     {
@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
       "state" : {
-        "revision" : "8f6abcf4c8950e2679d5b2fee4ca284fd7c34886",
-        "version" : "1.11.0"
+        "revision" : "d9308ad679143c26a30dec52daefe82f54af2b82",
+        "version" : "1.13.1"
       }
     }
   ],
