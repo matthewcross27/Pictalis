@@ -26,6 +26,14 @@ struct MockLoader: PhotoDataLoading {
     }
 }
 
+// A photo whose data never arrives (e.g. an iCloud original that never downloads).
+struct HangingLoader: PhotoDataLoading {
+    func loadData() async throws -> Data {
+        try await Task.sleep(for: .seconds(3600))
+        throw CompressionError.noImageData
+    }
+}
+
 struct MockTransportError: Error {}
 
 @MainActor
@@ -109,6 +117,8 @@ func makeTestPipeline(
     registrationBatchSize: Int = 25,
     registrationFlushDelay: Duration = .milliseconds(20),
     parkedRetryBaseDelay: Duration = .seconds(3600),
+    materializeTimeout: Duration = .seconds(20),
+    waiterTimeout: Duration = .seconds(8),
     connectivity: AsyncStream<Void> = AsyncStream { $0.finish() }
 ) -> PhotoPipeline {
     PhotoPipeline(
@@ -121,6 +131,8 @@ func makeTestPipeline(
         registrationBatchSize: registrationBatchSize,
         registrationFlushDelay: registrationFlushDelay,
         parkedRetryBaseDelay: parkedRetryBaseDelay,
+        materializeTimeout: materializeTimeout,
+        waiterTimeout: waiterTimeout,
         connectivityEvents: connectivity
     )
 }

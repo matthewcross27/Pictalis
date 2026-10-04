@@ -51,9 +51,18 @@ final class SyncService {
         return (send, markLocalOnly)
     }
 
-    // Awaits an initial drain attempt, then sets up foreground + network triggers.
-    func start(store: DecisionStore) async {
+    // Points the service at the decision store without sending anything. Decisions are
+    // saved locally first and sent later, so this must happen before the first card can
+    // be shown - it keeps syncIfNeeded()/flush() sending even if start() runs late.
+    func attach(store: DecisionStore) {
         self.store = store
+    }
+
+    // Awaits an initial drain attempt (which sends every decision still pending in the
+    // store, including any made before this ran), then sets up foreground + network
+    // triggers. Safe to call once the deck is already on screen.
+    func start(store: DecisionStore) async {
+        attach(store: store)
         await drain()
         startObservers()
     }

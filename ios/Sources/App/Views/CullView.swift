@@ -1,13 +1,21 @@
 import SwiftUI
 
 // What CullView's body should render, derived from cardProvider.state + currentCard.
-// Pulled out as pure state so the .ready/currentCard==nil case (LocalCardProvider.start(excluding:)
-// sets state = .ready before initialize() finishes awaiting syncReady and setting currentCard) has
-// a defined, testable outcome instead of silently falling through to a blank frame.
+// Pulled out as pure state so the .ready/currentCard==nil case (the provider has queued a card
+// but the view has not taken it yet) has a defined, testable outcome instead of silently
+// falling through to a blank frame.
 enum CullDisplayState: Equatable {
     case loading
+    case stalled
     case card
     case exhausted
+}
+
+// What the stall watchdog should do when it checks the screen.
+enum CullWatchdogVerdict: Equatable {
+    case resolved  // a card is showing, or the deck is finished
+    case stalled   // photos are on disk but no card is showing
+    case waiting   // nothing is on disk yet: still legitimately loading
 }
 
 struct CullView: View {
@@ -24,9 +32,15 @@ struct CullView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var isFinishing      = false
     @State private var finishFailed     = false
-    @State private var isInitialized    = false
+    @State private var isStalled        = false
+    @State private var watchdogTask: Task<Void, Never>?
     @State private var expandedCard: LocalCardProvider.Card?
     @State private var screenWidth: CGFloat = 390
+
+    // How long the deck may show no card, with photos already on disk, before it is
+    // reported as stalled and the user is offered a retry.
+    static let watchdogDelay: Duration = .seconds(5)
+    private static let watchdogPollInterval: Duration = .seconds(1)
 
     private var dragProgress: CGFloat { dragOffset / (screenWidth * 0.4) }
 
@@ -38,10 +52,15 @@ struct CullView: View {
                 VStack(spacing: 0) {
                     topBar
 
-                    switch Self.displayState(for: cardProvider?.state, currentCard: currentCard) {
+                    switch Self.displayState(for: cardProvider?.state, currentCard: currentCard, isStalled: isStalled) {
                     case .loading:
                         Spacer()
                         ProgressView().tint(Color.amber)
+                        Spacer()
+
+                    case .stalled:
+                        Spacer()
+                        CullStalledView(onRetry: retry)
                         Spacer()
 
                     case .card:
@@ -67,11 +86,11 @@ struct CullView: View {
                 }
                 .onTapGesture { expandedCard = nil }
             }
+            .onDisappear { watchdogTask?.cancel() }
             .onChange(of: cardProvider?.queue.isEmpty) { _, isEmpty in
-                // Guard against firing during initialization — initialize() calls advance() itself.
-                if isEmpty == false, currentCard == nil, isInitialized {
-                    currentCard = cardProvider?.advance()
-                }
+                // The deck drives the screen: a card is shown as soon as the provider has one,
+                // however far initialization has got.
+                if isEmpty == false { showNextCardIfNeeded() }
             }
             .onChange(of: cardProvider?.state) { _, newState in
                 if newState == .exhausted { onComplete() }
@@ -87,16 +106,28 @@ struct CullView: View {
 
     static func displayState(
         for queueState: CullQueueState?,
-        currentCard: LocalCardProvider.Card?
+        currentCard: LocalCardProvider.Card?,
+        isStalled: Bool = false
     ) -> CullDisplayState {
         switch queueState ?? .loading {
-        case .loading:
-            return .loading
-        case .ready:
-            return currentCard != nil ? .card : .loading
         case .exhausted:
             return .exhausted
+        case .ready where currentCard != nil:
+            return .card
+        case .ready, .loading:
+            return isStalled ? .stalled : .loading
         }
+    }
+
+    // Stalled means the deck has no card to show even though photos are already on disk -
+    // waiting for photos that have not materialized yet is just loading, not a fault.
+    static func watchdogVerdict(
+        queueState: CullQueueState?,
+        currentCard: LocalCardProvider.Card?,
+        materializedCount: Int
+    ) -> CullWatchdogVerdict {
+        if currentCard != nil || queueState == .exhausted { return .resolved }
+        return materializedCount > 0 ? .stalled : .waiting
     }
 
     // MARK: - Initialization
@@ -108,16 +139,82 @@ struct CullView: View {
             api: api,
             registrationState: { pipeline.registrationState(for: $0) }
         )
+        // Attach before anything can be decided so flush()/syncIfNeeded() always have the
+        // store, however late the sync service's own start runs.
+        sync.attach(store: decisionStore)
         cardProvider = provider
         syncService  = sync
+        startWatchdog()
 
-        async let syncReady: Void = sync.start(store: decisionStore)
-        let decidedIds = await decisionStore.load(sessionId: sessionId)
-        await provider.start(excluding: decidedIds)
-        await syncReady
+        // The first card never waits on the sync service.
+        await CullBootstrap.run(
+            store: decisionStore,
+            sessionId: sessionId,
+            provider: provider,
+            startSync: { [decisionStore] in await sync.start(store: decisionStore) }
+        )
+        showNextCardIfNeeded()
+    }
 
-        currentCard   = provider.advance()
-        isInitialized = true
+    private func showNextCardIfNeeded() {
+        guard currentCard == nil, let provider = cardProvider, !provider.queue.isEmpty else { return }
+        currentCard = provider.advance()
+        if currentCard != nil { isStalled = false }
+    }
+
+    // MARK: - Stall watchdog
+
+    private func startWatchdog() {
+        watchdogTask?.cancel()
+        watchdogTask = Task { await runWatchdog() }
+    }
+
+    private func runWatchdog() async {
+        try? await Task.sleep(for: Self.watchdogDelay)
+        while !Task.isCancelled {
+            switch Self.watchdogVerdict(
+                queueState: cardProvider?.state,
+                currentCard: currentCard,
+                materializedCount: pipeline.materializedCount
+            ) {
+            case .resolved:
+                return
+            case .stalled:
+                reportStall()
+                return
+            case .waiting:
+                try? await Task.sleep(for: Self.watchdogPollInterval)
+            }
+        }
+    }
+
+    private func reportStall() {
+        isStalled = true
+        var context = cardProvider?.snapshot() ?? ["provider_state": "none"]
+        context["has_current_card"] = String(currentCard != nil)
+        context["materialized_count"] = String(pipeline.materializedCount)
+        context["total_count"] = String(pipeline.totalCount)
+        context["decisions_count"] = String(decisionStore.decisions.count)
+        context["first_items"] = pipeline.itemStateSummary(first: 5).joined(separator: ", ")
+        ErrorReporter.capture(
+            message: "Cull deck stalled: no card shown with photos materialized",
+            context: context
+        )
+    }
+
+    // Rebuilds the deck from scratch. The decision store and sync service are kept: they
+    // hold the user's choices and are not what is being retried.
+    private func retry() {
+        cardProvider?.stop()
+        isStalled   = false
+        currentCard = nil
+        let provider = LocalCardProvider(pipeline: pipeline)
+        cardProvider = provider
+        startWatchdog()
+        Task {
+            await provider.start(excluding: decisionStore.allDecidedIds)
+            showNextCardIfNeeded()
+        }
     }
 
     // MARK: - Top bar

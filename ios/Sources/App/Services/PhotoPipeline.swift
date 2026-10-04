@@ -12,6 +12,14 @@ enum PipelineError: Error {
     case photoUnavailable
     // The batch register call succeeded but refused some photos.
     case registrationRejected
+    case timedOut
+}
+
+// Whether a photo can be put on screen right now.
+enum PhotoAvailability {
+    case ready        // compressed copy on disk
+    case pending      // still materializing
+    case unavailable  // dropped or unreadable - will never be ready
 }
 
 // Owns the per-photo state machine: materialize (compress to tmp disk) →
@@ -37,7 +45,7 @@ final class PhotoPipeline {
     private var items: [UUID: Item] = [:]
     private var uploadQueue: [UUID] = []
     private var activeUploads = 0
-    private var waiters: [UUID: [CheckedContinuation<URL, Error>]] = [:]
+    private var waiters = MaterializationWaiters()
     private var didMarkComplete = false
     @ObservationIgnored nonisolated(unsafe) private var backgroundTasks: [Task<Void, Never>] = []
     @ObservationIgnored private var registrationBatcher: RegistrationBatcher?
@@ -49,6 +57,8 @@ final class PhotoPipeline {
     private let retryDelays: [Duration]
     private let materializeConcurrency: Int
     private let uploadConcurrency: Int
+    private let materializeTimeout: Duration
+    private let waiterTimeout: Duration
     private let connectivityEvents: AsyncStream<Void>
     private var monitor: NWPathMonitor?
 
@@ -63,6 +73,8 @@ final class PhotoPipeline {
         registrationFlushDelay: Duration = .seconds(1),
         parkedRetryBaseDelay: Duration = .seconds(5),
         parkedRetryMaxDelay: Duration = .seconds(60),
+        materializeTimeout: Duration = .seconds(20),
+        waiterTimeout: Duration = .seconds(8),
         connectivityEvents: AsyncStream<Void>? = nil
     ) {
         self.transport = transport
@@ -72,6 +84,8 @@ final class PhotoPipeline {
         self.materializeConcurrency = materializeConcurrency
         self.uploadConcurrency = uploadConcurrency
         self.parkedRetryTimer = ParkedRetryTimer(baseDelay: parkedRetryBaseDelay, maxDelay: parkedRetryMaxDelay)
+        self.materializeTimeout = materializeTimeout
+        self.waiterTimeout = waiterTimeout
         if let connectivityEvents {
             self.connectivityEvents = connectivityEvents
         } else {
@@ -110,18 +124,58 @@ final class PhotoPipeline {
     // MARK: - Display access
 
     // Returns the on-disk compressed JPEG, waiting for materialization if needed.
+    // Throws PipelineError.timedOut if it is still pending after `waiterTimeout`.
     func materializedFileURL(for id: UUID) async throws -> URL {
-        guard let item = items[id] else { throw PipelineError.photoUnavailable }
-        switch item.state {
-        case .cancelled, .failed:
-            throw PipelineError.photoUnavailable
-        case .pending:
-            return try await withCheckedThrowingContinuation { continuation in
-                waiters[id, default: []].append(continuation)
+        let ready = try await firstMaterialized(among: [id])
+        guard let url = items[ready]?.fileURL else { throw PipelineError.photoUnavailable }
+        return url
+    }
+
+    // The first of `candidates` (in the order given) that is materialized, waiting for
+    // one to materialize if none is yet. Unavailable candidates are ignored; throws
+    // photoUnavailable once none of them can ever materialize, and timedOut after
+    // `waiterTimeout` so callers re-evaluate instead of hanging on a stuck photo.
+    func firstMaterialized(among candidates: [UUID]) async throws -> UUID {
+        var pending: Set<UUID> = []
+        for id in candidates {
+            switch availability(for: id) {
+            case .ready: return id
+            case .pending: pending.insert(id)
+            case .unavailable: break
             }
-        default:
-            guard let url = item.fileURL else { throw PipelineError.photoUnavailable }
-            return url
+        }
+        guard !pending.isEmpty else { throw PipelineError.photoUnavailable }
+
+        let token = UUID()
+        let timeout = waiterTimeout
+        let timer = Task { [weak self] in
+            guard (try? await Task.sleep(for: timeout)) != nil else { return }
+            self?.waiters.expire(token: token)
+        }
+        defer { timer.cancel() }
+        return try await withCheckedThrowingContinuation { continuation in
+            waiters.add(token: token, ids: pending, continuation: continuation)
+        }
+    }
+
+    func availability(for id: UUID) -> PhotoAvailability {
+        guard let item = items[id] else { return .unavailable }
+        switch item.state {
+        case .pending: return .pending
+        case .cancelled, .failed: return .unavailable
+        default: return item.fileURL != nil ? .ready : .unavailable
+        }
+    }
+
+    // Photos with a compressed copy on disk, regardless of whether they have been shown.
+    var materializedCount: Int {
+        items.values.reduce(0) { $0 + ($1.fileURL != nil ? 1 : 0) }
+    }
+
+    // "<id prefix>=<state>" for the first `count` photos in selection order, for diagnostics.
+    func itemStateSummary(first count: Int) -> [String] {
+        order.prefix(count).map { id in
+            "\(id.uuidString.prefix(8))=\(items[id].map { String(describing: $0.state) } ?? "missing")"
         }
     }
 
@@ -155,7 +209,7 @@ final class PhotoPipeline {
                 // (set by batch-submit-cull) keeps it out of the ranking pool.
                 items[photoId]?.state = .cancelled
                 removeWorkingCopy(photoId)
-                resumeWaiters(for: photoId, with: .failure(PipelineError.photoUnavailable))
+                waiters.release(unavailable: photoId)
                 updateFailedIds()
                 checkCompletion()
             default:
@@ -219,7 +273,7 @@ final class PhotoPipeline {
         guard items[id]?.state == .pending, let loader = items[id]?.loader else { return }
         items[id]?.materializeAttempts += 1
         do {
-            let raw = try await loader.loadData()
+            let raw = try await withTimeout(materializeTimeout) { try await loader.loadData() }
             let jpeg = try await Task.detached(priority: .userInitiated) {
                 try ImageCompressor.compressData(raw)
             }.value
@@ -229,7 +283,7 @@ final class PhotoPipeline {
             try jpeg.write(to: url)
             items[id]?.fileURL = url
             items[id]?.state = .materialized
-            resumeWaiters(for: id, with: .success(url))
+            waiters.resume(materialized: id)
             enqueueUpload(id)
         } catch {
             if items[id]?.materializeAttempts == 1 {
@@ -238,17 +292,10 @@ final class PhotoPipeline {
                 ErrorReporter.capture(error)
                 items[id]?.state = .failed
                 updateFailedIds()
-                resumeWaiters(for: id, with: .failure(PipelineError.photoUnavailable))
+                waiters.release(unavailable: id)
                 checkCompletion()
             }
         }
-    }
-
-    private func resumeWaiters(for id: UUID, with result: Result<URL, Error>) {
-        for continuation in waiters[id] ?? [] {
-            continuation.resume(with: result)
-        }
-        waiters[id] = nil
     }
 
     private func removeWorkingCopy(_ id: UUID) {
