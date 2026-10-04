@@ -9,6 +9,8 @@ struct PictalisApp: App {
     @State private var api: APIClient
 
     init() {
+        NetworkPathStatus.shared.start()
+
         SentrySDK.start { options in
             options.dsn = SentryConfig.dsn
             options.debug = false

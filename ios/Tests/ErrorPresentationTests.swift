@@ -46,7 +46,41 @@ final class ErrorPresentationTests: XCTestCase {
         let error = URLError(.notConnectedToInternet)
 
         XCTAssertEqual(
-            ErrorPresentation.message(for: error),
+            ErrorPresentation.message(for: error, isNetworkPathSatisfied: false),
+            "You're offline. Check your connection and try again."
+        )
+    }
+
+    func testLostConnectionOnSatisfiedPathMapsToCouldNotReachMessage() {
+        for code in [URLError.Code.networkConnectionLost, .timedOut] {
+            XCTAssertEqual(
+                ErrorPresentation.message(for: URLError(code), isNetworkPathSatisfied: true),
+                "Could not reach Pictalis. Try again.",
+                "\(code)"
+            )
+        }
+    }
+
+    func testLostConnectionOnUnsatisfiedPathKeepsOfflineMessage() {
+        for code in [URLError.Code.networkConnectionLost, .timedOut] {
+            XCTAssertEqual(
+                ErrorPresentation.message(for: URLError(code), isNetworkPathSatisfied: false),
+                "You're offline. Check your connection and try again.",
+                "\(code)"
+            )
+        }
+    }
+
+    func testLostConnectionWithUnknownPathKeepsOfflineMessage() {
+        XCTAssertEqual(
+            ErrorPresentation.message(for: URLError(.networkConnectionLost), isNetworkPathSatisfied: nil),
+            "You're offline. Check your connection and try again."
+        )
+    }
+
+    func testNotConnectedToInternetStaysOfflineEvenOnSatisfiedPath() {
+        XCTAssertEqual(
+            ErrorPresentation.message(for: URLError(.notConnectedToInternet), isNetworkPathSatisfied: true),
             "You're offline. Check your connection and try again."
         )
     }

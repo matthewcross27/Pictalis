@@ -17,11 +17,27 @@ enum APIError: Error {
 @Observable
 @MainActor
 final class APIClient {
-    private let supabase: SupabaseClient
+    private let urlSession: URLSession
+    private let accessToken: () async throws -> String
     private let decoder = JSONDecoder()
 
-    init(supabase: SupabaseClient) {
-        self.supabase = supabase
+    init(supabase: SupabaseClient, urlSession: URLSession = .shared) {
+        self.urlSession = urlSession
+        self.accessToken = {
+            // `auth.session` refreshes an expired token; `currentSession` can
+            // hand back a stale one that the server then rejects.
+            do {
+                return try await supabase.auth.session.accessToken
+            } catch AuthError.sessionMissing {
+                throw APIError.unauthenticated
+            }
+        }
+    }
+
+    /// Test seam: supplies the bearer token directly instead of a `SupabaseClient`.
+    init(urlSession: URLSession, accessToken: @escaping () async throws -> String) {
+        self.urlSession = urlSession
+        self.accessToken = accessToken
     }
 
     // MARK: - Helpers
@@ -30,11 +46,8 @@ final class APIClient {
         SupabaseConfig.url.appending(path: "functions/v1")
     }
 
-    private func authHeader() throws -> String {
-        guard let token = supabase.auth.currentSession?.accessToken else {
-            throw APIError.unauthenticated
-        }
-        return "Bearer \(token)"
+    private func authHeader() async throws -> String {
+        "Bearer \(try await accessToken())"
     }
 
     private func buildRequest(
@@ -42,7 +55,7 @@ final class APIClient {
         method: String = "GET",
         queryItems: [URLQueryItem] = [],
         body: [String: Any]? = nil
-    ) throws -> URLRequest {
+    ) async throws -> URLRequest {
         guard var comps = URLComponents(url: functionsBase.appending(path: path), resolvingAgainstBaseURL: false) else {
             throw URLError(.badURL)
         }
@@ -50,7 +63,7 @@ final class APIClient {
         guard let url = comps.url else { throw URLError(.badURL) }
         var req = URLRequest(url: url)
         req.httpMethod = method
-        req.setValue(try authHeader(), forHTTPHeaderField: "Authorization")
+        req.setValue(try await authHeader(), forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body {
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -68,21 +81,40 @@ final class APIClient {
         throw APIError.httpError(statusCode: http.statusCode, body: data)
     }
 
+    // A pooled connection the server or a middlebox dropped while idle fails
+    // the next request with one of these even though the device is online, and
+    // URLSession does not retry POSTs itself. A fresh attempt opens a new
+    // connection, so retry once immediately.
+    nonisolated static func isTransient(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        switch urlError.code {
+        case .networkConnectionLost, .timedOut, .cannotConnectToHost:
+            return true
+        default:
+            return false
+        }
+    }
+
     private func send(_ req: URLRequest) async throws -> Data {
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await urlSession.data(for: req)
+        } catch where Self.isTransient(error) {
+            (data, response) = try await urlSession.data(for: req)
+        }
         try Self.validate(response, data: data)
         return data
     }
 
     // Shared by every endpoint whose entire request is `POST { session_id }`.
     private func postSessionId(_ path: String, sessionId: UUID) async throws -> Data {
-        let req = try buildRequest(path: path, method: "POST", body: ["session_id": sessionId.lowercased])
+        let req = try await buildRequest(path: path, method: "POST", body: ["session_id": sessionId.lowercased])
         return try await send(req)
     }
 
     // Shared by every endpoint whose entire request is `GET ?session_id=...`.
     private func getSessionId(_ path: String, sessionId: UUID) async throws -> Data {
-        let req = try buildRequest(
+        let req = try await buildRequest(
             path: path,
             queryItems: [URLQueryItem(name: "session_id", value: sessionId.lowercased)]
         )
@@ -90,10 +122,15 @@ final class APIClient {
     }
 
     // MARK: - create-session
-    // POST { photo_count } → { session: { id, created_at, expires_at, status, photo_count } }
+    // POST { photo_count, session_id } → { session: { id, created_at, expires_at, status, photo_count } }
+    // `sessionId` is client-generated and makes the call idempotent: repeating it
+    // returns the already-created session rather than inserting another one.
 
-    func createSession(photoCount: Int) async throws -> APISession {
-        let req = try buildRequest(path: "create-session", method: "POST", body: ["photo_count": photoCount])
+    func createSession(sessionId: UUID, photoCount: Int) async throws -> APISession {
+        let req = try await buildRequest(path: "create-session", method: "POST", body: [
+            "photo_count": photoCount,
+            "session_id": sessionId.lowercased
+        ])
         let data = try await send(req)
         return try decoder.decode(CreateSessionResponse.self, from: data).session
     }
@@ -102,7 +139,7 @@ final class APIClient {
     // POST { session_id, photos: [{ photo_id, storage_path }] } → { results: [{ photo_id, success, error? }] }
 
     func registerPhotos(sessionId: UUID, photos: [PhotoRegistration]) async throws -> [PhotoRegistrationResult] {
-        let req = try buildRequest(path: "batch-register-photos", method: "POST", body: [
+        let req = try await buildRequest(path: "batch-register-photos", method: "POST", body: [
             "session_id": sessionId.lowercased,
             "photos": photos.map { ["photo_id": $0.photoId.lowercased, "storage_path": $0.storagePath] }
         ])
@@ -122,7 +159,7 @@ final class APIClient {
     // POST { comparison_id, winner_id } → { winner_id, loser_id, winner_new_rating, loser_new_rating }
 
     func submitComparison(comparisonId: UUID, winnerId: UUID) async throws {
-        let req = try buildRequest(path: "submit-comparison", method: "POST", body: [
+        let req = try await buildRequest(path: "submit-comparison", method: "POST", body: [
             "comparison_id": comparisonId.lowercased,
             "winner_id": winnerId.lowercased
         ])
@@ -133,7 +170,7 @@ final class APIClient {
     // POST { session_id, photo_id } → { photo_id }
 
     func removePhoto(sessionId: UUID, photoId: UUID) async throws {
-        let req = try buildRequest(path: "remove-photo", method: "POST", body: [
+        let req = try await buildRequest(path: "remove-photo", method: "POST", body: [
             "session_id": sessionId.lowercased,
             "photo_id": photoId.lowercased
         ])
@@ -152,7 +189,7 @@ final class APIClient {
     // GET ?session_id=...&limit=20 → { photos: [...], session: { stage, is_complete } }
 
     func results(sessionId: UUID, limit: Int = 20) async throws -> ResultsResponse {
-        let req = try buildRequest(
+        let req = try await buildRequest(
             path: "results",
             queryItems: [
                 URLQueryItem(name: "session_id", value: sessionId.lowercased),
@@ -181,7 +218,7 @@ final class APIClient {
     // POST { session_id, decisions } → { results }
 
     func batchSubmitCull(sessionId: UUID, decisions: [StoredDecision]) async throws -> BatchSubmitResponse {
-        let req = try buildRequest(path: "batch-submit-cull", method: "POST", body: [
+        let req = try await buildRequest(path: "batch-submit-cull", method: "POST", body: [
             "session_id": sessionId.lowercased,
             "decisions": decisions.map { item in
                 ["photo_id": item.photoId.lowercased, "decision": item.decision.rawValue]
@@ -202,7 +239,7 @@ final class APIClient {
     // POST { session_id, photo_ids } → { ok }
 
     func batchPreRegister(sessionId: UUID, photoIds: [UUID]) async throws {
-        let req = try buildRequest(path: "batch-pre-register", method: "POST", body: [
+        let req = try await buildRequest(path: "batch-pre-register", method: "POST", body: [
             "session_id": sessionId.lowercased,
             "photo_ids": photoIds.map { $0.lowercased }
         ])
