@@ -24,8 +24,15 @@ export interface RateLimitConfig {
 
 // Mutating endpoints: stricter, since each call can create/modify rows.
 export const RATE_LIMIT_WRITE: RateLimitConfig = { capacity: 20, refillPerSecond: 20 / 60 };
-// Read-only/polling endpoints: more generous.
+// Read-only/polling endpoints: more generous. Also used by next-pair, which is
+// polled once per comparison - at 1 call per 3s (RATE_LIMIT_WRITE) any user
+// faster than that was throttled after their first 20 comparisons.
 export const RATE_LIMIT_READ: RateLimitConfig = { capacity: 60, refillPerSecond: 1 };
+// Batch endpoints: one call carries up to hundreds of rows, and the iOS client
+// flushes at most about once a second while uploading, which RATE_LIMIT_WRITE's
+// 1-per-3s refill can't sustain. The abuse bound that matters (rows per
+// session) is enforced separately by the session's photo_count cap.
+export const RATE_LIMIT_BATCH_WRITE: RateLimitConfig = { capacity: 60, refillPerSecond: 1 };
 
 export function clientIdentity(req: Request): string {
   const fwd = req.headers.get('x-forwarded-for');
@@ -63,9 +70,21 @@ export async function isRateLimited(
   return data === false;
 }
 
-export function rateLimitResponse(cors: Record<string, string>): Response {
+// Seconds until a refused caller is guaranteed at least one token again.
+export function retryAfterSeconds(config: RateLimitConfig): number {
+  return Math.max(1, Math.ceil(1 / config.refillPerSecond));
+}
+
+// Pass `config` (the tier the caller was checked against) to include a
+// Retry-After header so clients can wait the right amount instead of guessing.
+export function rateLimitResponse(
+  cors: Record<string, string>,
+  config?: RateLimitConfig,
+): Response {
+  const headers: Record<string, string> = { ...cors, 'Content-Type': 'application/json' };
+  if (config) headers['Retry-After'] = String(retryAfterSeconds(config));
   return new Response(
     JSON.stringify({ error: 'Too many requests, please slow down' }),
-    { status: 429, headers: { ...cors, 'Content-Type': 'application/json' } },
+    { status: 429, headers },
   );
 }

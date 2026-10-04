@@ -28,14 +28,17 @@ import {
   SIGNED_URL_EXPIRY_SECONDS,
   WORKING_COPIES_BUCKET,
 } from '../_shared/http.ts';
-import { isRateLimited, RATE_LIMIT_WRITE, rateLimitResponse } from '../_shared/rate-limit.ts';
+import { isRateLimited, RATE_LIMIT_READ, rateLimitResponse } from '../_shared/rate-limit.ts';
 initSentry();
 
 serveAuthed(async (req, _authHeader, supabase) => {
-  // WRITE despite the "next" name: this inserts a pending comparison row
-  // (below) on every call, unlike other read/polling endpoints.
-  if (await isRateLimited('next-pair', req, RATE_LIMIT_WRITE)) {
-    return rateLimitResponse(CORS);
+  // Called once per comparison (plus a prefetch), so it needs the polling
+  // tier: RATE_LIMIT_WRITE's 1 call per 3s throttled any user comparing
+  // faster than that once their first 20 calls were spent. It does insert a
+  // pending comparison row per call, but at 1/s that stays bounded and
+  // abandoned pending rows are purged by cleanup_expired_sessions().
+  if (await isRateLimited('next-pair', req, RATE_LIMIT_READ)) {
+    return rateLimitResponse(CORS, RATE_LIMIT_READ);
   }
 
   const parsed = parseQuery(req, SessionIdSchema);

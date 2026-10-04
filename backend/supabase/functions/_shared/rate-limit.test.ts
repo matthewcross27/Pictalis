@@ -1,5 +1,12 @@
 import { assertEquals } from 'jsr:@std/assert@1';
-import { clientIdentity } from './rate-limit.ts';
+import {
+  clientIdentity,
+  RATE_LIMIT_BATCH_WRITE,
+  RATE_LIMIT_READ,
+  RATE_LIMIT_WRITE,
+  rateLimitResponse,
+  retryAfterSeconds,
+} from './rate-limit.ts';
 
 Deno.test('clientIdentity uses the first hop of x-forwarded-for', () => {
   const req = new Request('https://example.com', {
@@ -25,4 +32,20 @@ Deno.test('clientIdentity ignores an empty x-forwarded-for value', () => {
     headers: { 'x-forwarded-for': '', 'x-real-ip': '198.51.100.7' },
   });
   assertEquals(clientIdentity(req), '198.51.100.7');
+});
+
+Deno.test('retryAfterSeconds is the time to refill one token, rounded up', () => {
+  assertEquals(retryAfterSeconds(RATE_LIMIT_WRITE), 3);
+  assertEquals(retryAfterSeconds(RATE_LIMIT_READ), 1);
+  assertEquals(retryAfterSeconds(RATE_LIMIT_BATCH_WRITE), 1);
+});
+
+Deno.test('rateLimitResponse is a 429 that carries Retry-After only when given a tier', () => {
+  const withTier = rateLimitResponse({}, RATE_LIMIT_WRITE);
+  assertEquals(withTier.status, 429);
+  assertEquals(withTier.headers.get('Retry-After'), '3');
+
+  const withoutTier = rateLimitResponse({});
+  assertEquals(withoutTier.status, 429);
+  assertEquals(withoutTier.headers.get('Retry-After'), null);
 });

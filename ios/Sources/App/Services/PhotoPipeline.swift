@@ -10,36 +10,25 @@ enum PhotoRegistrationState {
 
 enum PipelineError: Error {
     case photoUnavailable
+    // The batch register call succeeded but refused some photos.
+    case registrationRejected
 }
 
 // Owns the per-photo state machine: materialize (compress to tmp disk) →
 // upload → register. Cull display images decode from the same tmp files,
 // so the cull phase never touches the network.
+//
+// Registration is batched: uploaded photos queue up and are sent to the server
+// together (when a batch is full, or after a short delay), because a call per
+// photo trips the server's per-caller rate limit on large sessions.
 @Observable
 @MainActor
 final class PhotoPipeline {
 
-    enum ItemState: Equatable {
-        case pending       // waiting to materialize
-        case materialized  // compressed JPEG on disk, queued for upload
-        case uploading     // an upload worker owns it
-        case uploaded      // bytes in storage, server row has upload_status='uploaded'
-        case cancelled     // dropped — upload skipped or aborted; server has is_suppressed=true
-        case parked        // retries exhausted; waits for connectivity or user retry
-        case failed        // local asset could not be read — terminal
-    }
-
-    private struct Item {
-        let loader: any PhotoDataLoading
-        var state: ItemState = .pending
-        var isKept = false
-        var didUpload = false
-        var fileURL: URL?
-        var materializeAttempts = 0
-    }
-
     private(set) var registeredCount = 0
     private(set) var failedIds: [UUID] = []
+    // True once the server was told every photo is uploaded and registered (so never
+    // while photos are parked). See `isSettled` for "nothing left in flight".
     private(set) var isComplete = false
 
     private(set) var order: [UUID] = []
@@ -51,6 +40,8 @@ final class PhotoPipeline {
     private var waiters: [UUID: [CheckedContinuation<URL, Error>]] = [:]
     private var didMarkComplete = false
     @ObservationIgnored nonisolated(unsafe) private var backgroundTasks: [Task<Void, Never>] = []
+    @ObservationIgnored private var registrationBatcher: RegistrationBatcher?
+    @ObservationIgnored private let parkedRetryTimer: ParkedRetryTimer
 
     private let transport: any PhotoUploadTransport
     private let sessionId: UUID
@@ -68,6 +59,10 @@ final class PhotoPipeline {
         retryDelays: [Duration] = [.seconds(1), .seconds(2), .seconds(4)],
         materializeConcurrency: Int = 3,
         uploadConcurrency: Int = 4,
+        registrationBatchSize: Int = 25,
+        registrationFlushDelay: Duration = .seconds(1),
+        parkedRetryBaseDelay: Duration = .seconds(5),
+        parkedRetryMaxDelay: Duration = .seconds(60),
         connectivityEvents: AsyncStream<Void>? = nil
     ) {
         self.transport = transport
@@ -76,6 +71,7 @@ final class PhotoPipeline {
         self.retryDelays = retryDelays
         self.materializeConcurrency = materializeConcurrency
         self.uploadConcurrency = uploadConcurrency
+        self.parkedRetryTimer = ParkedRetryTimer(baseDelay: parkedRetryBaseDelay, maxDelay: parkedRetryMaxDelay)
         if let connectivityEvents {
             self.connectivityEvents = connectivityEvents
         } else {
@@ -83,6 +79,17 @@ final class PhotoPipeline {
             self.connectivityEvents = stream
             self.monitor = monitor
         }
+        registrationBatcher = RegistrationBatcher(
+            transport: transport,
+            sessionId: sessionId,
+            batchSize: registrationBatchSize,
+            flushDelay: registrationFlushDelay,
+            retryDelays: retryDelays,
+            storagePath: { [userId] id in "\(userId.lowercased)/\(sessionId.lowercased)/\(id.lowercased).jpg" },
+            claim: { [weak self] id in self?.claimForRegistration(id) ?? false },
+            settle: { [weak self] settlement in self?.applyRegistration(settlement) },
+            didGoIdle: { [weak self] in self?.checkCompletion() }
+        )
     }
 
     func start(photos: [PendingPhoto]) {
@@ -139,7 +146,8 @@ final class PhotoPipeline {
             items[photoId]?.isKept = true
         case .drop:
             switch items[photoId]?.state {
-            case .pending, .materialized, .parked, .uploading:
+            case .pending, .materialized, .parked, .uploading, .awaitingRegistration:
+                // (.registering is deliberately not here: that call is already in flight.)
                 // The server row already exists (pre-registered). The drop decision
                 // is sent to the server via SyncService — no timing dependency here.
                 // Cancelling the upload saves bandwidth: a dropped photo's bytes
@@ -158,11 +166,19 @@ final class PhotoPipeline {
     }
 
     // Give parked photos a fresh retry budget. Called on connectivity
-    // restore and from the user-facing retry affordance.
+    // restore, from the user-facing retry affordance, and by the backoff timer
+    // that re-arms itself while photos stay parked.
     func retryParked() {
+        parkedRetryTimer.cancel()
         for id in order where items[id]?.state == .parked {
-            items[id]?.state = .materialized
-            enqueueUpload(id)
+            if items[id]?.didUpload == true {
+                // Bytes already landed - only the registration is outstanding.
+                items[id]?.state = .awaitingRegistration
+                registrationBatcher?.enqueue(id)
+            } else {
+                items[id]?.state = .materialized
+                enqueueUpload(id)
+            }
         }
         updateFailedIds()
     }
@@ -253,7 +269,7 @@ final class PhotoPipeline {
         while activeUploads < uploadConcurrency, let id = dequeueNextUpload() {
             activeUploads += 1
             items[id]?.state = .uploading
-            backgroundTasks.append(Task { await self.uploadAndMarkUploaded(id) })
+            backgroundTasks.append(Task { await self.uploadAndQueueRegistration(id) })
         }
     }
 
@@ -268,7 +284,7 @@ final class PhotoPipeline {
         return nil
     }
 
-    private func uploadAndMarkUploaded(_ id: UUID) async {
+    private func uploadAndQueueRegistration(_ id: UUID) async {
         defer {
             activeUploads -= 1
             pumpUploads()
@@ -281,22 +297,25 @@ final class PhotoPipeline {
             updateFailedIds()
             return
         }
-        let storagePath = "\(userId.lowercased)/\(sessionId.lowercased)/\(id.lowercased).jpg"
         do {
-            try await uploadBytesIfNeeded(id, data: data, storagePath: storagePath)
+            try await uploadBytesIfNeeded(id, data: data, storagePath: storagePath(for: id))
             // Photo may have been dropped while bytes were in flight. Skip
-            // markUploaded — the drop is already on the server (is_suppressed=true),
+            // registration — the drop is already on the server (is_suppressed=true),
             // and upload_status staying 'pending' is a second exclusion from ranking.
             guard items[id]?.state == .uploading else { return }
-            try await markUploadedOnServer(id, storagePath: storagePath)
-            items[id]?.state = .uploaded
-            registeredCount += 1
-            updateFailedIds()
+            items[id]?.state = .awaitingRegistration
+            registrationBatcher?.enqueue(id)
         } catch {
             ErrorReporter.capture(error)
             if items[id]?.state == .uploading { items[id]?.state = .parked }
             updateFailedIds()
+            scheduleParkedRetry()
         }
+    }
+
+    private func scheduleParkedRetry(minimumDelay: Duration? = nil) {
+        guard items.values.contains(where: { $0.state == .parked }) else { return }
+        parkedRetryTimer.schedule(minimumDelay: minimumDelay) { [weak self] in self?.retryParked() }
     }
 
     private func uploadBytesIfNeeded(_ id: UUID, data: Data, storagePath: String) async throws {
@@ -307,10 +326,30 @@ final class PhotoPipeline {
         items[id]?.didUpload = true
     }
 
-    private func markUploadedOnServer(_ id: UUID, storagePath: String) async throws {
-        try await retryWithBackoff(delays: retryDelays, jitter: 0...300) {
-            try await self.transport.markUploaded(sessionId: self.sessionId, photoId: id, storagePath: storagePath)
+    // MARK: - Registration (batched by RegistrationBatcher)
+
+    private func storagePath(for id: UUID) -> String {
+        "\(userId.lowercased)/\(sessionId.lowercased)/\(id.lowercased).jpg"
+    }
+
+    private func claimForRegistration(_ id: UUID) -> Bool {
+        guard items[id]?.state == .awaitingRegistration else { return false } // e.g. dropped while queued
+        items[id]?.state = .registering
+        return true
+    }
+
+    private func applyRegistration(_ settlement: RegistrationBatcher.Settlement) {
+        for id in settlement.registered where items[id]?.state == .registering {
+            items[id]?.state = .uploaded
+            registeredCount += 1
         }
+        // A photo dropped mid-flight is no longer .registering and keeps its state.
+        for (ids, state) in [(settlement.requeued, ItemState.awaitingRegistration), (settlement.parked, .parked)] {
+            for id in ids where items[id]?.state == .registering { items[id]?.state = state }
+        }
+        if !settlement.registered.isEmpty { parkedRetryTimer.reset() }
+        updateFailedIds()
+        if !settlement.parked.isEmpty { scheduleParkedRetry(minimumDelay: settlement.serverWait) }
     }
 
     // MARK: - Bookkeeping
@@ -322,11 +361,24 @@ final class PhotoPipeline {
         }
     }
 
+    // True once nothing is in flight: every photo is registered, dropped, failed,
+    // or parked (waiting on a retry). Unlike `isComplete`, parked photos don't hold it back.
+    var isSettled: Bool {
+        !order.isEmpty && !order.contains {
+            switch items[$0]?.state {
+            case .pending, .materialized, .uploading, .awaitingRegistration, .registering: return true
+            default: return false
+            }
+        }
+    }
+
     private func checkCompletion() {
         guard !didMarkComplete, !order.isEmpty else { return }
+        // Parked photos have bytes in storage but no registered row, so ranking
+        // would ignore them: don't tell the server the upload is complete yet.
         let unresolved = order.contains {
             switch items[$0]?.state {
-            case .pending, .materialized, .uploading: return true
+            case .pending, .materialized, .uploading, .awaitingRegistration, .registering, .parked: return true
             default: return false
             }
         }

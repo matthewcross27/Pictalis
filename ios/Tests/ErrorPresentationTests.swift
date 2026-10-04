@@ -35,6 +35,13 @@ final class ErrorPresentationTests: XCTestCase {
         )
     }
 
+    func testRateLimitedWithRetryAfterMapsToRateLimitedMessage() {
+        XCTAssertEqual(
+            ErrorPresentation.message(for: APIError.rateLimited(retryAfter: 3)),
+            "Too many requests right now - please try again in a moment."
+        )
+    }
+
     func testOfflineMapsToOfflineMessage() {
         let error = URLError(.notConnectedToInternet)
 

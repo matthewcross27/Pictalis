@@ -265,7 +265,7 @@ struct ComparisonView: View {
         // as register-photo succeeds — wait on local state instead of
         // burning network round trips on guaranteed 422s.
         while pipeline.registeredCount < 2 {
-            if pipeline.isComplete {
+            if pipeline.isSettled {
                 let failed = pipeline.failedIds.count
                 errorMessage = failed > 0
                     ? "\(failed) photo upload\(failed == 1 ? "" : "s") failed. Please go back and try again."
