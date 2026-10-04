@@ -53,12 +53,32 @@ actor DecisionPersistence {
     private let fileManager = FileManager.default
     private let decoder     = JSONDecoder()
     private let encoder     = JSONEncoder()
+    private let directoryOverride: URL?
+    private var directoryEnsured = false
 
-    private func fileURL(sessionId: UUID) throws -> URL {
+    // `directory` overrides Library/Application Support (tests only).
+    init(directory: URL? = nil) {
+        directoryOverride = directory
+    }
+
+    private func supportDirectory() throws -> URL {
+        if let directoryOverride { return directoryOverride }
         guard let support = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
             throw PersistenceError.noAppSupportDirectory
         }
-        return support.appendingPathComponent("cull_\(sessionId.lowercased).json")
+        return support
+    }
+
+    private func fileURL(sessionId: UUID) throws -> URL {
+        try supportDirectory().appendingPathComponent("cull_\(sessionId.lowercased).json")
+    }
+
+    // Library/Application Support does not exist in a fresh install's container, so the
+    // first write must create it. Only marked done once creation succeeds, so a failure retries.
+    private func ensureDirectoryExists() throws {
+        guard !directoryEnsured else { return }
+        try fileManager.createDirectory(at: supportDirectory(), withIntermediateDirectories: true)
+        directoryEnsured = true
     }
 
     func load(sessionId: UUID) -> [StoredDecision] {
@@ -85,7 +105,7 @@ actor DecisionPersistence {
         }
     }
 
-    private func save(_ decisions: [StoredDecision], sessionId: UUID) {
+    func save(_ decisions: [StoredDecision], sessionId: UUID) {
         let dest: URL
         do {
             dest = try fileURL(sessionId: sessionId)
@@ -98,6 +118,7 @@ actor DecisionPersistence {
         let tmp  = dest.deletingLastPathComponent()
             .appendingPathComponent("cull_\(sessionId.lowercased).tmp.json")
         do {
+            try ensureDirectoryExists()
             try data.write(to: tmp)
             _ = try fileManager.replaceItem(
                 at: dest, withItemAt: tmp,

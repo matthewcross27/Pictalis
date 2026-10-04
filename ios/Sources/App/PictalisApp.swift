@@ -15,6 +15,7 @@ struct PictalisApp: App {
             options.dsn = SentryConfig.dsn
             options.debug = false
             options.tracesSampleRate = 0
+            options.beforeBreadcrumb = { SentryBreadcrumbFilter.apply($0) }
         }
 
         let client = SupabaseClient(
