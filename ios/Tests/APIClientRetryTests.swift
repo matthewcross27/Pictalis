@@ -24,8 +24,8 @@ final class ScriptedURLProtocol: URLProtocol, @unchecked Sendable {
         return recorded
     }
 
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override static func canInit(with request: URLRequest) -> Bool { true }
+    override static func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         Self.lock.lock()
@@ -54,7 +54,9 @@ final class ScriptedURLProtocol: URLProtocol, @unchecked Sendable {
 @MainActor
 final class APIClientRetryTests: XCTestCase {
     private let sessionJSON = """
-    {"session":{"id":"550e8400-e29b-41d4-a716-446655440000","created_at":"2026-05-17T00:00:00Z","expires_at":"2026-05-18T00:00:00Z","status":"ranking","photo_count":10}}
+    {"session":{"id":"550e8400-e29b-41d4-a716-446655440000",\
+    "created_at":"2026-05-17T00:00:00Z","expires_at":"2026-05-18T00:00:00Z",\
+    "status":"ranking","photo_count":10}}
     """
 
     private func makeClient(
