@@ -82,6 +82,52 @@ final class APIClientTests: XCTestCase {
             XCTFail("Expected httpError")
         }
     }
+
+    private func response(status: Int, headers: [String: String]? = nil) -> HTTPURLResponse {
+        HTTPURLResponse(
+            url: URL(string: "https://example.supabase.co/functions/v1/x")!,
+            statusCode: status, httpVersion: nil, headerFields: headers
+        )!
+    }
+
+    func testValidatePassesSuccessfulResponses() throws {
+        XCTAssertNoThrow(try APIClient.validate(response(status: 200), data: Data()))
+    }
+
+    func testValidateReadsRetryAfterFrom429() {
+        XCTAssertThrowsError(
+            try APIClient.validate(response(status: 429, headers: ["Retry-After": "3"]), data: Data())
+        ) { error in
+            XCTAssertEqual((error as? APIError)?.retryAfter, 3)
+        }
+    }
+
+    func testValidateTreats429WithoutRetryAfterAsRateLimited() {
+        XCTAssertThrowsError(try APIClient.validate(response(status: 429), data: Data())) { error in
+            guard case .rateLimited(let retryAfter)? = error as? APIError else {
+                return XCTFail("Expected rateLimited, got \(error)")
+            }
+            XCTAssertNil(retryAfter)
+        }
+    }
+
+    func testValidateKeepsOtherStatusesAsHttpError() {
+        XCTAssertThrowsError(try APIClient.validate(response(status: 422), data: Data())) { error in
+            guard case .httpError(let code, _)? = error as? APIError else {
+                return XCTFail("Expected httpError, got \(error)")
+            }
+            XCTAssertEqual(code, 422)
+        }
+    }
+
+    func testBatchRegisterResponseDecodes() throws {
+        let json = """
+        {"results":[{"photo_id":"11112222-e29b-41d4-a716-446655440000","success":true},
+        {"photo_id":"33334444-e29b-41d4-a716-446655440000","success":false,"error":"photo_not_found"}]}
+        """.data(using: .utf8)!
+        let results = try JSONDecoder().decode(BatchRegisterResponse.self, from: json).results
+        XCTAssertEqual(results.map(\.success), [true, false])
+    }
 }
 
 final class ImageCompressorTests: XCTestCase {

@@ -5,6 +5,13 @@ import Supabase
 enum APIError: Error {
     case unauthenticated
     case httpError(statusCode: Int, body: Data)
+    // 429. `retryAfter` is the server's Retry-After wait, when it sent one.
+    case rateLimited(retryAfter: TimeInterval?)
+
+    var retryAfter: TimeInterval? {
+        if case let .rateLimited(retryAfter) = self { return retryAfter }
+        return nil
+    }
 }
 
 @Observable
@@ -51,15 +58,19 @@ final class APIClient {
         return req
     }
 
-    private func validate(_ response: URLResponse, data: Data) throws {
+    nonisolated static func validate(_ response: URLResponse, data: Data) throws {
         guard let http = response as? HTTPURLResponse,
               !(200..<300).contains(http.statusCode) else { return }
+        if http.statusCode == 429 {
+            let seconds = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            throw APIError.rateLimited(retryAfter: seconds.map { max(0, $0) })
+        }
         throw APIError.httpError(statusCode: http.statusCode, body: data)
     }
 
     private func send(_ req: URLRequest) async throws -> Data {
         let (data, response) = try await URLSession.shared.data(for: req)
-        try validate(response, data: data)
+        try Self.validate(response, data: data)
         return data
     }
 
@@ -87,16 +98,16 @@ final class APIClient {
         return try decoder.decode(CreateSessionResponse.self, from: data).session
     }
 
-    // MARK: - register-photo
-    // POST { session_id, photo_id, storage_path } → { photo: { id, ... } }
+    // MARK: - batch-register-photos
+    // POST { session_id, photos: [{ photo_id, storage_path }] } → { results: [{ photo_id, success, error? }] }
 
-    func registerPhoto(sessionId: UUID, photoId: UUID, storagePath: String) async throws {
-        let req = try buildRequest(path: "register-photo", method: "POST", body: [
+    func registerPhotos(sessionId: UUID, photos: [PhotoRegistration]) async throws -> [PhotoRegistrationResult] {
+        let req = try buildRequest(path: "batch-register-photos", method: "POST", body: [
             "session_id": sessionId.lowercased,
-            "photo_id": photoId.lowercased,
-            "storage_path": storagePath
+            "photos": photos.map { ["photo_id": $0.photoId.lowercased, "storage_path": $0.storagePath] }
         ])
-        _ = try await send(req)
+        let data = try await send(req)
+        return try decoder.decode(BatchRegisterResponse.self, from: data).results
     }
 
     // MARK: - next-pair

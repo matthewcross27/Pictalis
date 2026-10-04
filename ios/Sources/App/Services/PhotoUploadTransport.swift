@@ -1,9 +1,17 @@
 import Foundation
 import Supabase
 
+struct PhotoRegistration: Sendable, Equatable {
+    let photoId: UUID
+    let storagePath: String
+}
+
 protocol PhotoUploadTransport: Sendable {
     func upload(storagePath: String, data: Data) async throws
-    func markUploaded(sessionId: UUID, photoId: UUID, storagePath: String) async throws
+    // Registers a batch of already-uploaded photos. Throws if the whole request
+    // failed (nothing is known to be registered); otherwise returns one result
+    // per photo, and only the ones with `success == false` need retrying.
+    func registerPhotos(sessionId: UUID, photos: [PhotoRegistration]) async throws -> [PhotoRegistrationResult]
     func markUploadComplete(sessionId: UUID) async throws
 }
 
@@ -24,8 +32,8 @@ struct SupabaseUploadTransport: PhotoUploadTransport {
         }
     }
 
-    func markUploaded(sessionId: UUID, photoId: UUID, storagePath: String) async throws {
-        try await api.registerPhoto(sessionId: sessionId, photoId: photoId, storagePath: storagePath)
+    func registerPhotos(sessionId: UUID, photos: [PhotoRegistration]) async throws -> [PhotoRegistrationResult] {
+        try await api.registerPhotos(sessionId: sessionId, photos: photos)
     }
 
     func markUploadComplete(sessionId: UUID) async throws {

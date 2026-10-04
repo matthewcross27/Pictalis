@@ -144,3 +144,19 @@ struct BatchDecisionResult: Decodable {
 struct BatchSubmitResponse: Decodable {
     let results: [BatchDecisionResult]
 }
+
+// MARK: - batch-register-photos
+
+struct PhotoRegistrationResult: Decodable, Equatable {
+    let photoId: UUID
+    let success: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case photoId = "photo_id"
+        case success
+    }
+}
+
+struct BatchRegisterResponse: Decodable {
+    let results: [PhotoRegistrationResult]
+}

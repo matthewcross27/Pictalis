@@ -32,9 +32,14 @@ struct MockTransportError: Error {}
 final class MockTransport: PhotoUploadTransport {
     private(set) var uploadedPaths: [String] = []
     private(set) var markedUploadedIds: [UUID] = []
+    private(set) var registerBatches: [[UUID]] = []
+    private(set) var registerCallTimes: [ContinuousClock.Instant] = []
     private(set) var markCompleteCount = 0
     var uploadFailures: [UUID: Int] = [:]
+    // Per-photo registration refusals: the call succeeds but this photo's result is a failure.
     var markUploadedFailures: [UUID: Int] = [:]
+    // Whole-request failures, thrown one per call (in order) before any photo is processed.
+    var registerErrors: [Error] = []
     var uploadDelay: Duration = .zero
 
     // Gated uploads: a gated photo's upload blocks (after announcing it started)
@@ -61,12 +66,18 @@ final class MockTransport: PhotoUploadTransport {
         uploadedPaths.append(storagePath)
     }
 
-    func markUploaded(sessionId: UUID, photoId: UUID, storagePath: String) async throws {
-        if let n = markUploadedFailures[photoId], n > 0 {
-            markUploadedFailures[photoId] = n - 1
-            throw MockTransportError()
+    func registerPhotos(sessionId: UUID, photos: [PhotoRegistration]) async throws -> [PhotoRegistrationResult] {
+        registerBatches.append(photos.map(\.photoId))
+        registerCallTimes.append(ContinuousClock.now)
+        if !registerErrors.isEmpty { throw registerErrors.removeFirst() }
+        return photos.map { photo in
+            if let n = markUploadedFailures[photo.photoId], n > 0 {
+                markUploadedFailures[photo.photoId] = n - 1
+                return PhotoRegistrationResult(photoId: photo.photoId, success: false)
+            }
+            markedUploadedIds.append(photo.photoId)
+            return PhotoRegistrationResult(photoId: photo.photoId, success: true)
         }
-        markedUploadedIds.append(photoId)
     }
 
     func markUploadComplete(sessionId: UUID) async throws {
@@ -95,6 +106,9 @@ func makeTestPipeline(
     retryDelays: [Duration] = [],
     materializeConcurrency: Int = 1,
     uploadConcurrency: Int = 1,
+    registrationBatchSize: Int = 25,
+    registrationFlushDelay: Duration = .milliseconds(20),
+    parkedRetryBaseDelay: Duration = .seconds(3600),
     connectivity: AsyncStream<Void> = AsyncStream { $0.finish() }
 ) -> PhotoPipeline {
     PhotoPipeline(
@@ -104,6 +118,9 @@ func makeTestPipeline(
         retryDelays: retryDelays,
         materializeConcurrency: materializeConcurrency,
         uploadConcurrency: uploadConcurrency,
+        registrationBatchSize: registrationBatchSize,
+        registrationFlushDelay: registrationFlushDelay,
+        parkedRetryBaseDelay: parkedRetryBaseDelay,
         connectivityEvents: connectivity
     )
 }
@@ -200,10 +217,12 @@ final class PhotoPipelineTests: XCTestCase {
         let pipeline = makeTestPipeline(transport: transport, retryDelays: [.zero])
         pipeline.start(photos: photos)
 
-        try await waitUntil { pipeline.isComplete }
+        try await waitUntil { pipeline.isSettled }
         XCTAssertEqual(pipeline.registeredCount, 2)
         XCTAssertEqual(pipeline.failedIds, [photos[1].id])
-        XCTAssertEqual(transport.markCompleteCount, 1)
+        // A parked photo is not registered, so the session must not be marked complete.
+        XCTAssertFalse(pipeline.isComplete)
+        XCTAssertEqual(transport.markCompleteCount, 0)
     }
 
     func testDropCancelsQueuedUpload() async throws {
@@ -268,12 +287,14 @@ final class PhotoPipelineTests: XCTestCase {
         let pipeline = makeTestPipeline(transport: transport, connectivity: stream)
         pipeline.start(photos: photos)
 
-        try await waitUntil { pipeline.isComplete }
+        try await waitUntil { pipeline.isSettled }
         XCTAssertEqual(pipeline.failedIds, [photos[1].id])
 
         continuation.yield() // connectivity restored; failure budget is spent
         try await waitUntil { pipeline.registeredCount == 2 }
         XCTAssertTrue(pipeline.failedIds.isEmpty)
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(transport.markCompleteCount, 1)
     }
 
     func testRetryParkedRequeuesFailedPhotos() async throws {
@@ -283,7 +304,7 @@ final class PhotoPipelineTests: XCTestCase {
         let pipeline = makeTestPipeline(transport: transport)
         pipeline.start(photos: photos)
 
-        try await waitUntil { pipeline.isComplete }
+        try await waitUntil { pipeline.isSettled }
         XCTAssertEqual(pipeline.failedIds, [photos[0].id])
 
         pipeline.retryParked()
@@ -292,5 +313,151 @@ final class PhotoPipelineTests: XCTestCase {
         // The storage upload already succeeded — the retry must not re-upload.
         XCTAssertEqual(transport.uploadedPaths.count, 2)
     }
-}
 
+    // MARK: - Batch registration
+
+    func testRegistersInBatchesOfConfiguredSize() async throws {
+        let transport = MockTransport()
+        // A huge flush delay: only full batches may be sent.
+        let pipeline = makeTestPipeline(
+            transport: transport, uploadConcurrency: 4,
+            registrationBatchSize: 5, registrationFlushDelay: .seconds(3600)
+        )
+        let photos = (0..<10).map { _ in PendingPhoto(loader: MockLoader()) }
+        pipeline.start(photos: photos)
+
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(transport.registerBatches.map(\.count), [5, 5])
+        XCTAssertEqual(Set(transport.markedUploadedIds), Set(photos.map(\.id)))
+    }
+
+    func testPartialBatchIsSentAfterFlushDelay() async throws {
+        let transport = MockTransport()
+        let pipeline = makeTestPipeline(
+            transport: transport, uploadConcurrency: 4,
+            registrationBatchSize: 25, registrationFlushDelay: .milliseconds(300)
+        )
+        let photos = (0..<3).map { _ in PendingPhoto(loader: MockLoader()) }
+        pipeline.start(photos: photos)
+
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(transport.registerBatches.count, 1)
+        XCTAssertEqual(Set(transport.registerBatches[0]), Set(photos.map(\.id)))
+    }
+
+    func testRefusedPhotoIsRetriedAloneInASecondRequest() async throws {
+        let transport = MockTransport()
+        let photos = (0..<3).map { _ in PendingPhoto(loader: MockLoader()) }
+        transport.markUploadedFailures[photos[1].id] = 1
+        let pipeline = makeTestPipeline(
+            transport: transport, retryDelays: [.zero], uploadConcurrency: 3,
+            registrationFlushDelay: .milliseconds(300)
+        )
+        pipeline.start(photos: photos)
+
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(pipeline.registeredCount, 3)
+        XCTAssertEqual(transport.registerBatches.count, 2)
+        XCTAssertEqual(Set(transport.registerBatches[0]), Set(photos.map(\.id)))
+        XCTAssertEqual(transport.registerBatches[1], [photos[1].id])
+    }
+
+    func testWholeRequestFailureRetriesTheBatch() async throws {
+        let transport = MockTransport()
+        transport.registerErrors = [MockTransportError()]
+        let photos = (0..<2).map { _ in PendingPhoto(loader: MockLoader()) }
+        let pipeline = makeTestPipeline(
+            transport: transport, retryDelays: [.zero], uploadConcurrency: 2,
+            registrationFlushDelay: .milliseconds(300)
+        )
+        pipeline.start(photos: photos)
+
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(pipeline.registeredCount, 2)
+        XCTAssertEqual(transport.registerBatches.count, 2)
+        XCTAssertEqual(Set(transport.registerBatches[1]), Set(photos.map(\.id)))
+    }
+
+    func testRateLimitedRequestWaitsForRetryAfter() async throws {
+        let transport = MockTransport()
+        transport.registerErrors = [APIError.rateLimited(retryAfter: 0.4)]
+        let photo = PendingPhoto(loader: MockLoader())
+        let pipeline = makeTestPipeline(transport: transport, retryDelays: [.zero])
+        pipeline.start(photos: [photo])
+
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(transport.registerCallTimes.count, 2)
+        let gap = transport.registerCallTimes[1] - transport.registerCallTimes[0]
+        XCTAssertGreaterThanOrEqual(gap, .milliseconds(400))
+        XCTAssertEqual(pipeline.registeredCount, 1)
+    }
+
+    func testParkedPhotosRetryOnTimerWithGrowingBackoff() async throws {
+        let transport = MockTransport()
+        let photo = PendingPhoto(loader: MockLoader())
+        transport.markUploadedFailures[photo.id] = 3
+        // No inline retries: every refusal parks the photo, and only the timer retries it.
+        let pipeline = makeTestPipeline(transport: transport, parkedRetryBaseDelay: .milliseconds(100))
+        pipeline.start(photos: [photo])
+
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(pipeline.registeredCount, 1)
+        XCTAssertTrue(pipeline.failedIds.isEmpty)
+        let times = transport.registerCallTimes
+        XCTAssertEqual(times.count, 4)
+        let gaps = zip(times.dropFirst(), times).map { $0 - $1 }
+        // Delays double: ~100ms, ~200ms, ~400ms.
+        XCTAssertGreaterThanOrEqual(gaps[0], .milliseconds(100))
+        XCTAssertGreaterThanOrEqual(gaps[1], .milliseconds(200))
+        XCTAssertGreaterThanOrEqual(gaps[2], .milliseconds(400))
+    }
+
+    func testSessionIsNotMarkedCompleteWhileAPhotoIsParked() async throws {
+        let transport = MockTransport()
+        let photos = (0..<2).map { _ in PendingPhoto(loader: MockLoader()) }
+        transport.markUploadedFailures[photos[1].id] = 99
+        let pipeline = makeTestPipeline(transport: transport)
+        pipeline.start(photos: photos)
+
+        try await waitUntil { pipeline.isSettled }
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertFalse(pipeline.isComplete)
+        XCTAssertEqual(transport.markCompleteCount, 0)
+
+        transport.markUploadedFailures[photos[1].id] = 0
+        pipeline.retryParked()
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(transport.markCompleteCount, 1)
+        XCTAssertEqual(pipeline.registeredCount, 2)
+    }
+
+    func testDroppingAParkedPhotoLetsTheSessionComplete() async throws {
+        let transport = MockTransport()
+        let photos = (0..<2).map { _ in PendingPhoto(loader: MockLoader()) }
+        transport.markUploadedFailures[photos[1].id] = 99
+        let pipeline = makeTestPipeline(transport: transport)
+        pipeline.start(photos: photos)
+
+        try await waitUntil { pipeline.isSettled }
+        pipeline.setDecision(photoId: photos[1].id, decision: .drop)
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(transport.markCompleteCount, 1)
+    }
+
+    func testDropWhileAwaitingRegistrationSkipsIt() async throws {
+        let transport = MockTransport()
+        let photos = (0..<2).map { _ in PendingPhoto(loader: MockLoader()) }
+        let pipeline = makeTestPipeline(
+            transport: transport, uploadConcurrency: 2,
+            registrationFlushDelay: .milliseconds(500)
+        )
+        pipeline.start(photos: photos)
+
+        // Both are uploaded and waiting on the 500ms flush; drop one before it fires.
+        try await waitUntil { transport.uploadedPaths.count == 2 }
+        pipeline.setDecision(photoId: photos[1].id, decision: .drop)
+
+        try await waitUntil { pipeline.isComplete }
+        XCTAssertEqual(transport.markedUploadedIds, [photos[0].id])
+    }
+}

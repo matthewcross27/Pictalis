@@ -30,6 +30,9 @@ enum ErrorPresentation {
     }
 
     private static func isRateLimited(_ error: Error) -> Bool {
+        if case APIError.rateLimited = error {
+            return true
+        }
         if case let APIError.httpError(statusCode, _) = error {
             return statusCode == 429
         }
