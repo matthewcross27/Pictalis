@@ -129,12 +129,12 @@ final class APIClientRetryTests: XCTestCase {
         let photoId = UUID()
         let calls: [(String, (APIClient) async throws -> Void)] = [
             ("batch-pre-register", { try await $0.batchPreRegister(sessionId: self.sessionId, photoIds: [photoId]) }),
-            ("register-photo", { try await $0.registerPhoto(sessionId: self.sessionId, photoId: photoId, storagePath: "u/s/p.jpg") }),
+            ("batch-register-photos", { _ = try await $0.registerPhotos(sessionId: self.sessionId, photos: [PhotoRegistration(photoId: photoId, storagePath: "u/s/p.jpg")]) }),
             ("mark-upload-complete", { try await $0.markUploadComplete(sessionId: self.sessionId) }),
             ("start-cull", { try await $0.startCull(sessionId: self.sessionId) })
         ]
         for (name, call) in calls {
-            let client = makeClient(script: [.failure(.networkConnectionLost), .response(status: 200, body: "{}")])
+            let client = makeClient(script: [.failure(.networkConnectionLost), .response(status: 200, body: #"{"results":[]}"#)])
             try await call(client)
             XCTAssertEqual(ScriptedURLProtocol.requests.count, 2, name)
         }
