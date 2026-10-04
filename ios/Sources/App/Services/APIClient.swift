@@ -84,7 +84,11 @@ final class APIClient {
     // A pooled connection the server or a middlebox dropped while idle fails
     // the next request with one of these even though the device is online, and
     // URLSession does not retry POSTs itself. A fresh attempt opens a new
-    // connection, so retry once immediately.
+    // connection, so a request that is safe to repeat is retried once
+    // immediately. Retry is opt-in per call (`retryOnTransientFailure`): a
+    // lost response can mean the server already applied the request, and
+    // endpoints guarded on state (finish-cull, submit-comparison, remove-photo)
+    // would answer the repeat with a 409 the UI cannot recover from.
     nonisolated static func isTransient(_ error: Error) -> Bool {
         guard let urlError = error as? URLError else { return false }
         switch urlError.code {
@@ -95,11 +99,11 @@ final class APIClient {
         }
     }
 
-    private func send(_ req: URLRequest) async throws -> Data {
+    private func send(_ req: URLRequest, retryOnTransientFailure: Bool = false) async throws -> Data {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await urlSession.data(for: req)
-        } catch where Self.isTransient(error) {
+        } catch where retryOnTransientFailure && Self.isTransient(error) {
             (data, response) = try await urlSession.data(for: req)
         }
         try Self.validate(response, data: data)
@@ -107,18 +111,18 @@ final class APIClient {
     }
 
     // Shared by every endpoint whose entire request is `POST { session_id }`.
-    private func postSessionId(_ path: String, sessionId: UUID) async throws -> Data {
+    private func postSessionId(_ path: String, sessionId: UUID, retryOnTransientFailure: Bool) async throws -> Data {
         let req = try await buildRequest(path: path, method: "POST", body: ["session_id": sessionId.lowercased])
-        return try await send(req)
+        return try await send(req, retryOnTransientFailure: retryOnTransientFailure)
     }
 
     // Shared by every endpoint whose entire request is `GET ?session_id=...`.
-    private func getSessionId(_ path: String, sessionId: UUID) async throws -> Data {
+    private func getSessionId(_ path: String, sessionId: UUID, retryOnTransientFailure: Bool) async throws -> Data {
         let req = try await buildRequest(
             path: path,
             queryItems: [URLQueryItem(name: "session_id", value: sessionId.lowercased)]
         )
-        return try await send(req)
+        return try await send(req, retryOnTransientFailure: retryOnTransientFailure)
     }
 
     // MARK: - create-session
@@ -131,7 +135,7 @@ final class APIClient {
             "photo_count": photoCount,
             "session_id": sessionId.lowercased
         ])
-        let data = try await send(req)
+        let data = try await send(req, retryOnTransientFailure: true)
         return try decoder.decode(CreateSessionResponse.self, from: data).session
     }
 
@@ -143,7 +147,7 @@ final class APIClient {
             "session_id": sessionId.lowercased,
             "photos": photos.map { ["photo_id": $0.photoId.lowercased, "storage_path": $0.storagePath] }
         ])
-        let data = try await send(req)
+        let data = try await send(req, retryOnTransientFailure: true)
         return try decoder.decode(BatchRegisterResponse.self, from: data).results
     }
 
@@ -151,7 +155,7 @@ final class APIClient {
     // GET ?session_id=... → { comparison_id, photo_a, photo_b }
 
     func nextPair(sessionId: UUID) async throws -> NextPairResponse {
-        let data = try await getSessionId("next-pair", sessionId: sessionId)
+        let data = try await getSessionId("next-pair", sessionId: sessionId, retryOnTransientFailure: false)
         return try decoder.decode(NextPairResponse.self, from: data)
     }
 
@@ -163,7 +167,7 @@ final class APIClient {
             "comparison_id": comparisonId.lowercased,
             "winner_id": winnerId.lowercased
         ])
-        _ = try await send(req)
+        _ = try await send(req, retryOnTransientFailure: false)
     }
 
     // MARK: - remove-photo
@@ -174,14 +178,14 @@ final class APIClient {
             "session_id": sessionId.lowercased,
             "photo_id": photoId.lowercased
         ])
-        _ = try await send(req)
+        _ = try await send(req, retryOnTransientFailure: false)
     }
 
     // MARK: - session-status
     // GET ?session_id=... → { stage, is_complete, top_photo_count, total_comparisons }
 
     func sessionStatus(sessionId: UUID) async throws -> SessionStatus {
-        let data = try await getSessionId("session-status", sessionId: sessionId)
+        let data = try await getSessionId("session-status", sessionId: sessionId, retryOnTransientFailure: true)
         return try decoder.decode(SessionStatus.self, from: data)
     }
 
@@ -196,7 +200,7 @@ final class APIClient {
                 URLQueryItem(name: "limit", value: "\(limit)")
             ]
         )
-        let data = try await send(req)
+        let data = try await send(req, retryOnTransientFailure: true)
         return try decoder.decode(ResultsResponse.self, from: data)
     }
 
@@ -204,14 +208,14 @@ final class APIClient {
     // POST { session_id } → { stage }
 
     func startCull(sessionId: UUID) async throws {
-        _ = try await postSessionId("start-cull", sessionId: sessionId)
+        _ = try await postSessionId("start-cull", sessionId: sessionId, retryOnTransientFailure: true)
     }
 
     // MARK: - finish-cull
     // POST { session_id } → { stage }
 
     func finishCull(sessionId: UUID) async throws {
-        _ = try await postSessionId("finish-cull", sessionId: sessionId)
+        _ = try await postSessionId("finish-cull", sessionId: sessionId, retryOnTransientFailure: false)
     }
 
     // MARK: - batch-submit-cull
@@ -224,7 +228,7 @@ final class APIClient {
                 ["photo_id": item.photoId.lowercased, "decision": item.decision.rawValue]
             }
         ])
-        let data = try await send(req)
+        let data = try await send(req, retryOnTransientFailure: false)
         return try decoder.decode(BatchSubmitResponse.self, from: data)
     }
 
@@ -232,7 +236,7 @@ final class APIClient {
     // POST { session_id } → { ok }
 
     func markUploadComplete(sessionId: UUID) async throws {
-        _ = try await postSessionId("mark-upload-complete", sessionId: sessionId)
+        _ = try await postSessionId("mark-upload-complete", sessionId: sessionId, retryOnTransientFailure: true)
     }
 
     // MARK: - batch-pre-register
@@ -243,6 +247,6 @@ final class APIClient {
             "session_id": sessionId.lowercased,
             "photo_ids": photoIds.map { $0.lowercased }
         ])
-        _ = try await send(req)
+        _ = try await send(req, retryOnTransientFailure: true)
     }
 }

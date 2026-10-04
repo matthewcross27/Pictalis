@@ -123,6 +123,56 @@ final class APIClientRetryTests: XCTestCase {
         XCTAssertEqual(ScriptedURLProtocol.requests.count, 2)
     }
 
+    func testRetriesOnceForEveryRepeatSafeEndpoint() async throws {
+        let photoId = UUID()
+        let calls: [(String, (APIClient) async throws -> Void)] = [
+            ("batch-pre-register", { try await $0.batchPreRegister(sessionId: self.sessionId, photoIds: [photoId]) }),
+            ("register-photo", { try await $0.registerPhoto(sessionId: self.sessionId, photoId: photoId, storagePath: "u/s/p.jpg") }),
+            ("mark-upload-complete", { try await $0.markUploadComplete(sessionId: self.sessionId) }),
+            ("start-cull", { try await $0.startCull(sessionId: self.sessionId) })
+        ]
+        for (name, call) in calls {
+            let client = makeClient(script: [.failure(.networkConnectionLost), .response(status: 200, body: "{}")])
+            try await call(client)
+            XCTAssertEqual(ScriptedURLProtocol.requests.count, 2, name)
+        }
+    }
+
+    func testStateGuardedEndpointsAreNeverRetried() async {
+        // A lost response can mean the server already applied the request; a
+        // repeat would hit the state guard and 409, so these must surface the
+        // original URLError after exactly one request.
+        let calls: [(String, (APIClient) async throws -> Void)] = [
+            ("finish-cull", { try await $0.finishCull(sessionId: self.sessionId) }),
+            ("submit-comparison", { try await $0.submitComparison(comparisonId: UUID(), winnerId: UUID()) }),
+            ("remove-photo", { try await $0.removePhoto(sessionId: self.sessionId, photoId: UUID()) })
+        ]
+        for code in [URLError.Code.timedOut, .networkConnectionLost] {
+            for (name, call) in calls {
+                let client = makeClient(script: [.failure(code), .response(status: 200, body: "{}")])
+                do {
+                    try await call(client)
+                    XCTFail("\(name): expected \(code) to be thrown")
+                } catch {
+                    XCTAssertEqual((error as? URLError)?.code, code, name)
+                }
+                XCTAssertEqual(ScriptedURLProtocol.requests.count, 1, "\(name) \(code)")
+            }
+        }
+    }
+
+    func testFinishCullTimeoutIsNotRetried() async {
+        let client = makeClient(script: [.failure(.timedOut), .response(status: 409, body: "{}")])
+
+        do {
+            try await client.finishCull(sessionId: sessionId)
+            XCTFail("expected timedOut")
+        } catch {
+            XCTAssertEqual((error as? URLError)?.code, .timedOut)
+        }
+        XCTAssertEqual(ScriptedURLProtocol.requests.count, 1)
+    }
+
     func testDoesNotRetryOtherURLErrors() async {
         let client = makeClient(script: [.failure(.notConnectedToInternet), .response(status: 200, body: "{}")])
 
