@@ -74,7 +74,15 @@ struct CullView: View {
                 }
             }
             .onChange(of: cardProvider?.state) { _, newState in
-                if newState == .exhausted { onComplete() }
+                // Running out of cards ends the cull the same way the "Done" button does:
+                // finish() flushes decisions and moves the server session to 'ranking'.
+                // Calling onComplete() directly would leave the session at 'cull', so the
+                // comparison screen's stage badge would keep saying "Cull".
+                if Self.shouldFinishCull(onQueueState: newState, isFinishing: isFinishing) {
+                    isFinishing  = true
+                    finishFailed = false
+                    Task { await finish() }
+                }
             }
             .onChange(of: geo.size.width) { _, newWidth in
                 screenWidth = newWidth
@@ -97,6 +105,10 @@ struct CullView: View {
         case .exhausted:
             return .exhausted
         }
+    }
+
+    static func shouldFinishCull(onQueueState queueState: CullQueueState?, isFinishing: Bool) -> Bool {
+        queueState == .exhausted && !isFinishing
     }
 
     // MARK: - Initialization
