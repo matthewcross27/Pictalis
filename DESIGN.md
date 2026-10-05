@@ -169,11 +169,11 @@ The single exception is the photo overlay button (fullscreen expand, download ic
 
 ### Photo Comparison Cells
 
-The heart of the app. Two cells stacked vertically, each filling the full width minus a small horizontal inset. Photos are presented at 4px corner radius — almost frameless, like a print — and clipped to fill the frame regardless of aspect ratio.
+The heart of the app. Two cells, stacked vertically by default, each as wide as the screen allows minus a small horizontal inset. Photos are presented at 4px corner radius — almost frameless, like a print — and always shown whole: each cell is sized to its photo's aspect ratio, never cropped.
 
 - **Shape:** 4px radius (`{rounded.photo}`). Never clip to a circle or pillar shape.
 - **Background:** Grain Paper (`{colors.grain-paper}`) while loading. Disappears once the photo fills the frame.
-- **Aspect ratio:** 4:3 (matches most phone camera output). Constrain the frame; let the image fill it.
+- **Aspect ratio:** The photo's own. Cells are sized to the photo, not the other way round (4:3 only until the photo has loaded). Landscape photos take the full width; when the pair is too tall for the screen the height is shared so a short photo keeps its natural height and a taller one takes the rest, or both get equal heights. Only when the smaller photo would gain at least 25% area (very tall photos on a short screen) do the cells sit side by side. See `ComparisonLayout`.
 - **Overlay buttons:** Expand and any per-photo actions use `{components.photo-overlay-button}` — pill-shaped, 55% dark translucent, white icon, 8px internal padding. Top-trailing position.
 - **Selection state:** On tap, the cell scales down to 96% over 60ms ease-out, then back to 100% over 60ms — a tactile confirmation that the choice landed. The next pair then enters over 120ms ease-out.
 - **Disabled while submitting:** Cells lose interaction at 70% opacity. No skeleton, no spinner overlay.
