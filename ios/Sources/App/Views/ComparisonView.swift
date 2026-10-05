@@ -131,17 +131,12 @@ struct ComparisonView: View {
         prefetchedPair = nil
         prefetchTask = Task {
             guard let response = try? await api.nextPair(sessionId: sessionId) else { return }
+            // Load both images into the cache before handing the pair over, so the swap
+            // changes both cards in the same frame and the layout is sized to the real
+            // photos instead of reflowing when the downloads land.
+            await PairPreloader.preload(response)
             guard !Task.isCancelled else { return }
             prefetchedPair = response
-            // Warm the image cache so the next pair appears already sized to its
-            // photos instead of reflowing when the downloads land.
-            await withTaskGroup(of: Void.self) { group in
-                for photo in [response.photoA, response.photoB] {
-                    group.addTask {
-                        _ = try? await CachedPhotoImage<EmptyView>.fetch(url: photo.signedUrl, cacheKey: photo.id)
-                    }
-                }
-            }
         }
     }
 
@@ -223,6 +218,8 @@ struct ComparisonView: View {
             if Task.isCancelled { return }
             do {
                 let response = try await api.nextPair(sessionId: sessionId)
+                await PairPreloader.preload(response)
+                if Task.isCancelled { return }
                 currentStage = response.stage.flatMap { RankingStage(rawValue: $0) }
                 pair = response
                 isLoading = false
@@ -328,6 +325,11 @@ private extension ComparisonView {
                                     EmptyView()
                                 }
                             }
+                            // Key by photo so a swapped slot never keeps the previous
+                            // photo's image while the new one loads; the hard cut keeps
+                            // both cards changing in the same frame.
+                            .id(photo.id)
+                            .transition(.identity)
                         }
                         .clipped()
                 }
