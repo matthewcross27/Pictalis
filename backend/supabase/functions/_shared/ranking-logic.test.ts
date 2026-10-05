@@ -1,35 +1,15 @@
-import { assertEquals } from 'jsr:@std/assert@1';
+import { assert, assertEquals } from 'jsr:@std/assert@1';
 import {
+  comparisonBudget,
+  COMPARISONS_PER_PHOTO_BUDGET,
   computeMinComparisons,
-  computeTopK,
+  DEFAULT_TOP_K,
   hasFullCoverage,
   isBoundaryStable,
   isSessionComplete,
   resolveTopKAndMinComparisons,
 } from './ranking-logic.ts';
 import { makePhoto } from './test-helpers.ts';
-
-// --- computeTopK ---
-
-Deno.test('computeTopK — n=4 → floor of 5 (formula gives 5, hits max floor)', () => {
-  assertEquals(computeTopK(4), 5);
-});
-
-Deno.test('computeTopK — n=1 → floor of 5', () => {
-  assertEquals(computeTopK(1), 5);
-});
-
-Deno.test('computeTopK — n=100 → 25', () => {
-  assertEquals(computeTopK(100), 25);
-});
-
-Deno.test('computeTopK — n=300 → capped at 40', () => {
-  assertEquals(computeTopK(300), 40);
-});
-
-Deno.test('computeTopK — n=256 → capped at 40', () => {
-  assertEquals(computeTopK(256), 40);
-});
 
 // --- computeMinComparisons ---
 
@@ -48,17 +28,26 @@ Deno.test('computeMinComparisons — n=200, topK=35 → correct ceil', () => {
 
 // --- resolveTopKAndMinComparisons ---
 
-Deno.test('resolveTopKAndMinComparisons — no top_k override → derives topK from photo_count', () => {
-  const result = resolveTopKAndMinComparisons({ top_k: null, photo_count: 100 });
-  assertEquals(result, {
-    topK: computeTopK(100),
-    minComparisons: computeMinComparisons(100, computeTopK(100)),
-  });
+Deno.test('resolveTopKAndMinComparisons — no top_k → default of 15, not scaled to the batch', () => {
+  assertEquals(DEFAULT_TOP_K, 15);
+  const result = resolveTopKAndMinComparisons({ top_k: null }, 253);
+  assertEquals(result, { topK: 15, minComparisons: computeMinComparisons(253, 15) });
 });
 
-Deno.test('resolveTopKAndMinComparisons — explicit top_k override → used as-is', () => {
-  const result = resolveTopKAndMinComparisons({ top_k: 10, photo_count: 100 });
+Deno.test('resolveTopKAndMinComparisons — explicit top_k → used as-is', () => {
+  const result = resolveTopKAndMinComparisons({ top_k: 10 }, 100);
   assertEquals(result, { topK: 10, minComparisons: computeMinComparisons(100, 10) });
+});
+
+Deno.test('resolveTopKAndMinComparisons — floor follows the pool, not the batch (F1)', () => {
+  // 253-photo batch culled to 76 kept photos. The old engine sized the floor from the
+  // batch: topK 40, ceil(log2(253/40)+1) = 4 comparisons per photo.
+  const culled = resolveTopKAndMinComparisons({ top_k: null }, 76);
+  assertEquals(culled.topK, 15);
+  assertEquals(culled.minComparisons, 4);
+  // A pool that already fits the shortlist needs only a token pass.
+  assertEquals(resolveTopKAndMinComparisons({ top_k: null }, 15).minComparisons, 1);
+  assertEquals(resolveTopKAndMinComparisons({ top_k: null }, 10).minComparisons, 1);
 });
 
 // --- isBoundaryStable ---
@@ -127,7 +116,7 @@ Deno.test('isSessionComplete — coverage met but boundary unstable → not comp
     makePhoto('b', 1490, 200, 3),
     makePhoto('c', 1480, 200, 3),
   ];
-  assertEquals(isSessionComplete(photos, 2, 1, 9, 3), false);
+  assertEquals(isSessionComplete(photos, 2, 1, 8, 3), false);
 });
 
 Deno.test('isSessionComplete — coverage not met but comparison budget exhausted → complete', () => {
@@ -135,7 +124,19 @@ Deno.test('isSessionComplete — coverage not met but comparison budget exhauste
     makePhoto('a', 1600, 50, 0),
     makePhoto('b', 1000, 50, 0),
   ];
-  assertEquals(isSessionComplete(photos, 2, 5, 8, 2), true);
+  assertEquals(isSessionComplete(photos, 2, 5, 6, 2), true);
+});
+
+Deno.test('isSessionComplete — one comparison short of the budget → not complete', () => {
+  const photos = [
+    makePhoto('a', 1600, 50, 0),
+    makePhoto('b', 1000, 50, 0),
+  ];
+  assertEquals(isSessionComplete(photos, 2, 5, 5, 2), false);
+});
+
+Deno.test('isSessionComplete — empty pool never reads as budget-exhausted', () => {
+  assertEquals(isSessionComplete([], 15, 1, 0, 0), false);
 });
 
 Deno.test('isSessionComplete — coverage not met and budget not exhausted → not complete', () => {
@@ -160,4 +161,47 @@ Deno.test('hasFullCoverage — every photo meets the floor → true', () => {
 Deno.test('hasFullCoverage — one photo below the floor → false', () => {
   const photos = [makePhoto('a', 1600, 50, 3), makePhoto('b', 1000, 50, 2)];
   assertEquals(hasFullCoverage(photos, 3), false);
+});
+
+// --- comparisonBudget / culled pool (F1, F2) ---
+
+Deno.test('comparisonBudget — about 3 comparisons per ranked photo', () => {
+  assertEquals(COMPARISONS_PER_PHOTO_BUDGET, 3);
+  assertEquals(comparisonBudget(76), 228);
+  assertEquals(comparisonBudget(0), 0);
+});
+
+// A 253-photo batch culled to the 76 photos the user kept. Boundary never stabilizes
+// (every photo has the same rating and uncertainty), so the budget is what ends it.
+function unsettledPool(size: number, comparisonsEach: number) {
+  return Array.from({ length: size }, (_, i) => makePhoto(`p${i}`, 1500, 300, comparisonsEach));
+}
+
+Deno.test('isSessionComplete — culled pool ends on 3 per kept photo, not 4 per batch photo', () => {
+  const pool = unsettledPool(76, 4);
+  const { topK, minComparisons } = resolveTopKAndMinComparisons({ top_k: null }, pool.length);
+  const budget = comparisonBudget(pool.length); // 228
+  assertEquals(
+    isSessionComplete(pool, topK, minComparisons, budget - 1, pool.length),
+    false,
+  );
+  assertEquals(isSessionComplete(pool, topK, minComparisons, budget, pool.length), true);
+  // The old rule was 4 x the whole 253-photo batch = 1,012 comparisons.
+  assert(budget < 253 * 4);
+});
+
+Deno.test('isSessionComplete — a settled boundary still ends the session before the budget', () => {
+  const pool = [
+    ...Array.from({ length: 15 }, (_, i) => makePhoto(`top${i}`, 1900 - i, 50, 5)),
+    ...Array.from({ length: 61 }, (_, i) => makePhoto(`rest${i}`, 1000 - i, 50, 5)),
+  ];
+  const { topK, minComparisons } = resolveTopKAndMinComparisons({ top_k: null }, pool.length);
+  assertEquals(isSessionComplete(pool, topK, minComparisons, 100, pool.length), true);
+});
+
+Deno.test('isSessionComplete — pool sizing, not the stored batch size, drives the budget', () => {
+  // Ranked pool of 10, all compared enough but unsettled; budget is 30 comparisons.
+  const pool = unsettledPool(10, 1);
+  assertEquals(isSessionComplete(pool, 5, 5, 29, pool.length), false);
+  assertEquals(isSessionComplete(pool, 5, 5, 30, pool.length), true);
 });

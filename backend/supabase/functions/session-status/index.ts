@@ -1,5 +1,10 @@
-import { isSessionComplete, resolveTopKAndMinComparisons } from '../_shared/ranking-logic.ts';
+import {
+  isSessionComplete,
+  type Photo,
+  resolveTopKAndMinComparisons,
+} from '../_shared/ranking-logic.ts';
 import { totalComparisons } from '../_shared/pair-selection.ts';
+import { selectRankablePhotos, splitRankedPool } from '../_shared/ranked-pool.ts';
 import { initSentry } from '../_shared/sentry.ts';
 import {
   CORS,
@@ -30,11 +35,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   // any field of the session row.
   const [session, { data: photos, error: photosError }] = await Promise.all([
     requireSession<SessionRow>(supabase, session_id, 'id, stage, photo_count, top_k'),
-    supabase
-      .from('photos')
-      .select('comparison_count, elo_rating, uncertainty')
-      .eq('session_id', session_id)
-      .eq('is_suppressed', false),
+    selectRankablePhotos(supabase, session_id, 'comparison_count, elo_rating, uncertainty'),
   ]);
   if (session instanceof Response) return session;
 
@@ -42,8 +43,11 @@ serveAuthed(async (req, _authHeader, supabase) => {
     return await serverError(photosError, 'Failed to fetch photos');
   }
 
-  const photoList = photos ?? [];
-  const { topK, minComparisons } = resolveTopKAndMinComparisons(session);
+  const pool = splitRankedPool<Pick<Photo, 'comparison_count' | 'elo_rating' | 'uncertainty'>>(
+    photos,
+  );
+  const photoList = pool.photos;
+  const { topK, minComparisons } = resolveTopKAndMinComparisons(session, pool.expectedSize);
   const totalComps = Math.round(totalComparisons(photoList));
 
   // Detect and persist completion
@@ -54,7 +58,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
       topK,
       minComparisons,
       totalComps,
-      session.photo_count,
+      pool.expectedSize,
     );
     if (complete) {
       currentStage = 'complete';

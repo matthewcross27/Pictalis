@@ -1,4 +1,4 @@
-import { computeTopK } from '../_shared/ranking-logic.ts';
+import { DEFAULT_TOP_K } from '../_shared/ranking-logic.ts';
 import { initSentry } from '../_shared/sentry.ts';
 import { CORS, json, parseBody, requireUser, serveAuthed, serverError } from '../_shared/http.ts';
 import {
@@ -25,7 +25,6 @@ serveAuthed(async (req, _authHeader, supabase) => {
   if (user instanceof Response) return user;
   if (parsed instanceof Response) return parsed;
 
-  const topK = computeTopK(parsed.photo_count);
   const { data: session, error } = await supabase
     .from('sessions')
     .insert({
@@ -33,7 +32,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
       ...(parsed.session_id ? { id: parsed.session_id } : {}),
       photo_count: parsed.photo_count,
       user_id: user.id,
-      top_k: topK,
+      top_k: DEFAULT_TOP_K,
       stage: 'ranking',
     })
     .select(SESSION_COLUMNS)
