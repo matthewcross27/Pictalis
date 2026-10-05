@@ -29,6 +29,15 @@ final class CullViewDisplayStateTests: XCTestCase {
         XCTAssertEqual(CullView.displayState(for: .exhausted, currentCard: nil), .exhausted)
     }
 
+    func testExhaustedWithFinishErrorShowsFinishFailed() {
+        // Regression test: a failed finishCull network call used to leave the exhausted
+        // deck showing an indefinite spinner with no way to retry from the main content area.
+        XCTAssertEqual(
+            CullView.displayState(for: .exhausted, currentCard: nil, finishErrorMessage: "Couldn't reach the server."),
+            .finishFailed(message: "Couldn't reach the server.")
+        )
+    }
+
     func testNilProviderStateDefaultsToLoading() {
         XCTAssertEqual(CullView.displayState(for: nil, currentCard: nil), .loading)
     }
