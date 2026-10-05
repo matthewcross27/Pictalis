@@ -8,7 +8,7 @@ enum SentryBreadcrumbFilter {
     private static let noisyPathFragments = [
         "/storage/v1/object/",
         "/functions/v1/batch-register-photos",
-        "/functions/v1/batch-pre-register",
+        "/functions/v1/batch-pre-register"
     ]
 
     static func apply(_ crumb: Breadcrumb) -> Breadcrumb? {

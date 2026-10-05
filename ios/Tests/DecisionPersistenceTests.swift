@@ -24,7 +24,7 @@ final class DecisionPersistenceTests: XCTestCase {
         let sessionId = UUID()
         let decisions = [
             StoredDecision(photoId: UUID(), decision: .keep, synced: false),
-            StoredDecision(photoId: UUID(), decision: .drop, synced: true),
+            StoredDecision(photoId: UUID(), decision: .drop, synced: true)
         ]
 
         let persistence = DecisionPersistence(directory: supportDir)
