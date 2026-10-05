@@ -47,6 +47,9 @@ struct CachedPhotoImage<Content: View>: View {
     let url: URL
     let cacheKey: UUID
     var thumbnailMaxPixelSize: CGFloat?
+    /// Called once the decoded image is available (cache hit or download), so a
+    /// parent can size itself to the photo's real aspect ratio.
+    var onLoaded: ((CGSize) -> Void)?
     @ViewBuilder var content: (AsyncImagePhase) -> Content
 
     @State private var phase: AsyncImagePhase = .empty
@@ -59,31 +62,40 @@ struct CachedPhotoImage<Content: View>: View {
     }
 
     private func load() async {
-        if let cached = PhotoMemoryCache.shared.image(for: cacheKey, thumbnail: isThumbnail) {
-            phase = .success(Image(uiImage: cached))
-            return
-        }
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let uiImage: UIImage?
-            if let maxPixelSize = thumbnailMaxPixelSize {
-                uiImage = Self.downsample(data: data, maxPixelSize: maxPixelSize)
-            } else {
-                uiImage = UIImage(data: data)
-            }
-            guard let uiImage else {
-                phase = .failure(URLError(.cannotDecodeContentData))
-                return
-            }
+            let uiImage = try await Self.fetch(
+                url: url, cacheKey: cacheKey, thumbnailMaxPixelSize: thumbnailMaxPixelSize
+            )
             guard !Task.isCancelled else { return }
-            PhotoMemoryCache.shared.store(uiImage, for: cacheKey, thumbnail: isThumbnail)
             phase = .success(Image(uiImage: uiImage))
+            onLoaded?(uiImage.size)
         } catch {
             if !Task.isCancelled {
                 ErrorReporter.capture(error)
                 phase = .failure(error)
             }
         }
+    }
+
+    /// Loads from PhotoMemoryCache or the network, caching the decoded result.
+    /// Also used to warm the cache for photos about to be shown.
+    @discardableResult
+    static func fetch(url: URL, cacheKey: UUID, thumbnailMaxPixelSize: CGFloat? = nil) async throws -> UIImage {
+        let isThumbnail = thumbnailMaxPixelSize != nil
+        if let cached = PhotoMemoryCache.shared.image(for: cacheKey, thumbnail: isThumbnail) {
+            return cached
+        }
+        let (data, _) = try await URLSession.shared.data(from: url)
+        let uiImage: UIImage?
+        if let maxPixelSize = thumbnailMaxPixelSize {
+            uiImage = downsample(data: data, maxPixelSize: maxPixelSize)
+        } else {
+            uiImage = UIImage(data: data)
+        }
+        guard let uiImage else { throw URLError(.cannotDecodeContentData) }
+        try Task.checkCancellation()
+        PhotoMemoryCache.shared.store(uiImage, for: cacheKey, thumbnail: isThumbnail)
+        return uiImage
     }
 
     /// Decodes directly at (approximately) the target pixel size via ImageIO,
