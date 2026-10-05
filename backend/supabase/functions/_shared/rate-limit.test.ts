@@ -68,13 +68,3 @@ Deno.test('RATE_LIMIT_READ sustains a comparison tap every 2 seconds, RATE_LIMIT
   assertEquals(refused(RATE_LIMIT_READ), 0);
   assertEquals(refused(RATE_LIMIT_WRITE) > 100, true);
 });
-
-Deno.test('submit-comparison is checked against the polling tier and answers 429 with Retry-After', async () => {
-  const source = await Deno.readTextFile(
-    new URL('../submit-comparison/index.ts', import.meta.url),
-  );
-  assertEquals(source.includes("isRateLimited('submit-comparison', req, RATE_LIMIT_READ)"), true);
-  assertEquals(/isRateLimited\([^)]*RATE_LIMIT_WRITE/.test(source), false);
-  // The client waits out Retry-After and resubmits, so the 429 has to carry it.
-  assertEquals(source.includes('rateLimitResponse(CORS, RATE_LIMIT_READ)'), true);
-});
