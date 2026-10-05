@@ -24,9 +24,10 @@ export interface RateLimitConfig {
 
 // Mutating endpoints: stricter, since each call can create/modify rows.
 export const RATE_LIMIT_WRITE: RateLimitConfig = { capacity: 20, refillPerSecond: 20 / 60 };
-// Read-only/polling endpoints: more generous. Also used by next-pair, which is
-// polled once per comparison - at 1 call per 3s (RATE_LIMIT_WRITE) any user
-// faster than that was throttled after their first 20 comparisons.
+// Read-only/polling endpoints: more generous. Also used by next-pair and
+// submit-comparison, which are each called once per comparison - at 1 call per
+// 3s (RATE_LIMIT_WRITE) any user faster than that was throttled after their
+// first 20 comparisons.
 export const RATE_LIMIT_READ: RateLimitConfig = { capacity: 60, refillPerSecond: 1 };
 // Batch endpoints: one call carries up to hundreds of rows, and the iOS client
 // flushes at most about once a second while uploading, which RATE_LIMIT_WRITE's
