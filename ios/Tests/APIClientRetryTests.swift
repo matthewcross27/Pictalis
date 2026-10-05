@@ -129,7 +129,10 @@ final class APIClientRetryTests: XCTestCase {
         let photoId = UUID()
         let calls: [(String, (APIClient) async throws -> Void)] = [
             ("batch-pre-register", { try await $0.batchPreRegister(sessionId: self.sessionId, photoIds: [photoId]) }),
-            ("batch-register-photos", { _ = try await $0.registerPhotos(sessionId: self.sessionId, photos: [PhotoRegistration(photoId: photoId, storagePath: "u/s/p.jpg")]) }),
+            ("batch-register-photos", {
+                let photos = [PhotoRegistration(photoId: photoId, storagePath: "u/s/p.jpg")]
+                _ = try await $0.registerPhotos(sessionId: self.sessionId, photos: photos)
+            }),
             ("mark-upload-complete", { try await $0.markUploadComplete(sessionId: self.sessionId) }),
             ("start-cull", { try await $0.startCull(sessionId: self.sessionId) })
         ]
