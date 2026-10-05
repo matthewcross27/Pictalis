@@ -15,13 +15,6 @@ enum PipelineError: Error {
     case timedOut
 }
 
-// Whether a photo can be put on screen right now.
-enum PhotoAvailability {
-    case ready        // compressed copy on disk
-    case pending      // still materializing
-    case unavailable  // dropped or unreadable - will never be ready
-}
-
 // Owns the per-photo state machine: materialize (compress to tmp disk) →
 // upload → register. Cull display images decode from the same tmp files,
 // so the cull phase never touches the network.
@@ -42,7 +35,7 @@ final class PhotoPipeline {
     private(set) var order: [UUID] = []
     var totalCount: Int { order.count }
 
-    private var items: [UUID: Item] = [:]
+    private(set) var items: [UUID: Item] = [:]
     private var uploadQueue: [UUID] = []
     private var activeUploads = 0
     private var waiters = MaterializationWaiters()
@@ -158,27 +151,6 @@ final class PhotoPipeline {
         }
     }
 
-    func availability(for id: UUID) -> PhotoAvailability {
-        guard let item = items[id] else { return .unavailable }
-        switch item.state {
-        case .pending: return .pending
-        case .cancelled, .failed: return .unavailable
-        default: return item.fileURL != nil ? .ready : .unavailable
-        }
-    }
-
-    // Photos with a compressed copy on disk, regardless of whether they have been shown.
-    var materializedCount: Int {
-        items.values.reduce(0) { $0 + ($1.fileURL != nil ? 1 : 0) }
-    }
-
-    // "<id prefix>=<state>" for the first `count` photos in selection order, for diagnostics.
-    func itemStateSummary(first count: Int) -> [String] {
-        order.prefix(count).map { id in
-            "\(id.uuidString.prefix(8))=\(items[id].map { String(describing: $0.state) } ?? "missing")"
-        }
-    }
-
     func displayImage(for id: UUID) async throws -> UIImage {
         let url = try await materializedFileURL(for: id)
         return try await Task.detached(priority: .userInitiated) {
@@ -235,13 +207,6 @@ final class PhotoPipeline {
             }
         }
         updateFailedIds()
-    }
-
-    func registrationState(for id: UUID) -> PhotoRegistrationState {
-        switch items[id]?.state {
-        case .failed, nil: return .unavailable
-        default: return .registered
-        }
     }
 
     // MARK: - Materialization
@@ -405,17 +370,6 @@ final class PhotoPipeline {
         failedIds = order.filter {
             let state = items[$0]?.state
             return state == .parked || state == .failed
-        }
-    }
-
-    // True once nothing is in flight: every photo is registered, dropped, failed,
-    // or parked (waiting on a retry). Unlike `isComplete`, parked photos don't hold it back.
-    var isSettled: Bool {
-        !order.isEmpty && !order.contains {
-            switch items[$0]?.state {
-            case .pending, .materialized, .uploading, .awaitingRegistration, .registering: return true
-            default: return false
-            }
         }
     }
 
