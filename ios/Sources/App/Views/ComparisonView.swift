@@ -124,123 +124,6 @@ struct ComparisonView: View {
         .background(Color.filmWhite)
     }
 
-    @ViewBuilder
-    private func pairLayout(for pair: NextPairResponse, in available: CGSize) -> some View {
-        let layout = ComparisonLayout.layout(
-            aspectA: aspect(of: pair.photoA),
-            aspectB: aspect(of: pair.photoB),
-            in: available,
-            spacing: cardSpacing
-        )
-        let cardA = photoCard(
-            photo: pair.photoA, size: layout.sizeA, dragOffset: $dragOffsetA, hasDragged: $hasDraggedA
-        )
-        let cardB = photoCard(
-            photo: pair.photoB, size: layout.sizeB, dragOffset: $dragOffsetB, hasDragged: $hasDraggedB
-        )
-        Group {
-            switch layout.arrangement {
-            case .stacked:
-                VStack(spacing: cardSpacing) { cardA; cardB }
-            case .sideBySide:
-                HStack(spacing: cardSpacing) { cardA; cardB }
-            }
-        }
-        .animation(.pairTransition, value: layout)
-    }
-
-    private func aspect(of photo: PairPhoto) -> CGFloat {
-        if let known = photoAspects[photo.id] { return known }
-        if let cached = PhotoMemoryCache.shared.image(for: photo.id, thumbnail: false) {
-            return ComparisonLayout.aspect(of: cached.size)
-        }
-        return ComparisonLayout.placeholderAspect
-    }
-
-    @ViewBuilder
-    private func photoCard(
-        photo: PairPhoto, size: CGSize, dragOffset: Binding<CGFloat>, hasDragged: Binding<Bool>
-    ) -> some View {
-        ZStack {
-            Color.red.opacity(0.85)
-                .overlay(alignment: .trailing) {
-                    Label("Remove", systemImage: "trash")
-                        .font(.labelSerif)
-                        .foregroundStyle(.white)
-                        .padding(.trailing, 20)
-                }
-
-            ZStack {
-                Button {
-                    guard !hasDragged.wrappedValue else { return }
-                    Task { @MainActor in await choose(winner: photo) }
-                } label: {
-                    Color.grainPaper
-                        .frame(width: size.width, height: size.height)
-                        .overlay {
-                            CachedPhotoImage(
-                                url: photo.signedUrl,
-                                cacheKey: photo.id,
-                                onLoaded: { photoAspects[photo.id] = ComparisonLayout.aspect(of: $0) }
-                            ) { phase in
-                                switch phase {
-                                case .empty:
-                                    ProgressView().tint(Color.secondaryText)
-                                case .success(let image):
-                                    // The card is sized to the photo, so fit shows all of it.
-                                    image.resizable().scaledToFit()
-                                case .failure:
-                                    Image(systemName: "photo")
-                                        .font(.largeTitle)
-                                        .foregroundStyle(Color.secondaryText)
-                                @unknown default:
-                                    EmptyView()
-                                }
-                            }
-                        }
-                        .clipped()
-                }
-                .buttonStyle(PhotoTapStyle())
-                .accessibilityLabel(photo.id == pair?.photoA.id ? "First photo" : "Second photo")
-                .accessibilityHint("Choose this photo as your favorite")
-
-                VStack {
-                    HStack {
-                        Spacer()
-                        ExpandPhotoButton { fullscreenPhoto = photo }
-                    }
-                    Spacer()
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
-            .offset(x: min(0, dragOffset.wrappedValue))
-        }
-        .frame(width: size.width, height: size.height)
-        .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
-        .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 20, coordinateSpace: .local)
-                .onChanged { value in
-                    guard value.translation.width < 0 else { return }
-                    hasDragged.wrappedValue = true
-                    dragOffset.wrappedValue = value.translation.width
-                }
-                .onEnded { value in
-                    let triggered = value.translation.width < -80
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        dragOffset.wrappedValue = 0
-                    }
-                    if triggered {
-                        Task { @MainActor in await remove(photo: photo) }
-                    }
-                    Task {
-                        try? await Task.sleep(for: .milliseconds(100))
-                        hasDragged.wrappedValue = false
-                    }
-                }
-        )
-    }
-
     // MARK: - Private
 
     private func startPrefetch() {
@@ -366,5 +249,126 @@ struct ComparisonView: View {
         }
         errorMessage = "Couldn't load the next pair."
         isLoading = false
+    }
+}
+
+// MARK: - Pair layout and card rendering
+
+private extension ComparisonView {
+    @ViewBuilder
+    func pairLayout(for pair: NextPairResponse, in available: CGSize) -> some View {
+        let layout = ComparisonLayout.layout(
+            aspectA: aspect(of: pair.photoA),
+            aspectB: aspect(of: pair.photoB),
+            in: available,
+            spacing: cardSpacing
+        )
+        let cardA = photoCard(
+            photo: pair.photoA, size: layout.sizeA, dragOffset: $dragOffsetA, hasDragged: $hasDraggedA
+        )
+        let cardB = photoCard(
+            photo: pair.photoB, size: layout.sizeB, dragOffset: $dragOffsetB, hasDragged: $hasDraggedB
+        )
+        Group {
+            switch layout.arrangement {
+            case .stacked:
+                VStack(spacing: cardSpacing) { cardA; cardB }
+            case .sideBySide:
+                HStack(spacing: cardSpacing) { cardA; cardB }
+            }
+        }
+        .animation(.pairTransition, value: layout)
+    }
+
+    func aspect(of photo: PairPhoto) -> CGFloat {
+        if let known = photoAspects[photo.id] { return known }
+        if let cached = PhotoMemoryCache.shared.image(for: photo.id, thumbnail: false) {
+            return ComparisonLayout.aspect(of: cached.size)
+        }
+        return ComparisonLayout.placeholderAspect
+    }
+
+    @ViewBuilder
+    func photoCard(
+        photo: PairPhoto, size: CGSize, dragOffset: Binding<CGFloat>, hasDragged: Binding<Bool>
+    ) -> some View {
+        ZStack {
+            Color.red.opacity(0.85)
+                .overlay(alignment: .trailing) {
+                    Label("Remove", systemImage: "trash")
+                        .font(.labelSerif)
+                        .foregroundStyle(.white)
+                        .padding(.trailing, 20)
+                }
+
+            ZStack {
+                Button {
+                    guard !hasDragged.wrappedValue else { return }
+                    Task { @MainActor in await choose(winner: photo) }
+                } label: {
+                    Color.grainPaper
+                        .frame(width: size.width, height: size.height)
+                        .overlay {
+                            CachedPhotoImage(
+                                url: photo.signedUrl,
+                                cacheKey: photo.id,
+                                onLoaded: { photoAspects[photo.id] = ComparisonLayout.aspect(of: $0) }
+                            ) { phase in
+                                switch phase {
+                                case .empty:
+                                    ProgressView().tint(Color.secondaryText)
+                                case .success(let image):
+                                    // The card is sized to the photo, so fit shows all of it.
+                                    image.resizable().scaledToFit()
+                                case .failure:
+                                    Image(systemName: "photo")
+                                        .font(.largeTitle)
+                                        .foregroundStyle(Color.secondaryText)
+                                @unknown default:
+                                    EmptyView()
+                                }
+                            }
+                        }
+                        .clipped()
+                }
+                .buttonStyle(PhotoTapStyle())
+                .accessibilityLabel(photo.id == pair?.photoA.id ? "First photo" : "Second photo")
+                .accessibilityHint("Choose this photo as your favorite")
+
+                VStack {
+                    HStack {
+                        Spacer()
+                        ExpandPhotoButton { fullscreenPhoto = photo }
+                    }
+                    Spacer()
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+            .offset(x: min(0, dragOffset.wrappedValue))
+        }
+        .frame(width: size.width, height: size.height)
+        .clipShape(RoundedRectangle(cornerRadius: .photoRadius))
+        .contentShape(RoundedRectangle(cornerRadius: .photoRadius))
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20, coordinateSpace: .local)
+                .onChanged { value in
+                    guard value.translation.width < 0 else { return }
+                    hasDragged.wrappedValue = true
+                    dragOffset.wrappedValue = value.translation.width
+                }
+                .onEnded { value in
+                    let triggered = value.translation.width < -80
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        dragOffset.wrappedValue = 0
+                    }
+                    if triggered {
+                        Task { @MainActor in await remove(photo: photo) }
+                    }
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(100))
+                        hasDragged.wrappedValue = false
+                    }
+                }
+        )
     }
 }
