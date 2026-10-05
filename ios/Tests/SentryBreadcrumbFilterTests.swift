@@ -16,9 +16,11 @@ final class SentryBreadcrumbFilterTests: XCTestCase {
         XCTAssertNil(SentryBreadcrumbFilter.apply(crumb))
     }
 
-    func testDropsRegisterPhotoBreadcrumbs() {
-        let crumb = httpCrumb(url: "https://ref.supabase.co/functions/v1/register-photo")
-        XCTAssertNil(SentryBreadcrumbFilter.apply(crumb))
+    func testDropsBatchRegisterBreadcrumbs() {
+        for name in ["batch-register-photos", "batch-pre-register"] {
+            let crumb = httpCrumb(url: "https://ref.supabase.co/functions/v1/\(name)")
+            XCTAssertNil(SentryBreadcrumbFilter.apply(crumb), name)
+        }
     }
 
     func testKeepsOtherHttpBreadcrumbs() {
@@ -28,7 +30,7 @@ final class SentryBreadcrumbFilterTests: XCTestCase {
 
     func testKeepsNonHttpBreadcrumbsEvenWithMatchingUrl() {
         let crumb = Breadcrumb(level: .info, category: "ui.click")
-        crumb.data = ["url": "https://ref.supabase.co/functions/v1/register-photo"]
+        crumb.data = ["url": "https://ref.supabase.co/functions/v1/batch-register-photos"]
         XCTAssertNotNil(SentryBreadcrumbFilter.apply(crumb))
     }
 
