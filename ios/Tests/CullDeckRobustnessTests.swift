@@ -64,7 +64,7 @@ final class PipelineHungPhotoTests: XCTestCase {
         let photos = [
             PendingPhoto(loader: MockLoader(data: nil)),
             PendingPhoto(loader: HangingLoader()),
-            PendingPhoto(loader: MockLoader()),
+            PendingPhoto(loader: MockLoader())
         ]
         let pipeline = makeTestPipeline(materializeConcurrency: 3)
         pipeline.start(photos: photos)
@@ -107,7 +107,7 @@ final class LocalCardProviderSkipAheadTests: XCTestCase {
         let photos = [
             PendingPhoto(loader: HangingLoader()),
             PendingPhoto(loader: MockLoader()),
-            PendingPhoto(loader: MockLoader()),
+            PendingPhoto(loader: MockLoader())
         ]
         let pipeline = makeTestPipeline(materializeConcurrency: 3)
         pipeline.start(photos: photos)
@@ -126,7 +126,7 @@ final class LocalCardProviderSkipAheadTests: XCTestCase {
     func testHungPhotoIsSkippedForGoodOnceTimedOutAndDeckExhausts() async throws {
         let photos = [
             PendingPhoto(loader: HangingLoader()),
-            PendingPhoto(loader: MockLoader()),
+            PendingPhoto(loader: MockLoader())
         ]
         let pipeline = makeTestPipeline(materializeConcurrency: 2, materializeTimeout: .milliseconds(50))
         pipeline.start(photos: photos)
