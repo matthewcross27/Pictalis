@@ -10,6 +10,9 @@ struct SessionSetupView: View {
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var isStarting = false
     @State private var errorMessage: String?
+    // Survives a failed start so a retry with the same selection resumes
+    // instead of creating another session; dropped when the selection changes.
+    @State private var attempt: SessionStartAttempt?
 
     private var selectionCount: Int { selectedItems.count }
     private var canStart: Bool { selectionCount >= 2 && auth.isAuthenticated && !isStarting }
@@ -100,6 +103,7 @@ struct SessionSetupView: View {
                 .padding(.bottom, 40)
             }
         }
+        .onChange(of: selectedItems) { attempt = nil }
     }
 
     // MARK: - Private
@@ -110,23 +114,24 @@ struct SessionSetupView: View {
         isStarting = true
         errorMessage = nil
 
+        // Generate stable photo IDs up front so the same IDs are used for both
+        // the server rows and the pipeline items, across retries.
+        let attempt = self.attempt ?? SessionStartAttempt(
+            photos: items.map { PendingPhoto(loader: PickerItemLoader(item: $0)) }
+        )
+        self.attempt = attempt
+
         Task { @MainActor in
             do {
-                let session = try await api.createSession(photoCount: items.count)
-                // Generate stable photo IDs before pre-registering so the same
-                // IDs are used for both the server rows and the pipeline items.
-                let pendingPhotos = items.map { PendingPhoto(loader: PickerItemLoader(item: $0)) }
-                try await api.batchPreRegister(
-                    sessionId: session.id,
-                    photoIds: pendingPhotos.map(\.id)
-                )
+                try await attempt.run(api: api)
                 let pipeline = PhotoPipeline(
                     transport: SupabaseUploadTransport(supabase: auth.storageClient, api: api),
-                    sessionId: session.id,
+                    sessionId: attempt.sessionId,
                     userId: userId
                 )
-                pipeline.start(photos: pendingPhotos)
-                onStart(session.id, pipeline)
+                pipeline.start(photos: attempt.photos)
+                self.attempt = nil
+                onStart(attempt.sessionId, pipeline)
             } catch {
                 ErrorReporter.capture(error)
                 errorMessage = ErrorPresentation.message(for: error)

@@ -7,8 +7,18 @@ import Supabase
 /// through here, and still call `ErrorReporter.capture(error)` with the
 /// original error for diagnostics.
 enum ErrorPresentation {
-    static func message(for error: Error) -> String {
+    /// `isNetworkPathSatisfied` is the device's current reachability. When it is
+    /// satisfied, a lost connection or timeout is a failed request on a working
+    /// network (not "offline"), so it gets the retry copy instead. `nil`
+    /// (unknown) keeps the offline copy.
+    static func message(
+        for error: Error,
+        isNetworkPathSatisfied: Bool? = NetworkPathStatus.shared.isSatisfied
+    ) -> String {
         if isOffline(error) {
+            if isNetworkPathSatisfied == true, isRequestFailureOnWorkingNetwork(error) {
+                return "Could not reach Pictalis. Try again."
+            }
             return "You're offline. Check your connection and try again."
         }
         if isRateLimited(error) {
@@ -27,6 +37,11 @@ enum ErrorPresentation {
         default:
             return false
         }
+    }
+
+    private static func isRequestFailureOnWorkingNetwork(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        return urlError.code == .networkConnectionLost || urlError.code == .timedOut
     }
 
     private static func isRateLimited(_ error: Error) -> Bool {

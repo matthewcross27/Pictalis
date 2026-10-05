@@ -1,13 +1,15 @@
-import { z } from 'npm:zod@3';
 import { computeTopK } from '../_shared/ranking-logic.ts';
 import { initSentry } from '../_shared/sentry.ts';
 import { CORS, json, parseBody, requireUser, serveAuthed, serverError } from '../_shared/http.ts';
+import {
+  CreateSessionBody,
+  resolveExistingSession,
+  UNIQUE_VIOLATION,
+} from '../_shared/create-session.ts';
 import { isRateLimited, RATE_LIMIT_WRITE, rateLimitResponse } from '../_shared/rate-limit.ts';
 initSentry();
 
-const CreateSessionBody = z.object({
-  photo_count: z.number().int().min(2).max(300),
-});
+const SESSION_COLUMNS = 'id, created_at, expires_at, status, photo_count, top_k';
 
 serveAuthed(async (req, _authHeader, supabase) => {
   if (await isRateLimited('create-session', req, RATE_LIMIT_WRITE)) {
@@ -27,13 +29,29 @@ serveAuthed(async (req, _authHeader, supabase) => {
   const { data: session, error } = await supabase
     .from('sessions')
     .insert({
+      // Omitted when the client sent no id, so the column default applies.
+      ...(parsed.session_id ? { id: parsed.session_id } : {}),
       photo_count: parsed.photo_count,
       user_id: user.id,
       top_k: topK,
       stage: 'ranking',
     })
-    .select('id, created_at, expires_at, status, photo_count, top_k')
+    .select(SESSION_COLUMNS)
     .single();
+
+  if (error && error.code === UNIQUE_VIOLATION && parsed.session_id) {
+    // A repeat of a call that already created this session (e.g. the client
+    // lost the response). Return the existing row so the caller can carry on.
+    const { data: existing } = await supabase
+      .from('sessions')
+      .select(SESSION_COLUMNS)
+      .eq('id', parsed.session_id)
+      .maybeSingle();
+    if (resolveExistingSession(existing, parsed.photo_count) === 'reuse') {
+      return json({ session: existing }, 200);
+    }
+    return json({ error: 'session_id already in use' }, 409);
+  }
 
   if (error) {
     return await serverError(error, error.message);
