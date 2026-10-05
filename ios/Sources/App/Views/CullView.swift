@@ -53,7 +53,9 @@ struct CullView: View {
                         }
 
                     case .exhausted:
-                        Color.clear
+                        Spacer()
+                        ProgressView().tint(Color.amber)
+                        Spacer()
                     }
                 }
             }
@@ -79,9 +81,7 @@ struct CullView: View {
                 // Calling onComplete() directly would leave the session at 'cull', so the
                 // comparison screen's stage badge would keep saying "Cull".
                 if Self.shouldFinishCull(onQueueState: newState, isFinishing: isFinishing) {
-                    isFinishing  = true
-                    finishFailed = false
-                    Task { await finish() }
+                    beginFinish()
                 }
             }
             .onChange(of: geo.size.width) { _, newWidth in
@@ -145,9 +145,7 @@ struct CullView: View {
             Spacer()
             Button(isFinishing ? "Finishing…" : "Done — start comparing") {
                 guard !isFinishing else { return }
-                isFinishing  = true
-                finishFailed = false
-                Task { await finish() }
+                beginFinish()
             }
             .font(.labelSerif)
             .foregroundStyle(finishFailed ? Color.red : Color.amber)
@@ -258,6 +256,12 @@ struct CullView: View {
             dragOffset  = 0
             currentCard = cardProvider?.advance()
         }
+    }
+
+    private func beginFinish() {
+        isFinishing  = true
+        finishFailed = false
+        Task { await finish() }
     }
 
     private func finish() async {
