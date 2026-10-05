@@ -91,7 +91,7 @@ using pairwise Elo-style comparisons. See docs/PRD.md for full spec.
   snapshot library) - `.github/workflows/ios.yml` runs `xcodebuild test` (unit tests only) against a
   gitignored Supabase config stub, network-free. A `View`'s `body` switch driven by `@Observable`
   state therefore has no way to be asserted against directly. The working pattern (see
-  `CullView.displayState(for:currentCard:)` and `CullViewDisplayStateTests.swift`) is to pull the
+  `CullView.displayState(for:currentCard:finishErrorMessage:)` and `CullViewDisplayStateTests.swift`) is to pull the
   branching decision out into a `static func` returning a plain `Equatable` enum, call it from
   `body`, and unit-test the pure function - that's real regression coverage for view-rendering logic
   without adding test infra.
