@@ -28,6 +28,7 @@ final class LocalCardProvider {
     private var remainingCursor = 0      // index of the next id in `remaining` to queue
     private var hasRemaining: Bool { remainingCursor < remaining.count }
     private var isFilling = false
+    private var isStopped = false
     private var currentMaxQueueSize = LocalCardProvider.normalQueueSize
     @ObservationIgnored nonisolated(unsafe) private var fillTask: Task<Void, Never>?
     @ObservationIgnored nonisolated(unsafe) private var memoryWarningObserver: NSObjectProtocol?
@@ -65,6 +66,24 @@ final class LocalCardProvider {
         fillTask = Task { await self.fill() }
     }
 
+    // Abandons this provider (the deck is being rebuilt): stops filling, even if a fill is
+    // parked waiting on a photo.
+    func stop() {
+        isStopped = true
+        fillTask?.cancel()
+    }
+
+    // State for diagnostics when the deck is stuck.
+    func snapshot() -> [String: String] {
+        [
+            "provider_state": String(describing: state),
+            "queue_count": String(queue.count),
+            "cursor": String(remainingCursor),
+            "remaining_count": String(remaining.count),
+            "is_filling": String(isFilling)
+        ]
+    }
+
     func advance() -> Card? {
         guard !queue.isEmpty else {
             if !hasRemaining { state = .exhausted }
@@ -82,28 +101,51 @@ final class LocalCardProvider {
 
     // MARK: - Private
 
+    // Fills the decode-ahead window with whichever undecided photos are on disk, preferring
+    // selection order but never waiting on a photo that is still pending (slow, hung or
+    // failed) while a later one is ready.
     private func fill(target: Int? = nil) async {
         guard !isFilling else { return }
         isFilling = true
         defer { isFilling = false }
 
-        while queue.count < (target ?? currentMaxQueueSize), hasRemaining {
-            let id = remaining[remainingCursor]
-            remainingCursor += 1
+        while !isStopped, queue.count < (target ?? currentMaxQueueSize) {
+            dropUnavailable()
+            guard hasRemaining else { break }
+            let id: UUID
+            do {
+                id = try await pipeline.firstMaterialized(among: Array(remaining[remainingCursor...]))
+            } catch {
+                // timedOut: nothing new materialized yet, re-evaluate. photoUnavailable: every
+                // candidate went away while waiting, dropUnavailable() clears them next pass.
+                continue
+            }
+            guard !isStopped, let index = remaining[remainingCursor...].firstIndex(of: id) else { continue }
+            if index == remainingCursor {
+                remainingCursor += 1
+            } else {
+                remaining.remove(at: index)
+            }
             do {
                 let image = try await pipeline.displayImage(for: id)
                 queue.append(Card(photoId: id, image: image))
                 if state == .loading { state = .ready }
             } catch {
-                // Card just isn't showable (dropped elsewhere or unreadable) — the
-                // deck moves on regardless, but a materialize failure here is still
-                // silent to the user in this swipe-deck flow (unlike ComparisonView's
-                // failedIds banner), so it's worth capturing for production visibility.
+                // The file vanished or won't decode - the deck moves on regardless, but a
+                // failure here is silent to the user in this swipe-deck flow (unlike
+                // ComparisonView's failedIds banner), so it's worth capturing.
                 ErrorReporter.capture(error)
                 continue
             }
         }
         if queue.isEmpty && !hasRemaining { state = .exhausted }
+    }
+
+    // Photos dropped or unreadable (already reported by the pipeline) will never become cards.
+    private func dropUnavailable() {
+        guard hasRemaining else { return }
+        let viable = remaining[remainingCursor...].filter { pipeline.availability(for: $0) != .unavailable }
+        remaining.replaceSubrange(remainingCursor..., with: viable)
     }
 
     private func handleMemoryWarning() {
