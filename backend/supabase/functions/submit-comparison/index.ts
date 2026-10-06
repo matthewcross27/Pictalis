@@ -1,7 +1,7 @@
 import { z } from 'npm:zod@3';
 import { initSentry } from '../_shared/sentry.ts';
 import { CORS, json, parseBody, serveAuthed, serverError } from '../_shared/http.ts';
-import { isRateLimited, RATE_LIMIT_WRITE, rateLimitResponse } from '../_shared/rate-limit.ts';
+import { isRateLimited, RATE_LIMIT_READ, rateLimitResponse } from '../_shared/rate-limit.ts';
 initSentry();
 
 const SubmitBody = z.object({
@@ -10,8 +10,14 @@ const SubmitBody = z.object({
 });
 
 serveAuthed(async (req, _authHeader, supabase) => {
-  if (await isRateLimited('submit-comparison', req, RATE_LIMIT_WRITE)) {
-    return rateLimitResponse(CORS);
+  // Called once per comparison tap, so it needs the polling tier (same as
+  // next-pair): RATE_LIMIT_WRITE's 1 call per 3s refused any user tapping
+  // faster than that once their first 20 taps were spent, and the choice was
+  // lost. A refused call is rejected before the RPC touches the comparison, so
+  // the client can resubmit it after Retry-After. Each call is still bounded
+  // to one pending comparison by the RPC's completed_at guard (UE001).
+  if (await isRateLimited('submit-comparison', req, RATE_LIMIT_READ)) {
+    return rateLimitResponse(CORS, RATE_LIMIT_READ);
   }
 
   const parsed = await parseBody(req, SubmitBody);

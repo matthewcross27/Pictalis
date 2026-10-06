@@ -149,9 +149,12 @@ struct ComparisonView: View {
         guard let pair else { return }
         isSubmitting = true
         do {
-            try await api.submitComparison(
+            // A rate-limited tap keeps this pair on screen and is resubmitted after
+            // Retry-After instead of being discarded.
+            try await ComparisonSubmission.submit(
                 comparisonId: pair.comparisonId,
-                winnerId: winner.id
+                winnerId: winner.id,
+                api: api
             )
             comparisonCount += 1
         } catch {

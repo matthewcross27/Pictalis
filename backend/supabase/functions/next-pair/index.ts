@@ -6,6 +6,7 @@ import {
   resolveTopKAndMinComparisons,
   sortByEloDesc,
 } from '../_shared/ranking-logic.ts';
+import { selectRankablePhotos, splitRankedPool } from '../_shared/ranked-pool.ts';
 import {
   buildPairCounts,
   computeProgress,
@@ -46,7 +47,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
 
   const { session_id } = parsed;
 
-  // 1. Fetch session, non-suppressed/non-dropped photos, and all comparisons
+  // 1. Fetch session, rankable (non-suppressed/non-dropped) photos, and all comparisons
   // (pending + completed) for pair-count deduplication, all concurrently -
   // none of these three reads depends on either of the others' results (all
   // three only need session_id). This costs an extra photos/comparisons
@@ -59,15 +60,11 @@ serveAuthed(async (req, _authHeader, supabase) => {
     { data: rawComparisons },
   ] = await Promise.all([
     requireSession<SessionRow>(supabase, session_id, 'id, stage, photo_count, top_k'),
-    supabase
-      .from('photos')
-      .select(
-        'id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, cluster_id',
-      )
-      .eq('session_id', session_id)
-      .eq('is_suppressed', false)
-      .eq('upload_status', 'uploaded')
-      .or('cull_decision.is.null,cull_decision.eq.keep'),
+    selectRankablePhotos(
+      supabase,
+      session_id,
+      'id, storage_path, thumbnail_path, elo_rating, uncertainty, comparison_count, cluster_id',
+    ),
     supabase
       .from('comparisons')
       .select('photo_a_id, photo_b_id, completed_at')
@@ -84,13 +81,14 @@ serveAuthed(async (req, _authHeader, supabase) => {
     return await serverError(photosError, photosError.message);
   }
 
-  if (!photos || photos.length < 2) {
+  const pool = splitRankedPool<Photo>(photos);
+  if (pool.photos.length < 2) {
     return json({ error: 'Not enough photos to compare' }, 422);
   }
 
-  const typedPhotos = photos as Photo[];
+  const typedPhotos = pool.photos;
 
-  const { topK, minComparisons } = resolveTopKAndMinComparisons(session);
+  const { topK, minComparisons } = resolveTopKAndMinComparisons(session, pool.expectedSize);
 
   type RawComparison = CompletedComparison & { completed_at: string | null };
   const allComparisons = (rawComparisons ?? []) as RawComparison[];
@@ -102,7 +100,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
   );
 
   // 4. Check completion (safety net - session-status also writes this)
-  const allHaveCoverage = hasFullCoverage(photos, minComparisons);
+  const allHaveCoverage = hasFullCoverage(typedPhotos, minComparisons);
   // Once coverage is met, isBoundaryStable/selectPhotoA/computeProgress all
   // sort the same immutable photos array by elo - compute it once here and
   // reuse it instead of sorting up to 3 times per request.
@@ -112,7 +110,7 @@ serveAuthed(async (req, _authHeader, supabase) => {
     topK,
     minComparisons,
     totalComparisons(typedPhotos),
-    session.photo_count,
+    pool.expectedSize,
     allHaveCoverage,
     sortedByElo,
   );

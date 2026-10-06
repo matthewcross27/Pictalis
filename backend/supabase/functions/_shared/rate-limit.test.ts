@@ -49,3 +49,22 @@ Deno.test('rateLimitResponse is a 429 that carries Retry-After only when given a
   assertEquals(withoutTier.status, 429);
   assertEquals(withoutTier.headers.get('Retry-After'), null);
 });
+
+// submit-comparison fires once per comparison tap, so it must sustain a human
+// tap pace. On RATE_LIMIT_WRITE (20 burst, then 1 per 3s) taps past the first
+// 20 were refused and the user's choice was dropped (scout finding F3).
+Deno.test('RATE_LIMIT_READ sustains a comparison tap every 2 seconds, RATE_LIMIT_WRITE does not', () => {
+  // Token bucket starting full, one call every 2s for 15 minutes (450 taps).
+  const refused = (config: { capacity: number; refillPerSecond: number }) => {
+    let tokens = config.capacity;
+    let count = 0;
+    for (let i = 0; i < 450; i++) {
+      tokens = Math.min(config.capacity, tokens + 2 * config.refillPerSecond);
+      if (tokens >= 1) tokens -= 1;
+      else count++;
+    }
+    return count;
+  };
+  assertEquals(refused(RATE_LIMIT_READ), 0);
+  assertEquals(refused(RATE_LIMIT_WRITE) > 100, true);
+});
