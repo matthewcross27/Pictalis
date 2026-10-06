@@ -5,12 +5,12 @@ import UIKit
 final class PairPreloaderTests: XCTestCase {
 
     private func makePair() throws -> NextPairResponse {
-        let json = """
+        let json = Data("""
         {"comparison_id": "\(UUID().uuidString)",
          "photo_a": {"id": "\(UUID().uuidString)", "comparison_count": 0, "signed_url": "https://example.com/a.jpg"},
          "photo_b": {"id": "\(UUID().uuidString)", "comparison_count": 0, "signed_url": "https://example.com/b.jpg"},
          "stage": null}
-        """.data(using: .utf8)!
+        """.utf8)
         return try JSONDecoder().decode(NextPairResponse.self, from: json)
     }
 
