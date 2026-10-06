@@ -8,6 +8,7 @@ enum CullDisplayState: Equatable {
     case loading
     case card
     case exhausted
+    case finishFailed(message: String)
 }
 
 struct CullView: View {
@@ -22,9 +23,9 @@ struct CullView: View {
     @State private var syncService: SyncService?
     @State private var currentCard: LocalCardProvider.Card?
     @State private var dragOffset: CGFloat = 0
-    @State private var isFinishing      = false
-    @State private var finishFailed     = false
-    @State private var isInitialized    = false
+    @State private var isFinishing        = false
+    @State private var finishErrorMessage: String?
+    @State private var isInitialized      = false
     @State private var expandedCard: LocalCardProvider.Card?
     @State private var screenWidth: CGFloat = 390
 
@@ -38,7 +39,11 @@ struct CullView: View {
                 VStack(spacing: 0) {
                     topBar
 
-                    switch Self.displayState(for: cardProvider?.state, currentCard: currentCard) {
+                    switch Self.displayState(
+                        for: cardProvider?.state,
+                        currentCard: currentCard,
+                        finishErrorMessage: finishErrorMessage
+                    ) {
                     case .loading:
                         Spacer()
                         ProgressView().tint(Color.amber)
@@ -53,7 +58,23 @@ struct CullView: View {
                         }
 
                     case .exhausted:
-                        Color.clear
+                        Spacer()
+                        ProgressView().tint(Color.amber)
+                        Spacer()
+
+                    case .finishFailed(let message):
+                        Spacer()
+                        VStack(spacing: 16) {
+                            Text(message)
+                                .font(.bodySerif)
+                                .foregroundStyle(Color.amber)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
+                            Button("Try Again") { beginFinish() }
+                                .font(.labelSerif)
+                                .foregroundStyle(Color.ink)
+                        }
+                        Spacer()
                     }
                 }
             }
@@ -74,7 +95,13 @@ struct CullView: View {
                 }
             }
             .onChange(of: cardProvider?.state) { _, newState in
-                if newState == .exhausted { onComplete() }
+                // Running out of cards ends the cull the same way the "Done" button does:
+                // finish() flushes decisions and moves the server session to 'ranking'.
+                // Calling onComplete() directly would leave the session at 'cull', so the
+                // comparison screen's stage badge would keep saying "Cull".
+                if Self.shouldFinishCull(onQueueState: newState, isFinishing: isFinishing) {
+                    beginFinish()
+                }
             }
             .onChange(of: geo.size.width) { _, newWidth in
                 screenWidth = newWidth
@@ -87,8 +114,12 @@ struct CullView: View {
 
     static func displayState(
         for queueState: CullQueueState?,
-        currentCard: LocalCardProvider.Card?
+        currentCard: LocalCardProvider.Card?,
+        finishErrorMessage: String? = nil
     ) -> CullDisplayState {
+        if queueState == .exhausted, let finishErrorMessage {
+            return .finishFailed(message: finishErrorMessage)
+        }
         switch queueState ?? .loading {
         case .loading:
             return .loading
@@ -97,6 +128,10 @@ struct CullView: View {
         case .exhausted:
             return .exhausted
         }
+    }
+
+    static func shouldFinishCull(onQueueState queueState: CullQueueState?, isFinishing: Bool) -> Bool {
+        queueState == .exhausted && !isFinishing
     }
 
     // MARK: - Initialization
@@ -133,12 +168,10 @@ struct CullView: View {
             Spacer()
             Button(isFinishing ? "Finishing…" : "Done — start comparing") {
                 guard !isFinishing else { return }
-                isFinishing  = true
-                finishFailed = false
-                Task { await finish() }
+                beginFinish()
             }
             .font(.labelSerif)
-            .foregroundStyle(finishFailed ? Color.red : Color.amber)
+            .foregroundStyle(finishErrorMessage != nil ? Color.red : Color.amber)
             .disabled(isFinishing)
         }
         .padding(.horizontal, 20)
@@ -248,6 +281,12 @@ struct CullView: View {
         }
     }
 
+    private func beginFinish() {
+        isFinishing = true
+        finishErrorMessage = nil
+        Task { await finish() }
+    }
+
     private func finish() async {
         // flush (not drain): every registered-photo drop MUST reach the server
         // before ranking starts, even if a background drain is mid-flight.
@@ -257,7 +296,7 @@ struct CullView: View {
             onComplete()
         } catch {
             ErrorReporter.capture(error)
-            finishFailed = true
+            finishErrorMessage = ErrorPresentation.message(for: error)
         }
         isFinishing = false
     }
